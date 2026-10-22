@@ -126,7 +126,6 @@ test('recall conceals generic targets in live labels and late voice messages, th
     assert(!visibleText(e.document).includes(character), character + ' concealed after late voiceschanged');
     e.$('teacher-end').click();
     assert(e.document.querySelector('.brand').textContent.includes('字慢慢'));
-    assert(e.document.querySelector('.brand').textContent.includes('一筆一筆'));
     const saved = [...e.store.values()].map(value => { try { return JSON.parse(value); } catch { return null; } }).find(value => value && value.id === initial.id);
     assert.equal(saved.attempts.at(-1).help.length, 0, 'masking itself never records assistance');
   }
@@ -367,7 +366,7 @@ test('zero selection or changed words cannot end the current valid lesson', asyn
 });
 test('choosing a later assigned word first shows processed count rather than a false ordinal', async () => {
   const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃'; e.$('validate-words').click(); chooseCharacters(e, ['w0:0', 'w1:0']); e.$('apply-words').click();
-  e.$('word-cards').childNodes[1].click(); await waitFor(() => e.$('practice-title').textContent === '睇一睇，點樣寫');
+  e.$('word-cards').childNodes[1].click(); await waitFor(() => e.$('practice-title').textContent === '睇筆順');
   assert.equal(e.$('char-position').textContent, '今次 2 字 · 已處理 0 字');
 });
 test('simplified mode defaults on and toggles partial writing without replacing the writer or assessment', async () => {
@@ -378,8 +377,44 @@ test('simplified mode defaults on and toggles partial writing without replacing 
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }, mount); e.send('WRITING_COMPLETE', {}, mount); assert.equal(e.snapshot().active.writingDone, true);
   assert.equal(e.snapshot().attempts[0].help.length, 0);
 });
+test('one native tools disclosure preserves writing state and keeps phase-specific actions available', async () => {
+  const e = await feedbackApp();
+  const tools = e.$('practice-tools');
+  assert.equal(e.$('extra-demo-controls').hidden, true);
+  assert.equal(e.$('writing-controls').hidden, false);
+  assert.equal(e.$('extra-writing-controls').hidden, false);
+  assert.equal(e.$('next-row').hidden, true);
+  e.$('previous-step').click();
+  assert.equal(e.snapshot().active.phase, 'watch');
+  assert.equal(e.$('demo-controls').hidden, false);
+  assert.equal(e.$('extra-demo-controls').hidden, false);
+  assert.equal(e.$('writing-controls').hidden, true);
+  e.$('main-next').click();
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
+  const before = JSON.stringify(e.snapshot()), mounts = e.mounts.length, mount = e.mounts.at(-1);
+  tools.open = true;
+  e.$('simplify').click();
+  assert(tools.open);
+  assert.equal(JSON.stringify(e.snapshot()), before);
+  assert.equal(e.mounts.length, mounts);
+  assert.equal(e.mounts.at(-1), mount);
+  assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
+  e.complete();
+  assert.equal(e.$('writing-controls').hidden, true);
+  assert.equal(e.$('extra-writing-controls').hidden, false, 'guided retry remains available after writing');
+  assert.equal(e.$('next-row').hidden, false);
+  e.$('main-next').click();
+  assert.equal(e.$('writing-controls').hidden, false);
+  e.complete();
+  assert.equal(e.$('writing-controls').hidden, true);
+  assert.equal(e.$('extra-writing-controls').hidden, false, 'completed recall can still retry');
+  assert(tools.open);
+  e.$('retry-writing').click();
+  assert.equal(e.snapshot().active.phase, 'recall');
+});
 test('instruction speech speaks exactly the displayed sentence on a click and never records help', async () => {
   const e = await feedbackApp(); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }, { lang: 'zh-CN', name: 'Mandarin' }]; e.voices.changed();
+  assert.equal(e.$('voice-note').textContent, '');
   assert.equal(e.voices.spoken.length, 0); const snapshot = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
   const utterance = e.voices.spoken.at(-1); assert.equal(utterance.text, e.$('practice-instruction').textContent); assert.equal(utterance.lang, 'yue-HK'); assert.equal(JSON.stringify(e.snapshot()), snapshot);
   const cancels = e.voices.cancels; e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.voices.cancels, cancels, 'ordinary stroke render preserves current instruction speech');
@@ -410,14 +445,14 @@ test('instruction speech falls back honestly for missing APIs, absent Cantonese,
   }
 });
 test('new instruction and presentation controls stay readable and target-safe in independent recall', async () => {
-  for (const character of ['聽', '指', '令', '精', '簡', '語', '由', '想', '再', '聲', '畫', '示', '字', '一']) {
+  for (const character of ['聽', '指', '令', '精', '簡', '語', '由', '想', '再', '聲', '畫', '示', '字', '一', '更', '多', '工', '具', '其', '他', '選', '項', '開', '啟', '功', '能', '默', '憑', '記', '憶', '自', '己', '試']) {
     const e = await feedbackApp(character); e.complete(); e.$('main-next').click(); assert(!e.$('speak').attributes['aria-label'].includes(character)); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click();
     assert.equal(e.voices.spoken.at(-1).text, e.$('practice-instruction').textContent);
-    for (const id of ['practice-instruction', 'hear-instruction', 'instruction-voice-note', 'simplify', 'char-position']) {
+    for (const id of ['practice-title', 'practice-instruction', 'hear-instruction', 'instruction-voice-note', 'speak-label', 'simplify', 'practice-tools-label', 'char-position']) {
       assert(!e.$(id).textContent.includes(character), character + ' absent from ' + id); assert(!e.$(id).textContent.includes('□'), id + ' is readable');
       assert(!Object.values(e.$(id).attributes).some(value => value.includes(character)), 'no answer in attributes');
     }
-    assert(!e.$('speak').attributes['aria-label'].includes(character)); e.$('simplify').click(); assert(!e.$('simplify').textContent.includes(character)); assert(!visibleText(e.document).includes(character));
+    assert(!e.$('speak').attributes['aria-label'].includes(character)); e.$('practice-tools').open = true; e.$('simplify').click(); assert(!e.$('simplify').textContent.includes(character)); assert(!e.$('practice-tools-label').textContent.includes(character)); assert(!visibleText(e.document).includes(character));
     assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
   }
 });

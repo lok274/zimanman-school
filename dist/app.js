@@ -158,7 +158,6 @@
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
     });
-    $('choice-message').textContent = completedWords === state.entries.length ? '今節練習已經行完，睇吓自己嘅腳印。' : completedWords ? '下一個詞語，都由你揀。' : '由你揀第一步。';
     $('choice-summary').textContent = completedWords === state.entries.length ? '完成，睇今節紀錄 →' : '睇今節紀錄';
   }
   function render() {
@@ -171,6 +170,7 @@
     $('previous-step').textContent = safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回詞語']);
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
+    $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
     if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else renderSummary(state); return; }
     const occurrence = currentOccurrence(), word = currentWord();
     const recall = a.phase === 'recall', complete = a.phase === 'character-complete';
@@ -183,18 +183,21 @@
     const stage = complete ? 'recall' : a.phase;
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
     document.querySelectorAll('[data-stage]').forEach((element, index) => { element.classList.toggle('active', index === stageIndex); element.classList.toggle('done', index < stageIndex); if (index === stageIndex) element.setAttribute('aria-current', 'step'); else element.removeAttribute('aria-current'); });
-    $('demo-controls').hidden = a.phase !== 'watch'; $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) && !(complete && a.completedPhase === 'recall');
+    $('demo-controls').hidden = a.phase !== 'watch'; $('extra-demo-controls').hidden = a.phase !== 'watch';
+    $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) || a.writingDone;
+    $('extra-writing-controls').hidden = !['guided', 'recall'].includes(a.phase) && !(complete && a.completedPhase === 'recall');
     $('hint-stroke').hidden = a.writingDone || complete; $('hint-outline').hidden = a.writingDone || complete;
     $('data-controls').hidden = a.phase !== 'unavailable';
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall'].includes(a.phase) && !a.writingDone);
+    $('next-row').hidden = $('main-next').hidden;
     $('stroke-progress').textContent = a.strokeCount && ['guided', 'recall'].includes(a.phase) ? '已寫 ' + a.currentStroke + ' / ' + a.strokeCount + ' 畫' : a.strokeCount && a.phase === 'watch' ? '共 ' + a.strokeCount + ' 畫' : '';
     const attempt = state.attempts.find(item => item.id === a.attemptId);
     let title = '', instruction = '', defaultFeedback = '';
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
     if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = safeText(['可以再載入，或者請老師幫手。', '資料未準備好，稍後再試。', '想求助就撳老師工具。']); }
-    if (a.phase === 'watch') { title = '睇一睇，點樣寫'; instruction = safeText(['撳播放，睇筆順。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : '跟住起點，一畫一畫寫'; instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
-    if (a.phase === 'recall') { title = '收起字形，自己試'; instruction = safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
+    if (a.phase === 'watch') { title = safeText(['睇筆順', '看示範', '觀察']); instruction = safeText(['撳播放，睇筆順。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
+    if (a.phase === 'recall') { title = safeText(['自己試', '試住記', '憑記憶']); instruction = safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && attempt.help.length ? '有提示完成' : '自己完成';
       title = label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
@@ -313,11 +316,11 @@
   const speechUnavailable = ['暫時冇粵語聲音，請老師讀畫面指令。', '裝置未提供合適語音，可搵大人幫手。', '未能朗讀，文字仍然保留。'];
   const speechFailed = ['裝置未能朗讀，請老師讀畫面指令。', '語音暫時用唔到，可搵大人幫手。', '聲音有問題，文字仍然保留。'];
   function refreshSpeechNotice() { restoreRecallText(); renderInstructionVoice(); maskRecallText(); }
-  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); }
+  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); $('speak-label').textContent = safeText(['聽詞語', '播放讀音', '請老師朗讀']); }
   function updateVoices() {
     restoreRecallText();
     try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
-    $('voice-note').textContent = cantoneseVoice ? '撳一下，聽粵語。' : '暫時冇粵語聲音。可以請老師讀一次。';
+    $('voice-note').textContent = cantoneseVoice ? '' : '暫時冇粵語聲音。可以請老師讀一次。';
     $('teacher-voice-note').textContent = cantoneseVoice ? '目前使用裝置嘅粵語聲音「' + cantoneseVoice.name + '」。語音由瀏覽器提供。' : '瀏覽器未提供可辨識嘅粵語聲音。程式唔會改用普通話。可由老師朗讀，或喺裝置設定加入粵語語音後重開。';
     renderWordVoiceLabel();
     maskRecallText();
