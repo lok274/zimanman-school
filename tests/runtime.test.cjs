@@ -202,6 +202,8 @@ function audioMock(e, { pending = false, fail = false } = {}) {
 }
 test('feedback follows accepted strokes, changes progress and recognizes only observed recovery', async () => {
   const e = await feedbackApp('粗', 3), icon = e.$('feedback-icon');
+  assert.equal(e.$('feedback-text').textContent, '由起點開始，慢慢寫。');
+  assert.notEqual(icon.textContent, '✓');
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
   assert.equal(e.$('feedback-text').textContent, '完成第 1 畫！'); assert.equal(icon.textContent, '✓');
   e.send('STROKE_MISSED', { strokeIndex: 1 });

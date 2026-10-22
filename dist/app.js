@@ -182,7 +182,7 @@
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = '等一等，整理緊筆順。'; }
     if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = '唔係你寫錯。可以再試，或者請老師幫手。'; }
     if (a.phase === 'watch') { title = '睇一睇，點樣寫'; instruction = '撳播放，眼睛跟住每一畫。'; defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : '跟住起點，一畫一畫寫'; instruction = a.writingDone ? '而家試吓收起字形，用自己嘅方法記住。' : '由橙色起點開始。用手指或者觸控筆寫。'; defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '一畫完成，再寫下一畫。'; $('main-next').textContent = '收起字形，自己試 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : '跟住起點，一畫一畫寫'; instruction = a.writingDone ? '而家試吓收起字形，用自己嘅方法記住。' : '由橙色起點開始。用手指或者觸控筆寫。'; defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
     if (a.phase === 'recall') { title = '收起字形，自己試'; instruction = '先想一想。想要提示，隨時可以開。'; defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && attempt.help.length ? '有提示完成' : '自己完成';
