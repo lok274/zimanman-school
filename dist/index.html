@@ -10,7 +10,7 @@
 <body>
   <header class="app-header">
     <a class="brand" href="#" aria-label="字慢慢首頁"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M9 29l3-10L27 4l9 9-15 15-12 1zm3-10l9 9M23 8l9 9M8 35h24"/></svg><span>字慢慢<small>一筆一筆，慢慢學</small></span></a>
-    <div class="header-actions"><span class="device-tag">課堂練習</span><button id="previous-step" class="button secondary" hidden>← 返回詞語</button><button id="teacher-open" class="button quiet">老師工具 <span aria-hidden="true">⚙</span></button></div>
+    <div class="header-actions"><span class="device-tag">課堂練習</span><button id="teacher-open" class="button quiet">老師工具 <span aria-hidden="true">⚙</span></button></div>
   </header>
   <div id="storage-notice" class="notice storage-notice" role="status" hidden></div>
   <main>
@@ -34,6 +34,7 @@
       </aside>
       <div class="work-panel">
         <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 睇筆順</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己試</li></ol>
+        <div class="practice-actions"><button id="rest" class="button secondary rest-button">休息一下</button></div>
         <div class="practice-heading"><div><h2 id="practice-title">睇一睇，點樣寫</h2><p id="practice-instruction">撳播放，眼睛跟住每一畫。</p></div><span id="char-position" class="position-pill"></span></div>
         <div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><div id="board-message" class="board-message" hidden></div></div></div>
         <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div>
@@ -41,7 +42,7 @@
         <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個詞語</button></div>
         <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
         <div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div>
-        <div class="next-row"><button id="rest" class="button quiet rest-button">休息一下</button><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
+        <div class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
       </div>
     </section>
     <section id="summary-view" class="summary-view" hidden aria-labelledby="summary-title">
@@ -51,7 +52,7 @@
       <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">開始新一節 <span aria-hidden="true">→</span></button></div>
     </section>
   </main>
-  <footer class="app-footer"><span>眼睛睇 · 耳仔聽 · 手指寫</span><span>按自己步伐學</span></footer>
+  <footer class="app-footer"><button id="previous-step" class="button secondary" hidden>← 返回詞語</button><span>眼睛睇 · 耳仔聽 · 手指寫</span><span>按自己步伐學</span></footer>
   <dialog id="teacher-dialog" aria-labelledby="teacher-title">
     <div class="dialog-heading"><div><p class="eyebrow">成人設定</p><h2 id="teacher-title">老師工具</h2></div><button id="teacher-close" class="icon-button" aria-label="關閉老師工具">×</button></div>
     <p>不用帳戶，不記學生姓名。練習紀錄只留喺呢個瀏覽器；共用平板嘅其他使用者可能睇到。清除瀏覽器資料會移除紀錄。</p>
