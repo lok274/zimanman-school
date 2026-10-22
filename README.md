@@ -4,7 +4,7 @@
 
 GitHub Pages 網頁入口為 [字慢慢](https://lok274.github.io/zimanman-school/)，任何人都可透過連結開啟，不需要 GitHub 帳戶。原始碼放喺 [lok274/zimanman-school](https://github.com/lok274/zimanman-school)。
 
-Android 平板請用 Chrome，iPad 請用 Safari，直接開啟上述 HTTPS 網址。書寫區可用手指或觸控筆操作，實際觸控筆及掌壓排除表現需要在學校裝置測試。粵語聲音視裝置及瀏覽器有冇提供粵語語音而定，請在上堂前按「聽一聽」確認。
+Android 平板請用更新版 Chrome，iPad 請用 Safari，直接開啟上述 HTTPS 網址。iPad 需要 iPadOS 15.4 或以上，因為老師工具及休息視窗使用該版本開始支援嘅 [原生 dialog 功能](https://webkit.org/blog/12445/new-webkit-features-in-safari-15-4/)。書寫區可用手指或觸控筆操作，實際觸控筆及掌壓排除表現需要在學校裝置測試。粵語聲音視裝置及瀏覽器有冇提供粵語語音而定，請在上堂前按「聽一聽」確認。
 
 直接開啟 `dist/standalone.html`，可用內置六項詞語。部分平板嘅檔案預覽器未必執行下載嘅 HTML，平板建議用上面嘅網站。亦可用任何靜態網頁伺服器提供 `dist/`。新增字詞可能需要上網載入字庫。
 
