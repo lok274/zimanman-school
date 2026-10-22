@@ -34,8 +34,8 @@
       </aside>
       <div class="work-panel">
         <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 睇筆順</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己試</li></ol>
-        <div class="practice-actions"><button id="rest" class="button secondary rest-button">休息一下</button></div>
-        <div class="practice-heading"><div><h2 id="practice-title">睇一睇，點樣寫</h2><p id="practice-instruction">撳播放，眼睛跟住每一畫。</p></div><span id="char-position" class="position-pill"></span></div>
+        <div class="practice-actions"><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button><button id="rest" class="button secondary rest-button">休息一下</button></div>
+        <div class="practice-heading"><div><h2 id="practice-title">睇一睇，點樣寫</h2><p id="practice-instruction">撳播放，睇筆順。</p><div class="instruction-audio"><button id="hear-instruction" class="button secondary">聽指令</button><span id="instruction-voice-note" class="small muted" role="status" aria-live="polite"></span></div></div><span id="char-position" class="position-pill"></span></div>
         <div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><div id="board-message" class="board-message" hidden></div></div></div>
         <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div>
         <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div>
@@ -48,7 +48,7 @@
     <section id="summary-view" class="summary-view" hidden aria-labelledby="summary-title">
       <p class="eyebrow">今節嘅腳印</p><h1 id="summary-title">每一步，都記低咗。</h1><p class="intro-copy">呢度記錄今次點樣練，唔代表已經識默寫。</p>
       <div id="summary-stats" class="summary-stats"></div><div id="summary-rows" class="summary-rows"></div>
-      <div class="paper-reminder"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 5h23l7 7v31H10zM32 5v9h8M18 22h14M18 30h14M18 37h9"/></svg><div><h2>帶返去紙上試一試</h2><p>放低平板，揀一個詞語寫喺紙上。老師可以一齊睇。</p></div></div>
+      <div class="paper-reminder"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 5h23l7 7v31H10zM32 5v9h8M18 22h14M18 30h14M18 37h9"/></svg><div><h2>帶返去紙上試一試</h2><p>放低平板，揀今次練過嘅一個字寫喺紙上。老師可以一齊睇。</p></div></div>
       <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">開始新一節 <span aria-hidden="true">→</span></button></div>
     </section>
   </main>
@@ -60,7 +60,7 @@
     <textarea id="teacher-words" rows="6" spellcheck="false"></textarea>
     <p id="teacher-error" class="field-error" role="alert"></p>
     <button id="validate-words" class="button secondary">更新可選詞語</button>
-    <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><p class="small muted">預設 2 項，可以減至 1 項，最多 6 項。孩子決定先寫邊項。</p><div id="teacher-word-options"></div></fieldset>
+    <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><p class="small muted">逐字選擇，預設先練第一項嘅一個字。建議每次 1 至 2 個字，可選最多 6 項詞語、48 個字。同一字喺不同位置會分開練。</p><div id="teacher-word-options"></div><p id="teacher-selection-total" role="status" aria-live="polite"></p></fieldset>
     <button id="apply-words" class="button primary">套用並開始新一節</button>
     <div id="teacher-active" class="teacher-active" hidden><h3>今節練習</h3><button id="teacher-skip" class="button secondary">老師協助，略過呢個字</button><button id="teacher-end" class="button quiet">結束今節並睇紀錄</button></div>
     <details><summary>筆順、語音及紀錄說明</summary><p>初始字庫附本機筆順資料。香港筆順調整範圍以附帶資料說明為準；其他字即使筆畫數相同，亦不代表所有字形細節符合學校教法。請配合課堂核對。</p><p>新增字詞可能要上網載入未經香港逐畫核對嘅字庫。載入失敗唔係學生寫錯。可以再試、改練另一詞，或由老師略過。</p><p id="teacher-voice-note"></p><p>筆畫配對容許較大偏差，只供練習回饋，唔係書寫字形評分。「自己完成」只代表今次無開提示完成平板配對，唔代表已掌握字形、紙筆書寫或默寫。程式唔錄音，唔評估朗讀。</p><a href="https://www.edbchinese.hk/lexlist_ch/" target="_blank" rel="noopener noreferrer">教育局《香港小學學習字詞表》參考</a></details>

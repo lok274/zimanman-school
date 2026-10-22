@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const S = require('../dist/session.js');
+const assigned = text => S.parseEntries(text).map(entry => ({ ...entry, selectedIndexes: entry.characters.map((_, index) => index) }));
 const source = file => fs.readFileSync(path.join(__dirname, '../dist', file), 'utf8');
 
 class Node {
@@ -60,21 +61,21 @@ function environment(html = '<html><body><div id="writer"></div></body></html>')
   document.querySelectorAll = selector => walk(document).filter(node => selector === '[data-stage]' ? 'data-stage' in node.attributes : selector.startsWith('.') && node.className.split(' ').includes(selector.slice(1)));
   document.querySelector = selector => document.querySelectorAll(selector)[0];
   document.createTreeWalker = node => { const nodes = walk(node).filter(item => item.nodeType === 3); let index = 0; return { nextNode: () => nodes[index++] || null }; };
-  const store = new Map(), voices = { current: [], changed: null };
+  const store = new Map(), voices = { current: [], changed: null, spoken: [], cancels: 0 };
   const storage = { get length() { return store.size; }, key: i => [...store.keys()][i], getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value) };
   const observers = new Set(), windowListeners = {}, motion = { reduced: false }; let nextId = 0;
   document.hidden = false;
   const context = vm.createContext({ document, console, setTimeout, clearTimeout, performance, AbortController, NodeFilter: { SHOW_TEXT: 4 },
     localStorage: storage, sessionStorage: storage, crypto: { randomUUID: () => 'runtime-test-' + ++nextId },
     ResizeObserver: class { observe() { observers.add(this); } disconnect() { observers.delete(this); } },
-    speechSynthesis: { getVoices: () => voices.current, cancel() {}, speak() {}, addEventListener(_name, fn) { voices.changed = fn; } },
+    speechSynthesis: { getVoices: () => voices.current, cancel() { voices.cancels++; }, speak(utterance) { if (voices.fail) throw new Error("speech blocked"); voices.spoken.push(utterance); }, addEventListener(_name, fn) { voices.changed = fn; } },
     SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } }, matchMedia: () => ({ matches: motion.reduced }), addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); }
   });
   context.window = context; context.location = { href: 'http://localhost/' };
   return { context, document, voices, store, observers, motion, emitWindow: name => (windowListeners[name] || []).forEach(fn => fn()), $: document.getElementById };
 }
 function recallSnapshot(character) {
-  let state = S.createSession({ id: 'recall-test', entries: S.parseEntries(character), startedAt: 1 });
+  let state = S.createSession({ id: 'recall-test', entries: assigned(character), startedAt: 1 });
   for (const event of [{ type: 'CHOOSE_WORD', wordId: 'w0' }, { type: 'DATA_READY', strokeCount: 1 }, { type: 'START_GUIDED' }, { type: 'STROKE_ACCEPTED', strokeIndex: 0 }, { type: 'WRITING_COMPLETE' }, { type: 'START_RECALL' }]) state = S.transition(state, { at: 2, token: state.active.token, newToken: event.type, ...event });
   assert.equal(state.active.phase, 'recall'); return state;
 }
@@ -89,7 +90,7 @@ function visibleText(document) {
 test('the six word cues use photos with empty alt text and retain SVG fallback', () => {
   const words = ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去'];
   const e = environment(source('index.html'));
-  e.context.BishunSession = { ...S, createSession: options => S.createSession({ ...options, entries: S.parseEntries(words.join('\n')) }) };
+  e.context.BishunSession = { ...S, createSession: options => S.createSession({ ...options, entries: assigned(words.join('\n')) }) };
   e.context.BishunWriting = {};
   vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context);
   const photos = walk(e.$('word-cards')).filter(node => node.nodeName === 'img');
@@ -102,7 +103,7 @@ test('the six word cues use photos with empty alt text and retain SVG fallback',
   assert(!walk(firstCard).some(node => node.nodeName === 'img'));
   for (const word of [...words, '朋友']) {
     const practice = environment(source('index.html'));
-    let initial = S.createSession({ id: 'photo-practice', entries: S.parseEntries(word), startedAt: 1 });
+    let initial = S.createSession({ id: 'photo-practice', entries: assigned(word), startedAt: 1 });
     for (const event of [{ type: 'CHOOSE_WORD', wordId: 'w0' }, { type: 'DATA_READY', strokeCount: 1 }]) initial = S.transition(initial, { at: 2, token: initial.active.token, newToken: 'watch', ...event });
     practice.context.BishunSession = { ...S, createSession: () => structuredClone(initial) }; practice.context.BishunWriting = {};
     vm.runInContext(source('content.js'), practice.context); vm.runInContext(source('app.js'), practice.context);
@@ -134,7 +135,7 @@ test('skipped word card shows pending practice instead of a completion stamp', (
   const e = environment(source('index.html'));
   let initial = recallSnapshot('一');
   initial = S.transition(initial, { type: 'TEACHER_SKIP', token: initial.active.token, at: 3 });
-  initial = S.transition(initial, { type: 'NEXT', token: initial.active.token, newToken: 'next', at: 4 });
+  initial = { ...initial, active: { phase: 'choose-word' } };
   e.context.BishunSession = { ...S, createSession: () => structuredClone(initial) };
   e.context.BishunWriting = {};
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
@@ -159,7 +160,7 @@ test('history counts each character once while retaining assisted and independen
 test('recent history remains discoverable after more than 500 existing storage keys', () => {
   const e = environment(source('index.html'));
   for (let index = 0; index < 500; index++) e.store.set('other-app-' + index, 'unrelated');
-  const latest = S.createSession({ id: 'newest-at-last', entries: S.parseEntries('機'), startedAt: Date.now() + 1000 });
+  const latest = S.createSession({ id: 'newest-at-last', entries: assigned('機'), startedAt: Date.now() + 1000 });
   e.store.set('bishun-school:v1:' + latest.id, JSON.stringify(latest));
   e.context.BishunSession = S; e.context.BishunWriting = {};
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
@@ -337,6 +338,96 @@ test('automatic help remains recorded and audio playback failure keeps visual co
   e.complete(); assert.equal(e.$('feedback').attributes['data-kind'], 'complete-assisted');
   assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false'); assert(e.$('feedback-sound-note').textContent.includes('未能播放'));
   assert.equal(S.summarize(e.snapshot())[0].independent, false);
+});
+function chooseCharacters(e, values) {
+  const selection = new Set(values);
+  walk(e.$('teacher-word-options')).filter(node => node.nodeName === 'input').forEach(input => {
+    input.checked = selection.has(input.value); input.emit('change');
+  });
+}
+test('teacher selects a later word position without word-id drift and keeps the full word as context', async () => {
+  const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃\n鬍鬚\n密\n剪草機\n推來推去'; e.$('validate-words').click();
+  chooseCharacters(e, ['w5:2']); assert.equal(e.$('teacher-selection-total').textContent, '已揀 1 個字 · 1 項詞語'); e.$('apply-words').click();
+  const sessionId = e.store.get('bishun-school:v1:current'), snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + sessionId));
+  assert.equal(snapshot().entries[0].text, '推來推去'); assert.equal(snapshot().occurrences.length, 1); assert.equal(snapshot().occurrences[0].id, 'w0:2');
+  assert(e.$('word-cards').textContent.includes('今次只練 第 3 字「推」')); assert(e.$('session-count').textContent.includes('指定 1 個字'));
+  e.$('word-cards').childNodes[0].click(); await waitFor(() => snapshot().active.phase === 'watch');
+  assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(e.$('word-position').textContent, '原詞第 3 字'); assert(e.$('char-position').textContent.includes('已處理 0'));
+  e.$('main-next').click();
+  for (let round = 0; round < 2; round++) { for (let i = 0; i < 2; i++) e.send('STROKE_ACCEPTED', { strokeIndex: i }); e.send('WRITING_COMPLETE'); if (round === 0) e.$('main-next').click(); }
+  assert.equal(snapshot().active.phase, 'character-complete'); assert.equal(e.$('main-next').textContent, '睇今次紀錄 →'); e.$('main-next').click();
+  assert.equal(snapshot().active.phase, 'summary'); assert.equal(S.summarize(snapshot()).length, 1); assert(!e.$('summary-rows').textContent.includes('待練'));
+});
+test('zero selection or changed words cannot end the current valid lesson', async () => {
+  const e = await feedbackApp(); e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.$('teacher-open').click();
+  const before = JSON.stringify(e.snapshot()); chooseCharacters(e, []); e.$('apply-words').click();
+  assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-dialog').open); assert(e.$('teacher-error').textContent.includes('請揀'));
+  e.$('teacher-words').value = '濃'; e.$('apply-words').click();
+  assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-error').textContent.includes('詞語有改動'));
+});
+test('choosing a later assigned word first shows processed count rather than a false ordinal', async () => {
+  const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃'; e.$('validate-words').click(); chooseCharacters(e, ['w0:0', 'w1:0']); e.$('apply-words').click();
+  e.$('word-cards').childNodes[1].click(); await waitFor(() => e.$('practice-title').textContent === '睇一睇，點樣寫');
+  assert.equal(e.$('char-position').textContent, '今次 2 字 · 已處理 0 字');
+});
+test('simplified mode defaults on and toggles partial writing without replacing the writer or assessment', async () => {
+  const e = await feedbackApp(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'true'); assert(e.document.body.className.includes('simplified-practice'));
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); const before = JSON.stringify(e.snapshot()), mount = e.mounts.at(-1), mounts = e.mounts.length;
+  e.$('simplify').click(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'false'); assert(!e.document.body.className.includes('simplified-practice')); assert.equal(e.mounts.length, mounts);
+  e.$('simplify').click(); assert.equal(JSON.stringify(e.snapshot()), before); assert.equal(e.mounts.at(-1), mount); assert.equal(e.$('stroke-progress').textContent, '已寫 1 / 2 畫');
+  e.send('STROKE_ACCEPTED', { strokeIndex: 1 }, mount); e.send('WRITING_COMPLETE', {}, mount); assert.equal(e.snapshot().active.writingDone, true);
+  assert.equal(e.snapshot().attempts[0].help.length, 0);
+});
+test('instruction speech speaks exactly the displayed sentence on a click and never records help', async () => {
+  const e = await feedbackApp(); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }, { lang: 'zh-CN', name: 'Mandarin' }]; e.voices.changed();
+  assert.equal(e.voices.spoken.length, 0); const snapshot = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
+  const utterance = e.voices.spoken.at(-1); assert.equal(utterance.text, e.$('practice-instruction').textContent); assert.equal(utterance.lang, 'yue-HK'); assert.equal(JSON.stringify(e.snapshot()), snapshot);
+  const cancels = e.voices.cancels; e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.voices.cancels, cancels, 'ordinary stroke render preserves current instruction speech');
+  e.$('simplify').click(); assert.equal(e.voices.cancels, cancels); e.$('hear-instruction').click(); assert.equal(e.voices.spoken.length, 2); assert(e.voices.cancels > cancels);
+  utterance.onerror(); assert(!e.$('instruction-voice-note').textContent.includes('未能朗讀'), 'stale error cannot replace a new request');
+  e.voices.spoken.at(-1).onerror(); assert(e.$('instruction-voice-note').textContent.includes('未能朗讀'));
+  assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
+});
+test('instruction speech cancels on navigation, rest, teacher, hidden page and page exit with stale callbacks ignored', async () => {
+  const e = await feedbackApp(); e.voices.current = [{ lang: 'zh-HK', name: 'Cantonese' }];
+  const actions = [() => e.$('previous-step').click(), () => e.$('rest').click(), () => e.$('teacher-open').click(), () => { e.document.hidden = true; e.document.emit('visibilitychange'); }, () => e.emitWindow('pagehide')];
+  for (const action of actions) {
+    e.$('hear-instruction').click(); const u = e.voices.spoken.at(-1), before = e.voices.cancels; action(); assert(e.voices.cancels > before); u.onerror(); u.onend(); assert.equal(e.$('instruction-voice-note').textContent, '');
+    if (e.$('rest-dialog').open) e.$('resume').click(); if (e.$('teacher-dialog').open) e.$('teacher-close').click(); e.document.hidden = false;
+  }
+});
+test('instruction speech falls back honestly for missing APIs, absent Cantonese, synchronous failure and utterance errors', async () => {
+  for (const mode of ['no-api', 'no-utterance', 'mandarin-only', 'throws', 'utterance-error']) {
+    const e = await feedbackApp(); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
+    if (mode === 'no-api') delete e.context.speechSynthesis;
+    if (mode === 'no-utterance') delete e.context.SpeechSynthesisUtterance;
+    if (mode === 'mandarin-only') e.voices.current = [{ lang: 'zh-CN', name: 'Mandarin' }];
+    if (mode === 'throws') e.voices.fail = true;
+    const saved = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
+    if (mode === 'utterance-error') e.voices.spoken.at(-1).onerror();
+    assert(/冇粵語|未能朗讀/.test(e.$('instruction-voice-note').textContent), mode); assert.equal(JSON.stringify(e.snapshot()), saved);
+    assert(e.voices.spoken.every(u => u.lang !== 'zh-CN'));
+  }
+});
+test('new instruction and presentation controls stay readable and target-safe in independent recall', async () => {
+  for (const character of ['聽', '指', '令', '精', '簡', '語', '由', '想', '再', '聲', '畫', '示', '字', '一']) {
+    const e = await feedbackApp(character); e.complete(); e.$('main-next').click(); assert(!e.$('speak').attributes['aria-label'].includes(character)); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click();
+    assert.equal(e.voices.spoken.at(-1).text, e.$('practice-instruction').textContent);
+    for (const id of ['practice-instruction', 'hear-instruction', 'instruction-voice-note', 'simplify', 'char-position']) {
+      assert(!e.$(id).textContent.includes(character), character + ' absent from ' + id); assert(!e.$(id).textContent.includes('□'), id + ' is readable');
+      assert(!Object.values(e.$(id).attributes).some(value => value.includes(character)), 'no answer in attributes');
+    }
+    assert(!e.$('speak').attributes['aria-label'].includes(character)); e.$('simplify').click(); assert(!e.$('simplify').textContent.includes(character)); assert(!visibleText(e.document).includes(character));
+    assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
+  }
+});
+test('legacy history remains full scope and interrupted v1 work is closed without migration', () => {
+  const e = environment(source('index.html')), legacy = require('./fixtures/session-v1.json');
+  e.store.set('bishun-school:v1:' + legacy.id, JSON.stringify(legacy)); e.store.set('bishun-school:v1:current', legacy.id);
+  e.context.BishunSession = S; e.context.BishunWriting = {}; e.context.BishunContent = { words: ['粗'], cue: () => ['例子', 'M1 1L2 2'] };
+  vm.runInContext(source('app.js'), e.context); e.$('teacher-open').click();
+  const closed = JSON.parse(e.store.get('bishun-school:v1:' + legacy.id)); assert.equal(closed.version, 1); assert.equal(closed.occurrences.length, 5); assert.equal(closed.attempts.at(-1).outcome, 'abandoned');
+  assert(e.$('local-history').textContent.includes('自己完成 0 · 有提示完成 1 · 跳過 0 · 待練 4')); assert(e.$('local-history').textContent.includes('推來推去 第 3 字「推」待練'));
 });
 
 test('pinned vendor keeps one pointer-end listener pair across repeated mounts and disposals', async () => {

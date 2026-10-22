@@ -3,10 +3,11 @@
   const S = globalThis.BishunSession, W = globalThis.BishunWriting, C = globalThis.BishunContent;
   const $ = id => document.getElementById(id);
   const prefix = 'bishun-school:v1:';
-  let entries = S.parseEntries(C.words.join('\n')), selected = new Set(['w0', 'w1']);
+  let entries = S.parseEntries(C.words.join('\n')), selected = new Set(['w0:0']);
   let state, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   let feedback = null, feedbackAnimation = null, tone = null;
   let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
+  let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
   const dataCache = new Map();
   const concealedText = new Map();
   function restoreRecallText() { concealedText.forEach((text, node) => { node.nodeValue = text; }); concealedText.clear(); }
@@ -39,14 +40,19 @@
     } catch (_) { storageError(); }
     return sessions.sort((a, b) => b.startedAt - a.startedAt).slice(0, 40);
   }
-  function startSession() {
+  function sessionCandidate() {
+    const assigned = entries.map(entry => ({ text: entry.text, selectedIndexes: entry.characters.flatMap((_, index) => selected.has(entry.id + ':' + index) ? [index] : []) })).filter(entry => entry.selectedIndexes.length);
+    if (!assigned.length || assigned.length > 6) throw new Error('今節請揀 1 至 6 項詞語入面嘅字。建議先練 1 至 2 個字。');
+    return S.createSession({ id: id(), entries: assigned, startedAt: Date.now() });
+  }
+  function startSession(candidate = sessionCandidate()) {
     stopEffects();
     feedback = null;
-    state = S.createSession({ id: id(), entries: entries.filter(entry => selected.has(entry.id)), startedAt: Date.now() });
+    state = candidate;
     try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
     save(); render();
   }
-  function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+  function stopSpeech() { speechGeneration++; instructionStatus = ''; $('instruction-voice-note').textContent = ''; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {} }
   function stopEffects() { if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
   function dispatch(event) {
     const before = state;
@@ -141,12 +147,13 @@
     const container = $('word-cards'); container.replaceChildren();
     const rows = S.summarize(state);
     const completedWords = state.entries.filter(word => state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id))).length;
-    $('session-count').textContent = '今節 ' + state.entries.length + ' 項詞語 · 已練 ' + completedWords + ' 項';
+    $('session-count').textContent = '今次指定 ' + state.occurrences.length + ' 個字 · 已處理 ' + state.finished.length + ' 個';
     state.entries.forEach((word, index) => {
       const done = state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id));
       const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
-      const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', C.cue(word.text)[0], 'card-example'), textNode('span', pending ? '今次先放低 · 紀錄入面再睇' : done ? '已練過 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
+      const assignment = state.occurrences.filter(item => item.wordId === word.id).map(item => '第 ' + (item.index + 1) + ' 字「' + item.character + '」').join('、');
+      const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', '今次只練 ' + assignment, 'card-example'), textNode('span', pending ? '今次先放低 · 紀錄入面再睇' : done ? '今次指定字已練 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
       button.append(content, visualCue(word.text));
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
@@ -157,19 +164,21 @@
   function render() {
     restoreRecallText();
     renderSound();
+    renderWordVoiceLabel();
     const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary';
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
     $('previous-step').textContent = safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回詞語']);
     document.body.classList.toggle('has-recall', a.phase === 'recall');
-    if (choose || summary) { if (handle || loadingController) stopEffects(); if (choose) renderChoices(); else renderSummary(state); return; }
+    renderPresentation();
+    if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else renderSummary(state); return; }
     const occurrence = currentOccurrence(), word = currentWord();
     const recall = a.phase === 'recall', complete = a.phase === 'character-complete';
-    $('word-position').textContent = '今節第 ' + (state.entries.indexOf(word) + 1) + ' 項詞語';
+    $('word-position').textContent = safeText(['原詞第 ' + (occurrence.index + 1) + ' 字', '詞內位置 ' + (occurrence.index + 1), '原本序號 ' + (occurrence.index + 1)]);
     $('word-title').textContent = recall ? '詞語收埋咗' : word.text; $('word-title').classList.toggle('concealed', recall);
     $('word-example').textContent = recall ? '想聽，可以撳「聽一聽」。' : C.cue(word.text)[0];
     $('semantic-cue').replaceChildren(visualCue(word.text));
-    $('char-position').textContent = '第 ' + (occurrence.index + 1) + ' / ' + word.characters.length + ' 字';
+    $('char-position').textContent = safeText(['今次 ' + state.occurrences.length + ' 字 · 已處理 ' + state.finished.length + ' 字', '指定 ' + state.occurrences.length + ' 個 · 做咗 ' + state.finished.length + ' 個', '任務共 ' + state.occurrences.length + ' · 進度 ' + state.finished.length]);
     $('writer').setAttribute('aria-label', recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
@@ -181,17 +190,22 @@
     $('stroke-progress').textContent = a.strokeCount && ['guided', 'recall'].includes(a.phase) ? '已寫 ' + a.currentStroke + ' / ' + a.strokeCount + ' 畫' : a.strokeCount && a.phase === 'watch' ? '共 ' + a.strokeCount + ' 畫' : '';
     const attempt = state.attempts.find(item => item.id === a.attemptId);
     let title = '', instruction = '', defaultFeedback = '';
-    if (a.phase === 'loading') { title = '準備好書寫格'; instruction = '等一等，整理緊筆順。'; }
-    if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = '唔係你寫錯。可以再試，或者請老師幫手。'; }
-    if (a.phase === 'watch') { title = '睇一睇，點樣寫'; instruction = '撳播放，眼睛跟住每一畫。'; defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : '跟住起點，一畫一畫寫'; instruction = a.writingDone ? '而家試吓收起字形，用自己嘅方法記住。' : '由橙色起點開始。用手指或者觸控筆寫。'; defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
-    if (a.phase === 'recall') { title = '收起字形，自己試'; instruction = '先想一想。想要提示，隨時可以開。'; defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
+    if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
+    if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = safeText(['可以再載入，或者請老師幫手。', '資料未準備好，稍後再試。', '想求助就撳老師工具。']); }
+    if (a.phase === 'watch') { title = '睇一睇，點樣寫'; instruction = safeText(['撳播放，睇筆順。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : '跟住起點，一畫一畫寫'; instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
+    if (a.phase === 'recall') { title = '收起字形，自己試'; instruction = safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && attempt.help.length ? '有提示完成' : '自己完成';
-      title = label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '你完成咗今次書寫。準備好先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
-      $('main-next').textContent = occurrence.index + 1 < word.characters.length ? '下一個字 →' : '揀下一項詞語 →';
+      title = label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
+      const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
+      $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個指定字 →' : '揀下一項詞語 →';
     }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
+    instructionText = instruction;
+    const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction].join(':');
+    if (nextSpeechKey !== speechKey) { stopSpeech(); speechKey = nextSpeechKey; }
+    renderInstructionVoice();
     const message = feedback ? feedback.text : defaultFeedback;
     if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;
     const icon = feedback ? feedback.icon : '';
@@ -264,9 +278,17 @@
   }
   function selectedOptions() {
     const div = $('teacher-word-options'); div.replaceChildren();
-    entries.forEach(entry => { const label = textNode('label', '', 'word-option'), checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = selected.has(entry.id); checkbox.value = entry.id;
-      checkbox.addEventListener('change', () => { if (checkbox.checked) selected.add(entry.id); else selected.delete(entry.id); }); label.append(checkbox, document.createTextNode(entry.text)); div.append(label); });
+    entries.forEach(entry => {
+      const group = document.createElement('fieldset'); group.className = 'character-options'; group.append(textNode('legend', entry.text));
+      entry.characters.forEach((character, index) => {
+        const key = entry.id + ':' + index, label = textNode('label', '', 'word-option'), checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = selected.has(key); checkbox.value = key;
+        checkbox.addEventListener('change', () => { if (checkbox.checked) selected.add(key); else selected.delete(key); renderSelectionTotal(); });
+        label.append(checkbox, document.createTextNode('第 ' + (index + 1) + ' 字「' + character + '」')); group.append(label);
+      }); div.append(group);
+    });
+    renderSelectionTotal();
   }
+  function renderSelectionTotal() { $('teacher-selection-total').textContent = '已揀 ' + selected.size + ' 個字 · ' + entries.filter(entry => entry.characters.some((_, index) => selected.has(entry.id + ':' + index))).length + ' 項詞語'; }
   function renderHistory() {
     const list = $('local-history'); list.replaceChildren(); const all = history();
     if (!all.length) { list.textContent = '暫時未有已儲存紀錄。'; return; }
@@ -279,21 +301,46 @@
     });
   }
   let cantoneseVoice = null;
+  function renderPresentation() {
+    document.body.classList.toggle('simplified-practice', simplified);
+    $('simplify').textContent = safeText(simplified ? ['精簡畫面：開', '只顯示重點', '少啲內容'] : ['精簡畫面：關', '顯示全部內容', '完整模式']);
+    $('simplify').setAttribute('aria-pressed', String(simplified));
+  }
+  function renderInstructionVoice() {
+    $('hear-instruction').textContent = safeText(['聽指令', '操作語音', '播放說明']);
+    $('instruction-voice-note').textContent = instructionStatus ? safeText(instructionStatus) : '';
+  }
+  const speechUnavailable = ['暫時冇粵語聲音，請老師讀畫面指令。', '裝置未提供合適語音，可搵大人幫手。', '未能朗讀，文字仍然保留。'];
+  const speechFailed = ['裝置未能朗讀，請老師讀畫面指令。', '語音暫時用唔到，可搵大人幫手。', '聲音有問題，文字仍然保留。'];
+  function refreshSpeechNotice() { restoreRecallText(); renderInstructionVoice(); maskRecallText(); }
+  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); }
   function updateVoices() {
     restoreRecallText();
-    cantoneseVoice = 'speechSynthesis' in window ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null;
+    try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
     $('voice-note').textContent = cantoneseVoice ? '撳一下，聽粵語。' : '暫時冇粵語聲音。可以請老師讀一次。';
     $('teacher-voice-note').textContent = cantoneseVoice ? '目前使用裝置嘅粵語聲音「' + cantoneseVoice.name + '」。語音由瀏覽器提供。' : '瀏覽器未提供可辨識嘅粵語聲音。程式唔會改用普通話。可由老師朗讀，或喺裝置設定加入粵語語音後重開。';
-    $('speak').setAttribute('aria-label', cantoneseVoice ? '聽粵語詞語' : '顯示粵語聲音未能使用嘅說明');
+    renderWordVoiceLabel();
     maskRecallText();
   }
+  function speakText(text, operation) {
+    stopSpeech(); const generation = speechGeneration;
+    if (!cantoneseVoice) { if (operation) instructionStatus = speechUnavailable; else $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; refreshSpeechNotice(); return; }
+    try {
+      const u = new SpeechSynthesisUtterance(text); u.voice = cantoneseVoice; u.lang = cantoneseVoice.lang; u.rate = 0.72;
+      u.onend = () => { if (generation === speechGeneration && operation) { instructionStatus = ''; refreshSpeechNotice(); } };
+      u.onerror = () => { if (generation !== speechGeneration) return; if (operation) instructionStatus = speechFailed; else $('voice-note').textContent = '裝置未能朗讀，可以請老師讀一次。'; refreshSpeechNotice(); };
+      if (operation) instructionStatus = ['正在播放指令。', '語音已送到裝置。', '聲音準備中。'];
+      speechSynthesis.speak(u); refreshSpeechNotice();
+    } catch (_) { if (operation) instructionStatus = speechFailed; else $('voice-note').textContent = '裝置未能朗讀，可以請老師讀一次。'; refreshSpeechNotice(); }
+  }
+  $('hear-instruction').addEventListener('click', () => { updateVoices(); speakText(instructionText, true); });
+  $('simplify').addEventListener('click', () => { restoreRecallText(); simplified = !simplified; renderPresentation(); maskRecallText(); });
   $('speak').addEventListener('click', () => {
     updateVoices();
-    if (!cantoneseVoice) { $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; maskRecallText(); return; }
     const word = currentWord(), occurrence = currentOccurrence(); if (!word || !occurrence) return;
-    stopSpeech(); const u = new SpeechSynthesisUtterance(word.text + '。第' + (occurrence.index + 1) + '個字，' + occurrence.character + '。'); u.voice = cantoneseVoice; u.lang = cantoneseVoice.lang; u.rate = 0.72; speechSynthesis.speak(u);
+    speakText(word.text + '。第' + (occurrence.index + 1) + '個字，' + occurrence.character + '。', false);
   });
-  if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', updateVoices);
+  if ('speechSynthesis' in window && speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', updateVoices);
   $('teacher-open').addEventListener('click', () => {
     if (state.active.phase === 'recall') requestHelp('outline');
     stopSpeech(); cancelFeedbackEffects(); if (handle) handle.pause();
@@ -303,14 +350,14 @@
     $('teacher-dialog').showModal();
   });
   $('teacher-close').addEventListener('click', () => $('teacher-dialog').close());
-  $('validate-words').addEventListener('click', () => { try { entries = S.parseEntries($('teacher-words').value); selected = new Set(entries.slice(0, 2).map(entry => entry.id)); selectedOptions(); $('teacher-error').textContent = '已更新可選詞語。揀好範圍，再撳「套用並開始新一節」。'; } catch (error) { $('teacher-error').textContent = error.message; } });
+  $('validate-words').addEventListener('click', () => { try { entries = S.parseEntries($('teacher-words').value); selected = new Set(['w0:0']); selectedOptions(); $('teacher-error').textContent = '已更新可選詞語。揀好範圍，再撳「套用並開始新一節」。'; } catch (error) { $('teacher-error').textContent = error.message; } });
   $('apply-words').addEventListener('click', () => {
     try {
       const parsed = S.parseEntries($('teacher-words').value);
       if (parsed.map(e => e.text).join('\n') !== entries.map(e => e.text).join('\n')) throw new Error('詞語有改動。先撳「更新可選詞語」，再選擇範圍。');
-      if (selected.size < 1 || selected.size > 6) throw new Error('今節請揀 1 至 6 項詞語。');
+      const candidate = sessionCandidate();
       if (state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
-      $('teacher-dialog').close(); startSession();
+      $('teacher-dialog').close(); startSession(candidate);
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
   $('teacher-skip').addEventListener('click', () => { if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
@@ -322,7 +369,7 @@
   $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
   $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
   $('choice-summary').addEventListener('click', () => dispatch({ type: 'END_SESSION' }));
-  $('new-session').addEventListener('click', startSession);
+  $('new-session').addEventListener('click', () => { try { startSession(); } catch (error) { $('teacher-open').click(); $('teacher-error').textContent = error.message; } });
   $('rest').addEventListener('click', () => { if (handle) handle.suspend(); stopSpeech(); dispatch({ type: 'REST' }); $('rest-dialog').showModal(); });
   $('resume').addEventListener('click', () => { $('rest-dialog').close(); mountedKey = ''; dispatch({ type: 'RESUME' }); });
   $('rest-dialog').addEventListener('cancel', event => event.preventDefault());

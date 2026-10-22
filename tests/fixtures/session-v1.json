@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "id": "legacy-v1",
+  "startedAt": 1,
+  "entries": [
+    {
+      "id": "w0",
+      "text": "粗",
+      "characters": [
+        "粗"
+      ]
+    },
+    {
+      "id": "w1",
+      "text": "推來推去",
+      "characters": [
+        "推",
+        "來",
+        "推",
+        "去"
+      ]
+    }
+  ],
+  "occurrences": [
+    {
+      "id": "w0:0",
+      "wordId": "w0",
+      "index": 0,
+      "character": "粗"
+    },
+    {
+      "id": "w1:0",
+      "wordId": "w1",
+      "index": 0,
+      "character": "推"
+    },
+    {
+      "id": "w1:1",
+      "wordId": "w1",
+      "index": 1,
+      "character": "來"
+    },
+    {
+      "id": "w1:2",
+      "wordId": "w1",
+      "index": 2,
+      "character": "推"
+    },
+    {
+      "id": "w1:3",
+      "wordId": "w1",
+      "index": 3,
+      "character": "去"
+    }
+  ],
+  "attempts": [
+    {
+      "id": "legacy-3",
+      "occurrenceId": "w0:0",
+      "phase": "guided",
+      "startedAt": 4,
+      "help": [],
+      "mistakes": 0,
+      "outcome": "complete",
+      "endedAt": 6
+    },
+    {
+      "id": "legacy-6",
+      "occurrenceId": "w0:0",
+      "phase": "recall",
+      "startedAt": 7,
+      "help": [
+        {
+          "kind": "outline",
+          "strokeIndex": 0,
+          "at": 8
+        }
+      ],
+      "mistakes": 0,
+      "outcome": "complete",
+      "endedAt": 10
+    },
+    {
+      "id": "legacy-13",
+      "occurrenceId": "w1:0",
+      "phase": "guided",
+      "startedAt": 14,
+      "help": [
+        {
+          "kind": "stroke",
+          "strokeIndex": 0,
+          "at": 16
+        }
+      ],
+      "mistakes": 1,
+      "outcome": "active"
+    }
+  ],
+  "finished": [
+    "w0:0"
+  ],
+  "active": {
+    "phase": "guided",
+    "occurrenceId": "w1:0",
+    "token": "legacy-13",
+    "strokeCount": 2,
+    "attemptId": "legacy-13",
+    "currentStroke": 0,
+    "missesOnCurrentStroke": 1,
+    "writingDone": false
+  },
+  "resting": false
+}

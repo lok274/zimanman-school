@@ -9,9 +9,15 @@
   }
   function createSession({ id, entries, startedAt }) {
     if (typeof id !== 'string' || !id || id.length > 100 || !Number.isFinite(startedAt) || !Array.isArray(entries) || !entries.length || entries.length > 6) throw new Error('練習設定無效。');
+    if (entries.some(entry => !entry || typeof entry.text !== 'string' || !/^\p{Script=Han}{1,8}$/u.test(entry.text))) throw new Error('練習設定無效。');
     const parsed = parseEntries(entries.map(entry => entry.text).join('\n'));
     if (parsed.length !== entries.length) throw new Error('詞語不能重複。');
-    return { version: 1, id, startedAt, entries: parsed, occurrences: parsed.flatMap(word => word.characters.map((character, index) => ({ id: word.id + ':' + index, wordId: word.id, index, character }))), attempts: [], finished: [], active: { phase: 'choose-word' }, resting: false };
+    const occurrences = parsed.flatMap((word, wordIndex) => {
+      const indexes = entries[wordIndex].selectedIndexes;
+      if (!Array.isArray(indexes) || !indexes.length || new Set(indexes).size !== indexes.length || indexes.some(index => !Number.isInteger(index) || index < 0 || index >= word.characters.length)) throw new Error('請為每項詞語揀最少一個字。');
+      return [...indexes].sort((a, b) => a - b).map(index => ({ id: word.id + ':' + index, wordId: word.id, index, character: word.characters[index] }));
+    });
+    return { version: 2, id, startedAt, entries: parsed, occurrences, attempts: [], finished: [], active: { phase: 'choose-word' }, resting: false };
   }
   function transition(state, event) {
     if (!state || !event || typeof event.type !== 'string') return state;
@@ -86,6 +92,7 @@
         s.active = { ...a, phase: 'character-complete', completedPhase: 'skipped' }; return s;
       case 'NEXT': {
         if (a.phase !== 'character-complete' || typeof event.newToken !== 'string') return state;
+        if (s.occurrences.every(item => s.finished.includes(item.id))) return transition(s, { type: 'END_SESSION', at: event.at });
         const current = s.occurrences.find(item => item.id === a.occurrenceId);
         const next = s.occurrences.find(item => item.wordId === current.wordId && !s.finished.includes(item.id));
         s.active = next ? { phase: 'loading', occurrenceId: next.id, token: event.newToken } : { phase: 'choose-word' }; return s;
@@ -108,10 +115,16 @@
   }
   function validateSnapshot(value) {
     try {
-      if (!value || value.version !== 1 || !Number.isFinite(value.startedAt) || typeof value.id !== 'string' || value.id.length > 100 || !Array.isArray(value.attempts) || value.attempts.length > 2000 || !Array.isArray(value.entries)) return false;
-      const expected = createSession({ id: value.id, entries: value.entries, startedAt: value.startedAt });
-      if (JSON.stringify(value.entries) !== JSON.stringify(expected.entries) || JSON.stringify(value.occurrences) !== JSON.stringify(expected.occurrences) || !Array.isArray(value.finished) || value.finished.some(id => !expected.occurrences.some(o => o.id === id))) return false;
+      if (!value || ![1, 2].includes(value.version) || !Number.isFinite(value.startedAt) || typeof value.id !== 'string' || value.id.length > 100 || !Array.isArray(value.attempts) || value.attempts.length > 2000 || !Array.isArray(value.entries) || !Array.isArray(value.occurrences) || value.occurrences.length > 48) return false;
+      const entries = value.entries.map(word => ({ text: word.text, selectedIndexes: value.version === 1 ? Array.from(word.text).map((_, index) => index) : value.occurrences.filter(item => item.wordId === word.id).map(item => item.index) }));
+      const expected = createSession({ id: value.id, entries, startedAt: value.startedAt });
+      if (JSON.stringify(value.entries) !== JSON.stringify(expected.entries) || JSON.stringify(value.occurrences) !== JSON.stringify(expected.occurrences) || !Array.isArray(value.finished) || new Set(value.finished).size !== value.finished.length || value.finished.some(id => !expected.occurrences.some(o => o.id === id))) return false;
       if (!value.active || !['choose-word', 'loading', 'unavailable', 'watch', 'guided', 'recall', 'character-complete', 'summary'].includes(value.active.phase)) return false;
+      const a = value.active;
+      if (!['choose-word', 'summary'].includes(a.phase) && (!expected.occurrences.some(o => o.id === a.occurrenceId) || typeof a.token !== 'string' || !a.token)) return false;
+      if (a.attemptId !== undefined && !value.attempts.some(item => item.id === a.attemptId && item.occurrenceId === a.occurrenceId)) return false;
+      if (['guided', 'recall'].includes(a.phase) && !value.attempts.some(item => item.id === a.attemptId && item.occurrenceId === a.occurrenceId && item.phase === a.phase)) return false;
+      if (new Set(value.attempts.map(item => item.id)).size !== value.attempts.length) return false;
       return value.attempts.every(item => item && typeof item.id === 'string' && item.id.length <= 100 && expected.occurrences.some(o => o.id === item.occurrenceId) && ['guided', 'recall', 'teacher'].includes(item.phase) && ['active', 'complete', 'abandoned', 'skipped'].includes(item.outcome) && Number.isInteger(item.mistakes) && item.mistakes >= 0 && item.mistakes < 100000 && Number.isFinite(item.startedAt) && Array.isArray(item.help) && item.help.length <= 2000 && item.help.every(help => help && ['start', 'outline', 'stroke'].includes(help.kind) && Number.isInteger(help.strokeIndex) && help.strokeIndex >= 0 && help.strokeIndex < 64 && Number.isFinite(help.at)));
     } catch (_) { return false; }
   }

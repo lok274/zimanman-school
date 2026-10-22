@@ -5,7 +5,7 @@ const S = require('../dist/session.js');
 const W = require('../dist/writing.js');
 let counter = 0;
 const token = () => 'token-' + (++counter);
-function create(text = '粗\n推來推去') { return S.createSession({ id: 'session', entries: S.parseEntries(text), startedAt: 1 }); }
+function create(text = '粗\n推來推去') { return S.createSession({ id: 'session', entries: S.parseEntries(text).map(entry => ({ ...entry, selectedIndexes: entry.characters.map((_, index) => index) })), startedAt: 1 }); }
 function send(state, type, extra = {}) { return S.transition(state, { type, token: state.active.token, at: 2, newToken: token(), ...extra }); }
 function guided(text = '粗') { let s = create(text); s = send(s, 'CHOOSE_WORD', { wordId: 'w0' }); s = send(s, 'DATA_READY', { strokeCount: 2 }); return send(s, 'START_GUIDED'); }
 function finish(s) { const start = s.active.currentStroke; for (let i = start; i < s.active.strokeCount; i++) s = send(s, 'STROKE_ACCEPTED', { strokeIndex: i }); return send(s, 'WRITING_COMPLETE'); }
@@ -45,7 +45,7 @@ test('stale, duplicate and premature callbacks do not award work or advance', ()
 });
 test('teacher skip is never completion and remains recorded', () => {
   let s = guided(); s = send(s, 'TEACHER_SKIP'); const row = S.summarize(s)[0]; assert.equal(row.skipped, true); assert.equal(row.independent, false); assert.equal(row.guided, false); assert.equal(s.active.phase, 'character-complete');
-  s = send(s, 'NEXT'); assert.equal(s.active.phase, 'choose-word'); assert.equal(S.summarize(s)[0].attempts[0].outcome, 'skipped');
+  s = send(s, 'NEXT'); assert.equal(s.active.phase, 'summary'); assert.equal(S.summarize(s)[0].attempts[0].outcome, 'skipped');
 });
 test('repeated characters have distinct positions and do not share achievement', () => {
   let s = guided('推來推去'); s = finish(s); s = send(s, 'START_RECALL'); s = finish(s); s = send(s, 'NEXT');
@@ -130,4 +130,43 @@ test('all bundled characters validate and required corrections remain present', 
   assert.equal(Object.keys(all).length, 11);
   for (const [character, data] of Object.entries(all)) assert(W.validateCharacter(character, data).strokes.length > 0);
   assert.equal(all['草'].strokes.length, 10);
+});
+test('new sessions require explicit valid character positions and canonicalize their order', () => {
+  const options = { id: 'assignment', startedAt: 1 };
+  for (const text of ['', '粗 粗', '粗\n粗', '粗A', '粗'.repeat(9)]) assert.throws(() => S.createSession({ ...options, entries: [{ text, selectedIndexes: [0] }] }));
+  for (const selectedIndexes of [undefined, null, [], [0, 0], [-1], [4], [0.5], ['0']]) assert.throws(() => S.createSession({ ...options, entries: [{ text: '推來推去', selectedIndexes }] }));
+  const state = S.createSession({ ...options, entries: [{ text: '推來推去', selectedIndexes: [2, 0] }] });
+  assert.equal(state.version, 2); assert.equal(state.entries[0].text, '推來推去');
+  assert.deepEqual(state.occurrences.map(o => [o.id, o.index, o.character]), [['w0:0', 0, '推'], ['w0:2', 2, '推']]);
+  assert.equal(S.validateSnapshot(state), true);
+});
+test('a single nonfirst assignment ends only on explicit next and excludes unassigned positions', () => {
+  let s = S.createSession({ id: 'one-position', entries: [{ text: '推來推去', selectedIndexes: [2] }], startedAt: 1 });
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0' }); assert.equal(s.active.occurrenceId, 'w0:2');
+  s = send(s, 'DATA_READY', { strokeCount: 1 }); s = send(s, 'START_GUIDED'); s = finish(s); s = send(s, 'START_RECALL'); s = finish(s);
+  assert.equal(s.active.phase, 'character-complete'); assert.equal(s.endedAt, undefined); assert.equal(S.summarize(s).length, 1);
+  assert.equal(S.summarize(s)[0].unfinished, false); s = send(s, 'NEXT');
+  assert.equal(s.active.phase, 'summary'); assert.equal(s.endedAt, 2); assert.equal(S.validateSnapshot(s), true);
+});
+test('repeated assigned positions advance separately, preserve skips and support out of order word choice', () => {
+  let s = S.createSession({ id: 'positions', entries: [{ text: '粗', selectedIndexes: [0] }, { text: '推來推去', selectedIndexes: [0, 2] }], startedAt: 1 });
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w1' }); s = send(s, 'TEACHER_SKIP'); s = send(s, 'NEXT');
+  assert.equal(s.active.occurrenceId, 'w1:2'); s = send(s, 'TEACHER_SKIP'); s = send(s, 'NEXT'); assert.equal(s.active.phase, 'choose-word');
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0' }); s = send(s, 'TEACHER_SKIP'); s = send(s, 'NEXT');
+  assert.equal(s.active.phase, 'summary'); assert(S.summarize(s).every(row => row.skipped && !row.independent && !row.unfinished));
+});
+test('version two stored scope rejects noncanonical membership and invalid active references', () => {
+  const s = S.createSession({ id: 'scope', entries: [{ text: '推來推去', selectedIndexes: [0, 2] }], startedAt: 1 });
+  for (const mutate of [v => v.occurrences.push(v.occurrences[0]), v => v.occurrences.reverse(), v => v.occurrences[0].wordId = 'w5', v => v.occurrences[0].character = '來', v => v.finished = ['w0:0', 'w0:0'], v => v.finished = ['w0:1'], v => v.active = { phase: 'watch', occurrenceId: 'w0:1', token: 'bad' }, v => v.active = { phase: 'character-complete', occurrenceId: 'w0:0', token: 'bad', attemptId: 'missing' }]) {
+    const broken = structuredClone(s); mutate(broken); assert.equal(S.validateSnapshot(broken), false);
+  }
+  assert.equal(S.validateSnapshot({ ...s, version: 3 }), false);
+});
+test('original version one fixture retains its full task and interrupted assistance', () => {
+  const legacy = require('./fixtures/session-v1.json'), before = JSON.stringify(legacy);
+  assert.equal(S.validateSnapshot(legacy), true); assert.equal(legacy.version, 1); assert.equal(legacy.occurrences.length, 5);
+  const closed = send(legacy, 'END_SESSION');
+  assert.equal(closed.version, 1); assert.equal(S.validateSnapshot(closed), true); assert.equal(closed.attempts.at(-1).outcome, 'abandoned'); assert.equal(closed.attempts.at(-1).mistakes, 1); assert.equal(closed.attempts.at(-1).help.length, 1);
+  const rows = S.summarize(closed); assert.equal(rows.filter(row => row.assisted).length, 1); assert.equal(rows.filter(row => row.unfinished).length, 4);
+  assert.equal(JSON.stringify(legacy), before, 'reading and closing a copy do not migrate the original');
 });
