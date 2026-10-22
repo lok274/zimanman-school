@@ -351,7 +351,7 @@ test('teacher selects a later word position without word-id drift and keeps the 
   assert.equal(snapshot().entries[0].text, '推來推去'); assert.equal(snapshot().occurrences.length, 1); assert.equal(snapshot().occurrences[0].id, 'w0:2');
   assert(e.$('word-cards').textContent.includes('今次只練 第 3 字「推」')); assert(e.$('session-count').textContent.includes('指定 1 個字'));
   e.$('word-cards').childNodes[0].click(); await waitFor(() => snapshot().active.phase === 'watch');
-  assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(e.$('word-position').textContent, '原詞第 3 字'); assert(e.$('char-position').textContent.includes('已處理 0'));
+  assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(e.$('word-position').textContent, '原詞第 3 字');
   e.$('main-next').click();
   for (let round = 0; round < 2; round++) { for (let i = 0; i < 2; i++) e.send('STROKE_ACCEPTED', { strokeIndex: i }); e.send('WRITING_COMPLETE'); if (round === 0) e.$('main-next').click(); }
   assert.equal(snapshot().active.phase, 'character-complete'); assert.equal(e.$('main-next').textContent, '睇今次紀錄 →'); e.$('main-next').click();
@@ -363,11 +363,6 @@ test('zero selection or changed words cannot end the current valid lesson', asyn
   assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-dialog').open); assert(e.$('teacher-error').textContent.includes('請揀'));
   e.$('teacher-words').value = '濃'; e.$('apply-words').click();
   assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-error').textContent.includes('詞語有改動'));
-});
-test('choosing a later assigned word first shows processed count rather than a false ordinal', async () => {
-  const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃'; e.$('validate-words').click(); chooseCharacters(e, ['w0:0', 'w1:0']); e.$('apply-words').click();
-  e.$('word-cards').childNodes[1].click(); await waitFor(() => e.$('practice-title').textContent === '睇筆順');
-  assert.equal(e.$('char-position').textContent, '今次 2 字 · 已處理 0 字');
 });
 test('simplified mode defaults on and toggles partial writing without replacing the writer or assessment', async () => {
   const e = await feedbackApp(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'true'); assert(e.document.body.className.includes('simplified-practice'));
@@ -448,7 +443,7 @@ test('new instruction and presentation controls stay readable and target-safe in
   for (const character of ['聽', '指', '令', '精', '簡', '語', '由', '想', '再', '聲', '畫', '示', '字', '一', '更', '多', '工', '具', '其', '他', '選', '項', '開', '啟', '功', '能', '默', '憑', '記', '憶', '自', '己', '試']) {
     const e = await feedbackApp(character); e.complete(); e.$('main-next').click(); assert(!e.$('speak').attributes['aria-label'].includes(character)); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click();
     assert.equal(e.voices.spoken.at(-1).text, e.$('practice-instruction').textContent);
-    for (const id of ['practice-title', 'practice-instruction', 'hear-instruction', 'instruction-voice-note', 'speak-label', 'simplify', 'practice-tools-label', 'char-position']) {
+    for (const id of ['practice-title', 'practice-instruction', 'hear-instruction', 'instruction-voice-note', 'speak-label', 'simplify', 'practice-tools-label']) {
       assert(!e.$(id).textContent.includes(character), character + ' absent from ' + id); assert(!e.$(id).textContent.includes('□'), id + ' is readable');
       assert(!Object.values(e.$(id).attributes).some(value => value.includes(character)), 'no answer in attributes');
     }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#214b3b">
   <title>字慢慢 · 一筆一筆，慢慢學</title>
-  <link rel="stylesheet" href="styles.css?v=34217dd62591">
+  <link rel="stylesheet" href="styles.css?v=323e6c61954d">
 </head>
 <body>
   <header class="app-header">
@@ -28,18 +28,21 @@
         <p id="word-example" class="word-example"></p>
         <button id="speak" class="button secondary speech-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8q5 4 0 8M20 5q8 7 0 14"/></svg><span id="speak-label">聽詞語</span></button>
         <p id="voice-note" class="small muted"></p>
+        <div class="practice-actions"><button id="hear-instruction" class="button secondary" aria-describedby="practice-instruction">聽指令</button><span id="instruction-voice-note" class="small muted" role="status" aria-live="polite"></span><button id="rest" class="button secondary rest-button">休息一下</button></div>
       </aside>
       <div class="work-panel">
         <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 睇筆順</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己試</li></ol>
-        <div class="practice-actions"><button id="rest" class="button secondary rest-button">休息一下</button></div>
-        <div class="practice-heading"><div><h2 id="practice-title">睇筆順</h2><div class="instruction-audio"><p id="practice-instruction">撳播放，睇筆順。</p><button id="hear-instruction" class="button secondary">聽指令</button><span id="instruction-voice-note" class="small muted" role="status" aria-live="polite"></span></div></div><span id="char-position" class="position-pill"></span></div>
-        <div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><div id="board-message" class="board-message" hidden></div></div></div>
-        <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
-        <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
-        <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個詞語</button></div>
-        <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
-        <details id="practice-tools"><summary id="practice-tools-label">更多工具</summary><div id="extra-demo-controls" class="demo-controls"><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div><div id="extra-writing-controls" class="writing-controls" hidden><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div><div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button></details>
-        <div id="next-row" class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
+        <div class="practice-heading"><h2 id="practice-title">睇筆順</h2><p id="practice-instruction">撳播放，睇筆順。</p></div>
+        <div class="practice-body"><div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><div id="board-message" class="board-message" hidden></div></div></div>
+          <div class="practice-side">
+            <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
+            <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
+            <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個詞語</button></div>
+            <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
+            <details id="practice-tools"><summary id="practice-tools-label">更多工具</summary><div id="extra-demo-controls" class="demo-controls"><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div><div id="extra-writing-controls" class="writing-controls" hidden><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div><div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button></details>
+            <div id="next-row" class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
+          </div>
+        </div></div>
       </div>
     </section>
     <section id="summary-view" class="summary-view" hidden aria-labelledby="summary-title">
@@ -70,6 +73,6 @@
   <script src="content.js"></script>
   <script src="session.js"></script>
   <script src="writing.js"></script>
-  <script src="app.js?v=5cb210dc93e6"></script>
+  <script src="app.js?v=d15500f1ee3c"></script>
 </body>
 </html>

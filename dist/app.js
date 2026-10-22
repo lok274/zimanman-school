@@ -178,7 +178,6 @@
     $('word-title').textContent = recall ? '詞語收埋咗' : word.text; $('word-title').classList.toggle('concealed', recall);
     $('word-example').textContent = recall ? '' : C.cue(word.text)[0];
     $('semantic-cue').replaceChildren(visualCue(word.text));
-    $('char-position').textContent = safeText(['今次 ' + state.occurrences.length + ' 字 · 已處理 ' + state.finished.length + ' 字', '指定 ' + state.occurrences.length + ' 個 · 做咗 ' + state.finished.length + ' 個', '任務共 ' + state.occurrences.length + ' · 進度 ' + state.finished.length]);
     $('writer').setAttribute('aria-label', recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
