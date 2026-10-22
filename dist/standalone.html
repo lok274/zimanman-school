@@ -641,7 +641,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const recall = a.phase === 'recall', complete = a.phase === 'character-complete';
     $('word-position').textContent = safeText(['原詞第 ' + (occurrence.index + 1) + ' 字', '詞內位置 ' + (occurrence.index + 1), '原本序號 ' + (occurrence.index + 1)]);
     $('word-title').textContent = recall ? '詞語收埋咗' : word.text; $('word-title').classList.toggle('concealed', recall);
-    $('word-example').textContent = recall ? '想聽，可以撳「聽一聽」。' : C.cue(word.text)[0];
+    $('word-example').textContent = recall ? '' : C.cue(word.text)[0];
     $('semantic-cue').replaceChildren(visualCue(word.text));
     $('char-position').textContent = safeText(['今次 ' + state.occurrences.length + ' 字 · 已處理 ' + state.finished.length + ' 字', '指定 ' + state.occurrences.length + ' 個 · 做咗 ' + state.finished.length + ' 個', '任務共 ' + state.occurrences.length + ' · 進度 ' + state.finished.length]);
     $('writer').setAttribute('aria-label', recall ? '無字形提示嘅書寫格' : '書寫練習格');
