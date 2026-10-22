@@ -6,6 +6,20 @@
   let entries = S.parseEntries(C.words.join('\n')), selected = new Set(['w0', 'w1']);
   let state, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   const dataCache = new Map();
+  const concealedText = new Map();
+  function restoreRecallText() { concealedText.forEach((text, node) => { node.nodeValue = text; }); concealedText.clear(); }
+  function maskRecallText() {
+    if (!state || state.active.phase !== 'recall') return;
+    if (state.attempts.find(attempt => attempt.id === state.active.attemptId).help.length) return;
+    const character = currentOccurrence().character;
+    const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.parentElement.closest('script, style, svg, textarea') && node.nodeValue.includes(character)) {
+        concealedText.set(node, node.nodeValue); node.nodeValue = node.nodeValue.replaceAll(character, '□');
+      }
+    }
+  }
   function id() { return globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2); }
   function storageError() { storageOkay = false; $('storage-notice').hidden = false; $('storage-notice').textContent = '今次紀錄暫時只留喺畫面，關閉後可能遺失。你仍然可以繼續練習。'; }
   function save() {
@@ -15,10 +29,10 @@
   function history() {
     const sessions = [];
     try {
-      for (let i = 0; i < Math.min(localStorage.length, 500); i++) {
+      for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key || !key.startsWith(prefix)) continue;
-        try { const raw = localStorage.getItem(key); if (!raw || raw.length > 1000000) continue; const value = JSON.parse(raw); if (S.validateSnapshot(value)) sessions.push(value); } catch (_) { /* A damaged record must not block practice. */ }
+        try { const raw = localStorage.getItem(key); if (!raw || raw.length > 1000000) continue; const value = JSON.parse(raw); if (S.validateSnapshot(value)) sessions.push(value); } catch (_) {}
       }
     } catch (_) { storageError(); }
     return sessions.sort((a, b) => b.startedAt - a.startedAt).slice(0, 40);
@@ -26,7 +40,7 @@
   function startSession() {
     stopEffects();
     state = S.createSession({ id: id(), entries: entries.filter(entry => selected.has(entry.id)), startedAt: Date.now() });
-    try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) { /* Practice works without tab storage. */ }
+    try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
     save(); render();
   }
   function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
@@ -43,20 +57,23 @@
   function textNode(tag, text, className) { const element = document.createElement(tag); element.textContent = text; if (className) element.className = className; return element; }
   function renderChoices() {
     const container = $('word-cards'); container.replaceChildren();
+    const rows = S.summarize(state);
     const completedWords = state.entries.filter(word => state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id))).length;
     $('session-count').textContent = '今節 ' + state.entries.length + ' 項詞語 · 已練 ' + completedWords + ' 項';
     state.entries.forEach((word, index) => {
       const done = state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id));
+      const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
-      const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', C.cue(word.text)[0], 'card-example'), textNode('span', done ? '已練過 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
+      const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', C.cue(word.text)[0], 'card-example'), textNode('span', pending ? '今次先放低 · 紀錄入面再睇' : done ? '已練過 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
       button.append(content, svgCue(word.text));
-      if (done) button.append(textNode('span', '完成今次練習', 'stamp'));
+      if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
     });
     $('choice-message').textContent = completedWords === state.entries.length ? '今節練習已經行完，睇吓自己嘅腳印。' : completedWords ? '下一個詞語，都由你揀。' : '由你揀第一步。';
     $('choice-summary').textContent = completedWords === state.entries.length ? '完成，睇今節紀錄 →' : '睇今節紀錄';
   }
   function render() {
+    restoreRecallText();
     const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary';
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary; $('summary-view').hidden = !summary;
     document.body.classList.toggle('has-recall', a.phase === 'recall');
@@ -95,6 +112,7 @@
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
     $('pause').disabled = demoState !== 'playing';
     syncWriter();
+    maskRecallText();
   }
   function syncWriter() {
     const a = state.active;
@@ -171,14 +189,16 @@
   }
   let cantoneseVoice = null;
   function updateVoices() {
+    restoreRecallText();
     cantoneseVoice = 'speechSynthesis' in window ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null;
-    $('voice-note').textContent = cantoneseVoice ? '撳一下，聽粵語。' : '呢部機暫時冇粵語聲音。可以請老師讀一次。';
+    $('voice-note').textContent = cantoneseVoice ? '撳一下，聽粵語。' : '暫時冇粵語聲音。可以請老師讀一次。';
     $('teacher-voice-note').textContent = cantoneseVoice ? '目前使用裝置嘅粵語聲音「' + cantoneseVoice.name + '」。語音由瀏覽器提供。' : '瀏覽器未提供可辨識嘅粵語聲音。程式唔會改用普通話。可由老師朗讀，或喺裝置設定加入粵語語音後重開。';
     $('speak').setAttribute('aria-label', cantoneseVoice ? '聽粵語詞語' : '顯示粵語聲音未能使用嘅說明');
+    maskRecallText();
   }
   $('speak').addEventListener('click', () => {
     updateVoices();
-    if (!cantoneseVoice) { $('voice-note').textContent = '請老師讀一次，再試吓自己讀。呢部機暫時冇粵語聲音。'; return; }
+    if (!cantoneseVoice) { $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; maskRecallText(); return; }
     const word = currentWord(), occurrence = currentOccurrence(); if (!word || !occurrence) return;
     stopSpeech(); const u = new SpeechSynthesisUtterance(word.text + '。第' + (occurrence.index + 1) + '個字，' + occurrence.character + '。'); u.voice = cantoneseVoice; u.lang = cantoneseVoice.lang; u.rate = 0.72; speechSynthesis.speak(u);
   });

@@ -32,17 +32,25 @@
     } else { text = await response.text(); if (text.length > 2000000) throw new Error('字形資料過大。'); }
     return validateCharacter(character, JSON.parse(text));
   }
+  // Hanzi Writer keeps document listeners, so each stable target owns one engine.
+  const engines = new WeakMap();
   function mount(element, character, data, options) {
-    let alive = true, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
-    element.replaceChildren();
+    let alive = true, suspended = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
     const size = Math.round(element.getBoundingClientRect().width) || 360;
-    const writer = root.HanziWriter.create(element, character, {
-      width: size, height: size, padding: 24, showCharacter: false, showOutline: options.phase === 'guided',
-      strokeColor: '#214b3b', outlineColor: '#d7ddd4', drawingColor: '#214b3b', highlightColor: '#ba642d', drawingWidth: 8,
-      strokeAnimationSpeed: 0.65, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
-      showHintAfterMisses: false, highlightOnComplete: false, markStrokeCorrectAfterMisses: false, acceptBackwardsStrokes: false, leniency: 1.65,
-      charDataLoader: (_char, done) => done(data)
-    });
+    let engine = engines.get(element);
+    if (!engine) {
+      engine = { data, ready: Promise.resolve() };
+      engine.writer = new root.HanziWriter(element, {
+        width: size, height: size, padding: 24, showCharacter: false, showOutline: false,
+        strokeColor: '#214b3b', outlineColor: '#d7ddd4', drawingColor: '#214b3b', highlightColor: '#ba642d', drawingWidth: 8,
+        strokeAnimationSpeed: 0.65, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
+        showHintAfterMisses: false, highlightOnComplete: false, markStrokeCorrectAfterMisses: false, acceptBackwardsStrokes: false, leniency: 1.65,
+        charDataLoader: (_char, done) => done(engine.data)
+      });
+      engines.set(element, engine);
+    }
+    const writer = engine.writer;
+    element.style.visibility = 'hidden';
     const ns = 'http://www.w3.org/2000/svg';
     const overlay = document.createElementNS(ns, 'svg'); overlay.setAttribute('class', 'start-overlay'); overlay.setAttribute('aria-hidden', 'true');
     const group = document.createElementNS(ns, 'g'); overlay.append(group);
@@ -57,13 +65,24 @@
       if (p) { dot.setAttribute('cx', p[0]); dot.setAttribute('cy', p[1]); }
     }
     placeStart();
-    if (['guided', 'recall'].includes(options.phase)) {
-      writer.quiz({ quizStartStrokeNum: currentStroke,
+    engine.ready = engine.ready.then(async () => {
+      if (!alive) return;
+      engine.data = data;
+      await writer.setCharacter(character);
+      if (!alive) return;
+      await Promise.all([writer.hideCharacter({ duration: 0 }), writer.hideOutline({ duration: 0 })]);
+      if (!alive) return;
+      if (options.phase === 'guided') await writer.showOutline({ duration: 0 });
+      if (!alive) return;
+      writer.updateDimensions({ width: size, height: size, padding: 24 }); placeStart();
+      if (!suspended && ['guided', 'recall'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke,
         onCorrectStroke: event => { if (!alive) return; currentStroke = event.strokeNum + 1; placeStart(); options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
         onMistake: event => { if (alive) options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); },
         onComplete: () => { if (alive) options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() }); }
       });
-    }
+      if (alive) element.style.visibility = '';
+    });
+    function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }); }
     const observer = new ResizeObserver(() => {
       if (!alive) return;
       const n = Math.round(element.getBoundingClientRect().width);
@@ -73,26 +92,29 @@
     return {
       play(replay) {
         if (!alive || options.phase !== 'watch') return;
-        if (paused && !replay) { writer.resumeAnimation(); paused = false; playing = true; }
-        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; writer.animateCharacter().then(() => demoDone(run)); }
+        if (paused && !replay) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
+        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; ready(() => writer.animateCharacter().then(() => demoDone(run))); }
         options.onDemoState && options.onDemoState('playing');
       },
-      pause() { if (!alive) return; writer.pauseAnimation(); if (playing) { paused = true; options.onDemoState && options.onDemoState('paused'); } },
+      pause() { if (!alive) return; ready(() => writer.pauseAnimation()); if (playing) { paused = true; options.onDemoState && options.onDemoState('paused'); } },
       nextStroke() {
         if (!alive || options.phase !== 'watch') return;
-        writer.resumeAnimation(); paused = false; playing = true;
+        paused = false; playing = true;
         const run = ++demoRun;
-        writer.animateStroke(nextIndex).then(() => demoDone(run)); nextIndex = (nextIndex + 1) % data.strokes.length;
+        const index = nextIndex; nextIndex = (nextIndex + 1) % data.strokes.length;
+        ready(() => { writer.resumeAnimation(); writer.animateStroke(index).then(() => demoDone(run)); });
         options.onDemoState && options.onDemoState('playing');
       },
       showHelp(kind) {
         if (!alive) return;
-        if (kind === 'outline') writer.showOutline({ duration: 0 });
-        startVisible = true; placeStart();
-        if (kind === 'stroke' && currentStroke < data.strokes.length) writer.highlightStroke(currentStroke);
+        ready(() => {
+          if (kind === 'outline') writer.showOutline({ duration: 0 });
+          startVisible = true; placeStart();
+          if (kind === 'stroke' && currentStroke < data.strokes.length) writer.highlightStroke(currentStroke);
+        });
       },
-      suspend() { writer.cancelQuiz(); writer.pauseAnimation(); },
-      dispose() { alive = false; observer.disconnect(); writer.cancelQuiz(); writer.pauseAnimation(); element.replaceChildren(); }
+      suspend() { suspended = true; writer.cancelQuiz(); writer.pauseAnimation(); },
+      dispose() { alive = false; observer.disconnect(); writer.cancelQuiz(); writer.pauseAnimation(); overlay.remove(); element.style.visibility = 'hidden'; }
     };
   }
   const api = { validateCharacter, loadCharacter, mount };

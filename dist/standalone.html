@@ -65,7 +65,7 @@
     <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><p class="small muted">預設 2 項，可以減至 1 項，最多 6 項。孩子決定先寫邊項。</p><div id="teacher-word-options"></div></fieldset>
     <button id="apply-words" class="button primary">套用並開始新一節</button>
     <div id="teacher-active" class="teacher-active" hidden><h3>今節練習</h3><button id="teacher-skip" class="button secondary">老師協助，略過呢個字</button><button id="teacher-end" class="button quiet">結束今節並睇紀錄</button></div>
-    <details><summary>筆順、語音及紀錄說明</summary><p>初始字庫附本機筆順資料。香港筆順調整範圍以附帶資料說明為準；其他字即使筆畫數相同，亦不代表所有字形細節符合學校教法。請配合課堂核對。</p><p>新增字詞可能要上網載入未經香港逐畫核對嘅字庫。載入失敗唔係學生寫錯。可以再試、改練另一詞，或由老師略過。</p><p id="teacher-voice-note"></p><p>「自己完成」只代表今次無開提示完成平板配對，唔代表已掌握字形、紙筆書寫或默寫。程式唔錄音，唔評估朗讀。</p><a href="https://www.edbchinese.hk/lexlist_ch/" target="_blank" rel="noopener noreferrer">教育局《香港小學學習字詞表》參考</a></details>
+    <details><summary>筆順、語音及紀錄說明</summary><p>初始字庫附本機筆順資料。香港筆順調整範圍以附帶資料說明為準；其他字即使筆畫數相同，亦不代表所有字形細節符合學校教法。請配合課堂核對。</p><p>新增字詞可能要上網載入未經香港逐畫核對嘅字庫。載入失敗唔係學生寫錯。可以再試、改練另一詞，或由老師略過。</p><p id="teacher-voice-note"></p><p>筆畫配對容許較大偏差，只供練習回饋，唔係書寫字形評分。「自己完成」只代表今次無開提示完成平板配對，唔代表已掌握字形、紙筆書寫或默寫。程式唔錄音，唔評估朗讀。</p><a href="https://www.edbchinese.hk/lexlist_ch/" target="_blank" rel="noopener noreferrer">教育局《香港小學學習字詞表》參考</a></details>
     <details id="license-details"><summary>字庫授權及修改說明</summary><p>Copyright 1999 Arphic Technology Co., Ltd. Copyright 2016 Shaunak Kishore. 字庫按 Arphic Public License 提供，並無擔保。你可以按授權條款修改及再分發。</p><p>本版將「草」改為十畫，交換「密」第七、八畫，並調整「來」嘅筆順。初始十一字嘅筆順已對照教育局圖示；字形仍有字庫風格差異，請配合學校教法核對。</p><p><details><summary>Arphic Public License 全文</summary><pre class="license-text">ARPHIC PUBLIC LICENSE
 
 Copyright (C) 1999 Arphic Technology Co., Ltd.
@@ -345,17 +345,25 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     } else { text = await response.text(); if (text.length > 2000000) throw new Error('字形資料過大。'); }
     return validateCharacter(character, JSON.parse(text));
   }
+  // Hanzi Writer keeps document listeners, so each stable target owns one engine.
+  const engines = new WeakMap();
   function mount(element, character, data, options) {
-    let alive = true, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
-    element.replaceChildren();
+    let alive = true, suspended = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
     const size = Math.round(element.getBoundingClientRect().width) || 360;
-    const writer = root.HanziWriter.create(element, character, {
-      width: size, height: size, padding: 24, showCharacter: false, showOutline: options.phase === 'guided',
-      strokeColor: '#214b3b', outlineColor: '#d7ddd4', drawingColor: '#214b3b', highlightColor: '#ba642d', drawingWidth: 8,
-      strokeAnimationSpeed: 0.65, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
-      showHintAfterMisses: false, highlightOnComplete: false, markStrokeCorrectAfterMisses: false, acceptBackwardsStrokes: false, leniency: 1.65,
-      charDataLoader: (_char, done) => done(data)
-    });
+    let engine = engines.get(element);
+    if (!engine) {
+      engine = { data, ready: Promise.resolve() };
+      engine.writer = new root.HanziWriter(element, {
+        width: size, height: size, padding: 24, showCharacter: false, showOutline: false,
+        strokeColor: '#214b3b', outlineColor: '#d7ddd4', drawingColor: '#214b3b', highlightColor: '#ba642d', drawingWidth: 8,
+        strokeAnimationSpeed: 0.65, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
+        showHintAfterMisses: false, highlightOnComplete: false, markStrokeCorrectAfterMisses: false, acceptBackwardsStrokes: false, leniency: 1.65,
+        charDataLoader: (_char, done) => done(engine.data)
+      });
+      engines.set(element, engine);
+    }
+    const writer = engine.writer;
+    element.style.visibility = 'hidden';
     const ns = 'http://www.w3.org/2000/svg';
     const overlay = document.createElementNS(ns, 'svg'); overlay.setAttribute('class', 'start-overlay'); overlay.setAttribute('aria-hidden', 'true');
     const group = document.createElementNS(ns, 'g'); overlay.append(group);
@@ -370,13 +378,24 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (p) { dot.setAttribute('cx', p[0]); dot.setAttribute('cy', p[1]); }
     }
     placeStart();
-    if (['guided', 'recall'].includes(options.phase)) {
-      writer.quiz({ quizStartStrokeNum: currentStroke,
+    engine.ready = engine.ready.then(async () => {
+      if (!alive) return;
+      engine.data = data;
+      await writer.setCharacter(character);
+      if (!alive) return;
+      await Promise.all([writer.hideCharacter({ duration: 0 }), writer.hideOutline({ duration: 0 })]);
+      if (!alive) return;
+      if (options.phase === 'guided') await writer.showOutline({ duration: 0 });
+      if (!alive) return;
+      writer.updateDimensions({ width: size, height: size, padding: 24 }); placeStart();
+      if (!suspended && ['guided', 'recall'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke,
         onCorrectStroke: event => { if (!alive) return; currentStroke = event.strokeNum + 1; placeStart(); options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
         onMistake: event => { if (alive) options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); },
         onComplete: () => { if (alive) options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() }); }
       });
-    }
+      if (alive) element.style.visibility = '';
+    });
+    function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }); }
     const observer = new ResizeObserver(() => {
       if (!alive) return;
       const n = Math.round(element.getBoundingClientRect().width);
@@ -386,26 +405,29 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     return {
       play(replay) {
         if (!alive || options.phase !== 'watch') return;
-        if (paused && !replay) { writer.resumeAnimation(); paused = false; playing = true; }
-        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; writer.animateCharacter().then(() => demoDone(run)); }
+        if (paused && !replay) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
+        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; ready(() => writer.animateCharacter().then(() => demoDone(run))); }
         options.onDemoState && options.onDemoState('playing');
       },
-      pause() { if (!alive) return; writer.pauseAnimation(); if (playing) { paused = true; options.onDemoState && options.onDemoState('paused'); } },
+      pause() { if (!alive) return; ready(() => writer.pauseAnimation()); if (playing) { paused = true; options.onDemoState && options.onDemoState('paused'); } },
       nextStroke() {
         if (!alive || options.phase !== 'watch') return;
-        writer.resumeAnimation(); paused = false; playing = true;
+        paused = false; playing = true;
         const run = ++demoRun;
-        writer.animateStroke(nextIndex).then(() => demoDone(run)); nextIndex = (nextIndex + 1) % data.strokes.length;
+        const index = nextIndex; nextIndex = (nextIndex + 1) % data.strokes.length;
+        ready(() => { writer.resumeAnimation(); writer.animateStroke(index).then(() => demoDone(run)); });
         options.onDemoState && options.onDemoState('playing');
       },
       showHelp(kind) {
         if (!alive) return;
-        if (kind === 'outline') writer.showOutline({ duration: 0 });
-        startVisible = true; placeStart();
-        if (kind === 'stroke' && currentStroke < data.strokes.length) writer.highlightStroke(currentStroke);
+        ready(() => {
+          if (kind === 'outline') writer.showOutline({ duration: 0 });
+          startVisible = true; placeStart();
+          if (kind === 'stroke' && currentStroke < data.strokes.length) writer.highlightStroke(currentStroke);
+        });
       },
-      suspend() { writer.cancelQuiz(); writer.pauseAnimation(); },
-      dispose() { alive = false; observer.disconnect(); writer.cancelQuiz(); writer.pauseAnimation(); element.replaceChildren(); }
+      suspend() { suspended = true; writer.cancelQuiz(); writer.pauseAnimation(); },
+      dispose() { alive = false; observer.disconnect(); writer.cancelQuiz(); writer.pauseAnimation(); overlay.remove(); element.style.visibility = 'hidden'; }
     };
   }
   const api = { validateCharacter, loadCharacter, mount };
@@ -423,6 +445,20 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   let entries = S.parseEntries(C.words.join('\n')), selected = new Set(['w0', 'w1']);
   let state, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   const dataCache = new Map();
+  const concealedText = new Map();
+  function restoreRecallText() { concealedText.forEach((text, node) => { node.nodeValue = text; }); concealedText.clear(); }
+  function maskRecallText() {
+    if (!state || state.active.phase !== 'recall') return;
+    if (state.attempts.find(attempt => attempt.id === state.active.attemptId).help.length) return;
+    const character = currentOccurrence().character;
+    const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.parentElement.closest('script, style, svg, textarea') && node.nodeValue.includes(character)) {
+        concealedText.set(node, node.nodeValue); node.nodeValue = node.nodeValue.replaceAll(character, '□');
+      }
+    }
+  }
   function id() { return globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2); }
   function storageError() { storageOkay = false; $('storage-notice').hidden = false; $('storage-notice').textContent = '今次紀錄暫時只留喺畫面，關閉後可能遺失。你仍然可以繼續練習。'; }
   function save() {
@@ -432,10 +468,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function history() {
     const sessions = [];
     try {
-      for (let i = 0; i < Math.min(localStorage.length, 500); i++) {
+      for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key || !key.startsWith(prefix)) continue;
-        try { const raw = localStorage.getItem(key); if (!raw || raw.length > 1000000) continue; const value = JSON.parse(raw); if (S.validateSnapshot(value)) sessions.push(value); } catch (_) { /* A damaged record must not block practice. */ }
+        try { const raw = localStorage.getItem(key); if (!raw || raw.length > 1000000) continue; const value = JSON.parse(raw); if (S.validateSnapshot(value)) sessions.push(value); } catch (_) {}
       }
     } catch (_) { storageError(); }
     return sessions.sort((a, b) => b.startedAt - a.startedAt).slice(0, 40);
@@ -443,7 +479,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function startSession() {
     stopEffects();
     state = S.createSession({ id: id(), entries: entries.filter(entry => selected.has(entry.id)), startedAt: Date.now() });
-    try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) { /* Practice works without tab storage. */ }
+    try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
     save(); render();
   }
   function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
@@ -460,20 +496,23 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function textNode(tag, text, className) { const element = document.createElement(tag); element.textContent = text; if (className) element.className = className; return element; }
   function renderChoices() {
     const container = $('word-cards'); container.replaceChildren();
+    const rows = S.summarize(state);
     const completedWords = state.entries.filter(word => state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id))).length;
     $('session-count').textContent = '今節 ' + state.entries.length + ' 項詞語 · 已練 ' + completedWords + ' 項';
     state.entries.forEach((word, index) => {
       const done = state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id));
+      const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
-      const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', C.cue(word.text)[0], 'card-example'), textNode('span', done ? '已練過 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
+      const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', C.cue(word.text)[0], 'card-example'), textNode('span', pending ? '今次先放低 · 紀錄入面再睇' : done ? '已練過 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
       button.append(content, svgCue(word.text));
-      if (done) button.append(textNode('span', '完成今次練習', 'stamp'));
+      if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
     });
     $('choice-message').textContent = completedWords === state.entries.length ? '今節練習已經行完，睇吓自己嘅腳印。' : completedWords ? '下一個詞語，都由你揀。' : '由你揀第一步。';
     $('choice-summary').textContent = completedWords === state.entries.length ? '完成，睇今節紀錄 →' : '睇今節紀錄';
   }
   function render() {
+    restoreRecallText();
     const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary';
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary; $('summary-view').hidden = !summary;
     document.body.classList.toggle('has-recall', a.phase === 'recall');
@@ -512,6 +551,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
     $('pause').disabled = demoState !== 'playing';
     syncWriter();
+    maskRecallText();
   }
   function syncWriter() {
     const a = state.active;
@@ -588,14 +628,16 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   let cantoneseVoice = null;
   function updateVoices() {
+    restoreRecallText();
     cantoneseVoice = 'speechSynthesis' in window ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null;
-    $('voice-note').textContent = cantoneseVoice ? '撳一下，聽粵語。' : '呢部機暫時冇粵語聲音。可以請老師讀一次。';
+    $('voice-note').textContent = cantoneseVoice ? '撳一下，聽粵語。' : '暫時冇粵語聲音。可以請老師讀一次。';
     $('teacher-voice-note').textContent = cantoneseVoice ? '目前使用裝置嘅粵語聲音「' + cantoneseVoice.name + '」。語音由瀏覽器提供。' : '瀏覽器未提供可辨識嘅粵語聲音。程式唔會改用普通話。可由老師朗讀，或喺裝置設定加入粵語語音後重開。';
     $('speak').setAttribute('aria-label', cantoneseVoice ? '聽粵語詞語' : '顯示粵語聲音未能使用嘅說明');
+    maskRecallText();
   }
   $('speak').addEventListener('click', () => {
     updateVoices();
-    if (!cantoneseVoice) { $('voice-note').textContent = '請老師讀一次，再試吓自己讀。呢部機暫時冇粵語聲音。'; return; }
+    if (!cantoneseVoice) { $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; maskRecallText(); return; }
     const word = currentWord(), occurrence = currentOccurrence(); if (!word || !occurrence) return;
     stopSpeech(); const u = new SpeechSynthesisUtterance(word.text + '。第' + (occurrence.index + 1) + '個字，' + occurrence.character + '。'); u.voice = cantoneseVoice; u.lang = cantoneseVoice.lang; u.rate = 0.72; speechSynthesis.speak(u);
   });
