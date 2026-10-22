@@ -1,0 +1,14 @@
+This package contains character outlines and stroke medians from hanzi-writer-data 2.0.1, derived from Make Me a Hanzi and Arphic fonts.
+
+Copyright 1999 Arphic Technology Co., Ltd.
+Copyright 2016 Shaunak Kishore.
+
+The character data is distributed under the Arphic Public License. ARPHICPL.TXT is supplied unchanged. You may redistribute or modify the data under that license. The data has no warranty.
+
+On 2026-10-22, Codex modified three files for this lesson application. 草.json splits the original horizontal of 艹 into two independent strokes. 密.json and 來.json reorder existing strokes and medians. Each modified file contains a prominent _notice field. provenance.json records every source, hash, and change. All modified data is supplied in full in chars/ under the same Arphic Public License.
+
+The remaining eight character files are unchanged copies of the upstream JSON. The application code is a separate work and is not covered by this notice.
+
+The public Hong Kong Education Bureau stroke demonstrations were consulted to compare sequence and gross direction. No EDB illustration, animation, outline, median, or other media is included in the redistributable package. EDB does not endorse this application. The character outlines retain the upstream calligraphic style and are not pixel copies of the EDB glyphs.
+
+For an interactive application, display the copyright, the absence of warranty, the right to redistribute under this license, and a link to ARPHICPL.TXT in the ordinary application interface. Keep each _notice field with its modified data file when redistributing.

@@ -1,0 +1,28 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const dist = path.join(__dirname, '..', 'dist');
+const scripts = ['vendor/hanzi-writer.min.js', 'data/characters.js', 'content.js', 'session.js', 'writing.js', 'app.js'];
+let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
+const cssTag = '<link rel="stylesheet" href="styles.css">';
+assert.equal(html.split(cssTag).length, 2, 'exactly one stylesheet tag');
+html = html.replace(cssTag, '<style>\n' + fs.readFileSync(path.join(dist, 'styles.css'), 'utf8') + '\n</style>');
+for (const file of scripts) {
+  const tag = '<script src="' + file + '"></script>';
+  assert.equal(html.split(tag).length, 2, 'exactly one script tag for ' + file);
+  const source = fs.readFileSync(path.join(dist, file), 'utf8').replace(/<\/script/gi, '<\\/script');
+  html = html.replace(tag, '<script>\n' + source + '\n</script>');
+}
+const escape = value => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const licenses = [['data/ARPHICPL.TXT', 'Arphic Public License 全文'], ['data/NOTICE.txt', '字庫來源及修改紀錄'], ['LICENSES/hanzi-writer-MIT.txt', 'Hanzi Writer 3.5.0 MIT 授權']];
+for (const [file, label] of licenses) {
+  const link = new RegExp('<a href="' + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"[^>]*>[^<]*</a>');
+  assert(link.test(html), 'license link exists for ' + file);
+  html = html.replace(link, '<details><summary>' + label + '</summary><pre class="license-text">' + escape(fs.readFileSync(path.join(dist, file), 'utf8')) + '</pre></details>');
+}
+assert(!/<script\s+src=/.test(html), 'no external runtime scripts');
+assert(!/<link\s+rel="stylesheet"/.test(html), 'no external stylesheets');
+assert(html.includes('ARPHIC PUBLIC LICENSE') || html.includes('Arphic Public License'), 'complete license included');
+fs.writeFileSync(path.join(dist, 'standalone.html'), html, 'utf8');
+console.log('Built dist/standalone.html (' + Buffer.byteLength(html) + ' bytes).');

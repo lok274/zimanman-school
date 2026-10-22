@@ -1,0 +1,147 @@
+{
+  "package": "Primary 2 lesson stroke data, Hong Kong sequence adaptation",
+  "date": "2026-10-22",
+  "license": "Arphic Public License, see ARPHICPL.TXT",
+  "copyright": [
+    "Copyright 1999 Arphic Technology Co., Ltd.",
+    "Copyright 2016 Shaunak Kishore."
+  ],
+  "originalPackage": "hanzi-writer-data@2.0.1",
+  "originalPackageLicense": "https://github.com/chanind/hanzi-writer-data/blob/v2.0.1/ARPHICPL.TXT",
+  "auditScope": "All 140 ordered stroke silhouettes and initial partial-stroke regions were visually compared with the public EDB animation JavaScript, using locally rendered per-stroke comparison panels. Sequence and gross direction were checked. This is not pixel parity, teacher certification, a complete glyph-standard audit, or a pedagogical effectiveness study.",
+  "officialMediaIncluded": false,
+  "characters": [
+    {
+      "character": "粗",
+      "strokes": 11,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E7%B2%97.json",
+      "upstreamSHA256": "f8e6b55df988a123c7da25bd5fd26f7ec43d66e0eaefbc94e2dfc9b8de42d802",
+      "outputSHA256": "f8e6b55df988a123c7da25bd5fd26f7ec43d66e0eaefbc94e2dfc9b8de42d802",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/3001-4000/3038.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/3001-4000/3038.js",
+      "edbScriptSHA256": "0f69c587e44828f28f20e92146a7dfa0babef8a6f8741091a3a29e093e05b3af"
+    },
+    {
+      "character": "濃",
+      "strokes": 16,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E6%BF%83.json",
+      "upstreamSHA256": "55ca335974aa5fbcf09050741203239a7052865b931d26793f657d69c57d1998",
+      "outputSHA256": "55ca335974aa5fbcf09050741203239a7052865b931d26793f657d69c57d1998",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/2001-3000/2328.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/2001-3000/2328.js",
+      "edbScriptSHA256": "09ca93f30b56d4d48e4e21f37984c49279dfec7add3188713f345b8334a29898"
+    },
+    {
+      "character": "鬍",
+      "strokes": 19,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E9%AC%8D.json",
+      "upstreamSHA256": "a62ffbf8cd54a9a21be348fed6c68e8f90686773ef9dc4dae757b11b8c8270ce",
+      "outputSHA256": "a62ffbf8cd54a9a21be348fed6c68e8f90686773ef9dc4dae757b11b8c8270ce",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/4001-ZC/4634.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/4001-ZC/4634.js",
+      "edbScriptSHA256": "c257d76c296ffcc8bd78fa13d607538e80889337579d86331db539a9ac676f9f"
+    },
+    {
+      "character": "鬚",
+      "strokes": 22,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E9%AC%9A.json",
+      "upstreamSHA256": "12a2e3161f8a93507866133e866a4521a70766425c9acf7e70b6f6a54f66485a",
+      "outputSHA256": "12a2e3161f8a93507866133e866a4521a70766425c9acf7e70b6f6a54f66485a",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/4001-ZC/4635.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/4001-ZC/4635.js",
+      "edbScriptSHA256": "1ea042e9b5b7623c8f665c6950d45a8828c88da1d3d0b016c47c9823f56679f7"
+    },
+    {
+      "character": "密",
+      "strokes": 11,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E5%AF%86.json",
+      "upstreamSHA256": "f834720e3268bfce61939cdc2749950ee1199702c766cf2803dcb0853c37e5ac",
+      "outputSHA256": "23530590af68254e89a980dd14b52371ba893fb6cec327f5c219befbef2baba2",
+      "modified": true,
+      "change": "Reorder the original one-based strokes and medians as [1,2,3,4,5,6,8,7,9,10,11], so the right dot precedes the long falling stroke. No outline or median coordinates are changed.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/1001-2000/1020.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/1001-2000/1020.js",
+      "edbScriptSHA256": "bbe4d8508b4c07c826a947b1c945852d789360cbcf8edbc76d0c9667b2a4aac4"
+    },
+    {
+      "character": "剪",
+      "strokes": 11,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E5%89%AA.json",
+      "upstreamSHA256": "b7002ff0ab6a4c0cc16bf6353b311d4ebad04aedf2f10fe76495f2e91b72e08f",
+      "outputSHA256": "b7002ff0ab6a4c0cc16bf6353b311d4ebad04aedf2f10fe76495f2e91b72e08f",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/0001-1000/0360.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/0001-1000/0360.js",
+      "edbScriptSHA256": "f2ed967f8571bd1cbf15450dc98f1aedb43b9577221a1b89c12f125382bb4555"
+    },
+    {
+      "character": "草",
+      "strokes": 10,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E8%8D%89.json",
+      "upstreamSHA256": "f9e8c120c5db52608a3a4c03b564c577f54230659c0dae5de4e8d7ad7de82f57",
+      "outputSHA256": "4c3effb70490ed69239cf473a697deaa53872c76ab753d7d3309f8b2e4908c12",
+      "modified": true,
+      "change": "Split the original joined horizontal into independent left and right horizontals at x=510 and x=550 using de Casteljau subdivision of its original quadratic curves. Truncate the original horizontal median at the same boundaries. Order the radical as left horizontal, left vertical, right horizontal, right vertical. Preserve the remaining six strokes and medians. No EDB drawing coordinates or media are included.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/3001-4000/3445.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/3001-4000/3445.js",
+      "edbScriptSHA256": "d4c33831981270844616207012d94b8347faa3dd9e38e50b8e1152c637cbdd49"
+    },
+    {
+      "character": "機",
+      "strokes": 16,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E6%A9%9F.json",
+      "upstreamSHA256": "d28e545c27ae218503f606defd3ef5d886b0cd5366cd6e48e99ba4e9a017d24c",
+      "outputSHA256": "d28e545c27ae218503f606defd3ef5d886b0cd5366cd6e48e99ba4e9a017d24c",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/2001-3000/2015.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/2001-3000/2015.js",
+      "edbScriptSHA256": "120283b5159b04c1abc4be4b2ca477090fad304abb363b6bf65ba87dcb4ffd1b"
+    },
+    {
+      "character": "推",
+      "strokes": 11,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E6%8E%A8.json",
+      "upstreamSHA256": "c90570d34c28fe6e5abeca85762453d3c9c63ff7846ffa8921547a80b08a7a4b",
+      "outputSHA256": "c90570d34c28fe6e5abeca85762453d3c9c63ff7846ffa8921547a80b08a7a4b",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/1001-2000/1591.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/1001-2000/1591.js",
+      "edbScriptSHA256": "6363335317811868878aa57bcdb45a16c4ceadf6d5211cdb206ddf24c7a45c2e"
+    },
+    {
+      "character": "來",
+      "strokes": 8,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E4%BE%86.json",
+      "upstreamSHA256": "d5e4aba4c3d6a4cac89a54ace08d7e5d0bf3e5f7d9833e8a5fae9f4164a042c9",
+      "outputSHA256": "f148f60d091f8ae8cdecbe0586c1e4569a83663c261baebf575065d24db3586c",
+      "modified": true,
+      "change": "Reorder the original one-based strokes and medians as [1,6,2,3,4,5,7,8], so the central vertical is written second. No outline or median coordinates are changed.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/0001-1000/0139.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/0001-1000/0139.js",
+      "edbScriptSHA256": "23054072a83cb19ce1e3c9a1798e4d23613416a595225d6f5a359b49ae552b5c"
+    },
+    {
+      "character": "去",
+      "strokes": 5,
+      "source": "https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/%E5%8E%BB.json",
+      "upstreamSHA256": "96e01168e8c76add5a05de734f18ef282451ca9107757977e5d83d8eea2bc281",
+      "outputSHA256": "96e01168e8c76add5a05de734f18ef282451ca9107757977e5d83d8eea2bc281",
+      "modified": false,
+      "change": "Unmodified upstream data. Ordered silhouettes and start regions were visually compared.",
+      "edbReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/0001-1000/0460.html?lang=ch",
+      "edbScriptReference": "https://www.edbchinese.hk/EmbziciwebRes/stkdemo_js/0001-1000/0460.js",
+      "edbScriptSHA256": "211f0f52630daa76e9f80989ddd7c163904351e50ad344bef17c9896702382d3"
+    }
+  ]
+}
