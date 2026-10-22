@@ -61,6 +61,64 @@ test('missing data is unavailable, not a learner mistake; retry and other word r
   const retry = send(s, 'RETRY_DATA'); assert.equal(retry.active.phase, 'loading'); assert.notEqual(retry.active.token, s.active.token);
   s = send(s, 'RETURN_TO_WORDS'); s = send(s, 'CHOOSE_WORD', { wordId: 'w1' }); assert.equal(s.active.occurrenceId, 'w1:0');
 });
+test('previous step returns loading, unavailable and watch to word choice without an attempt', () => {
+  const loading = send(create(), 'CHOOSE_WORD', { wordId: 'w0' });
+  for (const s of [loading, send(loading, 'DATA_FAILED'), send(loading, 'DATA_READY', { strokeCount: 2 })]) {
+    const back = send(s, 'PREVIOUS_STEP');
+    assert.equal(back.active.phase, 'choose-word'); assert.deepEqual(back.attempts, []); assert.deepEqual(back.finished, []);
+    assert.equal(send(back, 'DATA_READY', { token: s.active.token, strokeCount: 2 }), back);
+    assert.equal(send(back, 'DATA_FAILED', { token: s.active.token }), back);
+  }
+});
+test('previous guidance step retains partial help and completed attempts and restarts watch', () => {
+  let partial = guided();
+  partial = send(partial, 'REQUEST_HELP', { kind: 'stroke' }); partial = send(partial, 'STROKE_MISSED', { strokeIndex: 0 }); partial = send(partial, 'STROKE_ACCEPTED', { strokeIndex: 0 });
+  for (const original of [partial, finish(guided())]) {
+    const back = send(original, 'PREVIOUS_STEP');
+    assert.equal(back.active.phase, 'watch'); assert.equal(back.active.occurrenceId, original.active.occurrenceId); assert.equal(back.active.strokeCount, 2); assert.notEqual(back.active.token, original.active.token);
+    assert.equal(back.attempts.length, 1); assert.equal(back.attempts[0].outcome, original.active.writingDone ? 'complete' : 'abandoned');
+    assert.deepEqual(back.attempts[0].help, original.attempts[0].help); assert.equal(back.attempts[0].mistakes, original.attempts[0].mistakes);
+    assert.equal(send(back, 'WRITING_COMPLETE', { token: original.active.token }), back);
+    const restarted = send(back, 'START_GUIDED'); assert.equal(restarted.active.currentStroke, 0); assert.equal(restarted.active.writingDone, false); assert.equal(restarted.attempts.length, 2);
+    assert.equal(send(restarted, 'START_RECALL'), restarted); assert.deepEqual(restarted.finished, original.finished);
+  }
+});
+test('previous recall step starts fresh guidance while preserving help and every completed result', () => {
+  let partial = send(finish(guided()), 'START_RECALL');
+  partial = send(partial, 'REQUEST_HELP', { kind: 'outline' }); partial = send(partial, 'STROKE_MISSED', { strokeIndex: 0 });
+  const assisted = finish(partial), independent = finish(send(assisted, 'RETRY'));
+  const skipped = send(guided(), 'TEACHER_SKIP');
+  for (const original of [partial, assisted, independent, skipped]) {
+    const previousAttempt = original.attempts.at(-1), back = send(original, 'PREVIOUS_STEP');
+    assert.equal(back.active.phase, 'guided'); assert.equal(back.active.occurrenceId, original.active.occurrenceId); assert.notEqual(back.active.token, original.active.token);
+    assert.equal(back.active.currentStroke, 0); assert.equal(back.active.writingDone, false); assert.deepEqual(back.attempts.at(-1).help, []);
+    assert.deepEqual(back.finished, original.finished); assert.deepEqual(back.attempts.at(-2).help, previousAttempt.help); assert.equal(back.attempts.at(-2).mistakes, previousAttempt.mistakes);
+    assert.equal(back.attempts.at(-2).outcome, previousAttempt.outcome === 'active' ? 'abandoned' : previousAttempt.outcome);
+    assert.equal(send(back, 'WRITING_COMPLETE', { token: original.active.token }), back); assert.equal(send(back, 'START_RECALL'), back);
+    const beforeRow = S.summarize(original)[0], afterRow = S.summarize(back)[0];
+    for (const field of ['independent', 'assisted', 'skipped', 'helpUsed']) assert.equal(afterRow[field], beforeRow[field]);
+    const recall = send(finish(back), 'START_RECALL'); assert.equal(recall.active.phase, 'recall'); assert.notEqual(recall.active.token, back.active.token);
+  }
+});
+test('previous step rejects rest, choice, summary, stale events and reused tokens', () => {
+  const s = guided();
+  for (const blocked of [create(), send(s, 'REST'), send(s, 'END_SESSION')]) assert.equal(send(blocked, 'PREVIOUS_STEP'), blocked);
+  for (const extra of [{ token: 'late-token' }, { newToken: s.active.token }, { newToken: '' }, { newToken: null }]) assert.equal(send(s, 'PREVIOUS_STEP', extra), s);
+  const recall = send(finish(s), 'START_RECALL');
+  assert.equal(send(recall, 'PREVIOUS_STEP', { newToken: s.active.token }), recall);
+});
+test('returning to a skipped character without glyph data reloads before writing', () => {
+  const loading = send(create(), 'CHOOSE_WORD', { wordId: 'w0' });
+  for (const original of [loading, send(loading, 'DATA_FAILED')]) {
+    const skipped = send(original, 'TEACHER_SKIP'), back = send(skipped, 'PREVIOUS_STEP');
+    assert.equal(back.active.phase, 'loading'); assert.equal(back.active.occurrenceId, skipped.active.occurrenceId); assert.notEqual(back.active.token, skipped.active.token);
+    assert.deepEqual(back.attempts, skipped.attempts); assert.deepEqual(back.finished, skipped.finished);
+    assert.equal(send(back, 'START_GUIDED'), back);
+    const ready = send(back, 'DATA_READY', { strokeCount: 2 }), practice = send(ready, 'START_GUIDED');
+    assert.equal(practice.active.phase, 'guided'); assert.equal(practice.active.strokeCount, 2); assert.equal(S.summarize(practice)[0].skipped, true);
+    assert.equal(S.summarize(practice)[0].independent, false);
+  }
+});
 test('snapshot and glyph validation reject malformed stored or network values', () => {
   const s = create(); assert.equal(S.validateSnapshot(s), true); assert.equal(S.validateSnapshot({ ...s, entries: [] }), false); assert.equal(S.validateSnapshot({ ...s, occurrences: [] }), false); assert.equal(S.validateSnapshot({ ...s, attempts: [{ help: null }] }), false);
   const good = { strokes: ['M 1 2 L 3 4 Z'], medians: [[[1, 2], [3, 4]]] }; assert.equal(W.validateCharacter('粗', good).strokes.length, 1);

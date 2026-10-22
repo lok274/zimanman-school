@@ -56,6 +56,15 @@
       case 'START_GUIDED': return a.phase === 'watch' ? start('guided') : state;
       case 'START_RECALL': return a.phase === 'guided' && a.writingDone ? start('recall') : state;
       case 'RETRY': return writing ? start(a.phase) : a.phase === 'character-complete' && a.completedPhase === 'recall' ? start('recall') : state;
+      case 'PREVIOUS_STEP':
+        if (!['loading', 'unavailable', 'watch', 'guided', 'recall', 'character-complete'].includes(a.phase) || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || s.attempts.some(item => item.id === event.newToken)) return state;
+        if (a.phase === 'recall' || (a.phase === 'character-complete' && a.strokeCount)) return start('guided');
+        if (a.phase === 'character-complete') s.active = { phase: 'loading', occurrenceId: a.occurrenceId, token: event.newToken };
+        else if (a.phase === 'guided') {
+          if (attempt && attempt.outcome === 'active') { attempt.outcome = 'abandoned'; attempt.endedAt = event.at; }
+          s.active = { phase: 'watch', occurrenceId: a.occurrenceId, token: event.newToken, strokeCount: a.strokeCount };
+        } else s.active = { phase: 'choose-word' };
+        return s;
       case 'STROKE_ACCEPTED':
         if (!writing || a.writingDone || event.strokeIndex !== a.currentStroke || a.currentStroke >= a.strokeCount) return state;
         active.currentStroke++; active.missesOnCurrentStroke = 0; return s;

@@ -159,6 +159,8 @@
     renderSound();
     const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary';
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary; $('summary-view').hidden = !summary;
+    $('previous-step').hidden = choose || summary;
+    $('previous-step').textContent = safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回詞語']);
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     if (choose || summary) { if (handle || loadingController) stopEffects(); if (choose) renderChoices(); else renderSummary(state); return; }
     const occurrence = currentOccurrence(), word = currentWord();
@@ -316,6 +318,7 @@
   $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
   $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
   $('main-next').addEventListener('click', () => { const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
+  $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
   $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
   $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
   $('choice-summary').addEventListener('click', () => dispatch({ type: 'END_SESSION' }));
