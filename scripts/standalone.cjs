@@ -6,12 +6,12 @@ const vm = require('node:vm');
 const dist = path.join(__dirname, '..', 'dist');
 const scripts = ['vendor/hanzi-writer.min.js', 'data/characters.js', 'content.js', 'session.js', 'writing.js', 'app.js'];
 let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
-const cssTag = '<link rel="stylesheet" href="styles.css">';
-assert.equal(html.split(cssTag).length, 2, 'exactly one stylesheet tag');
-html = html.replace(cssTag, () => '<style>\n' + fs.readFileSync(path.join(dist, 'styles.css'), 'utf8') + '\n</style>');
+const cssTags = html.match(/<link rel="stylesheet" href="styles\.css(?:\?[^"]*)?">/g) || [];
+assert.equal(cssTags.length, 1, 'exactly one stylesheet tag');
+html = html.replace(cssTags[0], () => '<style>\n' + fs.readFileSync(path.join(dist, 'styles.css'), 'utf8') + '\n</style>');
 for (const file of scripts) {
-  const tag = '<script src="' + file + '"></script>';
-  assert.equal(html.split(tag).length, 2, 'exactly one script tag for ' + file);
+  const tags = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].filter(match => match[1].split('?')[0] === file);
+  assert.equal(tags.length, 1, 'exactly one script tag for ' + file);
   let source = fs.readFileSync(path.join(dist, file), 'utf8');
   if (file === 'content.js') {
     const context = {}; vm.runInNewContext(source, context);
@@ -21,7 +21,7 @@ for (const file of scripts) {
     }
   }
   source = source.replace(/<\/script/gi, '<\\/script');
-  html = html.replace(tag, () => '<script>\n' + source + '\n</script>');
+  html = html.replace(tags[0][0], () => '<script>\n' + source + '\n</script>');
 }
 const escape = value => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const licenses = [['data/ARPHICPL.TXT', 'Arphic Public License 全文'], ['data/NOTICE.txt', '字庫來源及修改紀錄'], ['LICENSES/hanzi-writer-MIT.txt', 'Hanzi Writer 3.5.0 MIT 授權']];

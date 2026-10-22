@@ -6,6 +6,15 @@ const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
+
+test('page asset URLs change when the application or stylesheet changes', () => {
+  const dist = path.join(__dirname, '..', 'dist'), html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
+  for (const file of ['app.js', 'styles.css']) {
+    const version = createHash('sha256').update(fs.readFileSync(path.join(dist, file), 'utf8').replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
+    assert(html.includes(file + '?v=' + version), file + ' URL must be ' + file + '?v=' + version);
+  }
+});
 
 test('the portable page embeds all word photos and preserves literal script text', () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'bishun-standalone-'));

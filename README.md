@@ -26,6 +26,8 @@ Android 平板請用更新版 Chrome，iPad 請用 Safari，直接開啟上述 H
 
 推送至 `main` 會自動執行 `.github/workflows/pages.yml`。流程先用 Node.js 24 執行現有行為測試及字庫檢查，全部通過後才將 `dist/` 部署到 GitHub Pages。GitHub 儲存庫嘅 Pages 發佈來源須設為 GitHub Actions。亦可在 Actions 頁面手動執行流程。網站不需要伺服器程式或額外建置。
 
+`index.html` 的 `app.js` 及 `styles.css` 網址包含內容版本，避免新版頁面讀到舊快取。更改這兩個檔案後，測試會列出應更新的網址；版本為統一 LF 換行後 SHA-256 的首 12 字。單檔產生器可處理這些版本網址。
+
 執行以下指令檢查邏輯及重新產生單檔版。
 
 ```powershell
