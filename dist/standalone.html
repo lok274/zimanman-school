@@ -7,6 +7,7 @@
   <title>字慢慢 · 一筆一筆，慢慢學</title>
   <style>
 @charset "UTF-8";
+.feedback-line #feedback{display:flex;align-items:center;gap:8px}.feedback-line #feedback-icon{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;border-radius:50%;background:var(--soft);font-size:17px;font-weight:700}.feedback-line [data-kind^="complete-"] #feedback-icon{background:var(--green);color:#fff}.feedback-sound-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}.feedback-sound-row .button{min-width:44px;min-height:44px;font-size:12px;padding:7px 10px;border:1px solid var(--line)}.feedback-sound-row [aria-pressed="true"]{background:var(--soft);border-color:#77977c}.feedback-sound-row .small{font-size:11px}
 :root{--paper:#f6f3e9;--card:#fffdf6;--ink:#243d32;--green:#214b3b;--muted:#677568;--line:#d9dece;--soft:#e9eddf;--warm:#ba642d;--sans:"PingFang HK","Noto Sans TC","Microsoft JhengHei",sans-serif;--serif:"Noto Serif TC","Songti TC","PMingLiU",serif;color:var(--ink);background:var(--paper);font-family:var(--sans);font-size:17px;line-height:1.65;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button,textarea,input{font:inherit}button,a,input,summary{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:disabled{cursor:default;opacity:.45}button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--warm);outline-offset:4px}button svg,svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}.app-header{max-width:1280px;margin:auto;padding:26px 42px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.brand{color:var(--green);display:flex;gap:13px;text-decoration:none;align-items:center;font-size:25px;letter-spacing:3px;font-weight:800;line-height:1.15}.brand svg{width:41px;height:41px;stroke-width:2}.brand small{display:block;font-size:10px;font-weight:500;letter-spacing:2px;margin-top:9px}.header-actions{display:flex;gap:22px;align-items:center}.device-tag,.eyebrow{font-size:12px;letter-spacing:2px;font-weight:700}.device-tag{border:1px solid var(--line);padding:5px 12px;border-radius:5px;color:var(--muted)}main{max-width:1160px;margin:auto;padding:46px 34px 32px}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(28px,3.2vw,40px);line-height:1.45;letter-spacing:1px;margin-bottom:13px}h2{font-size:24px;line-height:1.5;margin-bottom:7px}h3{font-size:19px}.eyebrow{color:var(--muted);margin-bottom:12px}.intro-copy{color:var(--muted);font-size:18px}.intro-line{display:flex;align-items:center;justify-content:space-between;gap:20px}.paper-seal{border:1.5px solid #98a78c;color:#688461;line-height:1.55;padding:13px 18px;border-radius:50%;font-size:15px;letter-spacing:3px;transform:rotate(8deg);flex:none}.session-line{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:22px;font-size:14px;color:var(--muted);margin:24px 0 18px}.session-line>span:first-child{color:var(--ink);font-weight:700}.word-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.word-card{appearance:none;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:18px;min-height:215px;padding:25px 27px;display:grid;grid-template-columns:1fr 132px;align-items:center;gap:14px;color:var(--ink);position:relative;box-shadow:0 4px 0 #e4e6d944;transition:border-color .15s,transform .15s}.word-card:hover{border-color:#77977c;transform:translateY(-2px)}.word-card .word-name{display:block;font-family:var(--serif);font-size:clamp(32px,3.8vw,48px);font-weight:700;letter-spacing:3px;line-height:1.5}.word-card .card-example{display:block;color:var(--muted);font-size:15px;margin-top:12px}.word-card .card-action{display:block;color:var(--green);font-size:13px;font-weight:700;letter-spacing:1px;margin-top:20px}.word-card svg{width:74px;height:74px;stroke-width:2;stroke:#728765;background:#eff1e5;border-radius:50%;padding:10px}.word-card .word-photo,.semantic-cue .word-photo{display:block;background:#fff;object-fit:contain;border-radius:10px}.word-card .word-photo{width:132px;height:132px}.word-card:disabled{opacity:.75}.word-card:disabled .word-name{font-size:34px}.word-card .stamp{font-family:var(--sans);color:#536d4c;position:absolute;right:22px;bottom:20px;border:1px solid #8a9c7c;padding:2px 10px;font-size:12px;border-radius:5px}.journey-preview{display:flex;align-items:center;gap:17px;flex-wrap:wrap;padding:27px 0 21px;border-bottom:1px solid var(--line);font-size:14px;color:var(--muted)}.journey-preview span{display:flex;align-items:center;gap:8px}.journey-preview b{display:inline-grid;place-items:center;background:var(--soft);border-radius:50%;width:27px;height:27px;font-size:12px;color:var(--green)}.journey-preview i{font-style:normal;color:#9aab97}.journey-note{margin-left:auto;font-size:13px}.choice-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:22px}.choice-footer p{margin:0;color:var(--muted);font-size:14px}.button{min-height:48px;border-radius:9px;border:1px solid transparent;padding:10px 19px;font-size:15px;line-height:1.5;font-weight:650;display:inline-flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;white-space:nowrap}.primary{background:var(--green);color:#fffdf6;box-shadow:0 3px 0 #102f25}.primary:hover{background:#163e2e}.secondary{background:#fbfaf3;border-color:#c6cfbd;color:var(--green)}.secondary:hover{background:#e9eddf}.quiet{background:transparent;color:var(--green)}.quiet:hover{background:#e9eddf}.large{font-size:17px;min-height:54px;padding-inline:25px}.button svg{width:23px;height:23px;stroke-width:1.8}.practice-view{display:grid;grid-template-columns:235px minmax(0,1fr);gap:46px}.word-panel{padding:8px 27px 0 0;border-right:1px solid var(--line)}.semantic-cue svg{width:96px;height:96px;stroke-width:1.8;stroke:#728765;background:var(--soft);padding:14px;border-radius:50%;margin:8px 0 20px}.semantic-cue .word-photo{width:min(100%,180px);aspect-ratio:1;margin:8px 0 20px}.word-panel h1{font-family:var(--serif);font-size:38px;letter-spacing:3px;overflow-wrap:anywhere;margin-bottom:13px}.word-panel h1.concealed{font-family:var(--sans);font-size:22px;letter-spacing:1px;padding:9px 0}.word-example{font-size:16px;color:var(--muted);min-height:52px;margin-bottom:16px}.speech-button{width:100%;margin-bottom:10px}.small{font-size:12px;line-height:1.8}.muted{color:var(--muted)}.oral-prompt{display:flex;align-items:flex-start;gap:9px;margin-top:28px;padding-top:23px;border-top:1px solid var(--line);font-size:15px}.oral-prompt>span{font-size:25px;line-height:1.2;color:#a27042}.oral-prompt p{margin-bottom:8px}.step-rail{display:flex;list-style:none;padding:0;margin:0 0 25px;gap:0;justify-content:space-between;font-size:13px;color:#778571}.step-rail li{border-bottom:2px solid var(--line);padding-bottom:12px;flex:1;text-align:center}.step-rail b{display:inline-grid;place-items:center;border-radius:50%;height:25px;width:25px;background:#e7ebdf;margin-right:6px;font-size:12px}.step-rail li.active{color:var(--green);border-color:var(--green);font-weight:700}.step-rail li.active b{color:var(--card);background:var(--green)}.step-rail li.done{border-color:#9fb08f}.practice-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.practice-heading h2{font-size:24px}.practice-heading p{font-size:14px;color:var(--muted);margin-bottom:20px}.position-pill{background:var(--soft);padding:5px 11px;border-radius:6px;font-size:12px;white-space:nowrap;margin-top:3px}.board-row{display:flex;justify-content:center}.grid-shell{width:min(100%,388px);aspect-ratio:1;background:#fffdf8;border:1.5px solid #aebba4;position:relative;border-radius:6px;overflow:hidden;box-shadow:0 3px 0 #e1e3d8}.grid-lines{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right,transparent calc(50% - .5px),#d7dcca calc(50% - .5px),#d7dcca calc(50% + .5px),transparent calc(50% + .5px)),linear-gradient(to bottom,transparent calc(50% - .5px),#d7dcca calc(50% - .5px),#d7dcca calc(50% + .5px),transparent calc(50% + .5px))}.grid-lines:before,.grid-lines:after{content:"";position:absolute;top:50%;left:-21%;width:142%;border-top:1px dashed #e2e5d8;transform:rotate(45deg)}.grid-lines:after{transform:rotate(-45deg)}.writer{position:absolute;inset:0;touch-action:none;user-select:none;-webkit-user-select:none}.writer>svg{position:absolute;inset:0}.start-overlay{pointer-events:none;width:100%;height:100%}.board-message{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;background:#fffdf5ed;z-index:2;font-size:17px;white-space:pre-line}.demo-controls,.writing-controls{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:20px}.demo-controls .button,.writing-controls .button{min-height:46px;padding:9px 13px;font-size:14px}.feedback-line{display:flex;align-items:start;justify-content:space-between;gap:12px;margin-top:16px;min-height:45px;font-size:13px;color:var(--muted)}.feedback-line p{margin:0;color:var(--green)}#stroke-progress{white-space:nowrap;font-size:12px}.next-row{border-top:1px solid var(--line);padding-top:18px;display:flex;align-items:center;justify-content:space-between;gap:14px}.rest-button{font-size:14px}.app-footer{max-width:1160px;margin:auto;padding:21px 34px 25px;color:#7e8a78;display:flex;justify-content:space-between;font-size:11px;letter-spacing:1px}.summary-view{max-width:920px;margin:0 auto}.summary-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0}.stat{padding:19px 15px;background:var(--soft);border-radius:10px}.stat b{font-family:var(--serif);display:block;font-size:30px}.stat span{font-size:12px}.summary-row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin-bottom:12px;display:grid;grid-template-columns:130px 1fr;gap:18px}.summary-word{font-family:var(--serif);font-size:24px;letter-spacing:2px}.char-record{display:flex;gap:12px;align-items:start;font-size:14px;padding:5px 0}.char-record strong{font-family:var(--serif);font-size:22px;line-height:1.4;min-width:25px}.record-label{color:var(--green)}.attempt-detail{font-size:11px;color:var(--muted);display:block;margin-top:3px}.paper-reminder{display:flex;align-items:center;gap:18px;background:#e9eddf;border-radius:12px;padding:25px;margin:28px 0 21px}.paper-reminder svg{width:49px;height:55px;stroke-width:1.5;flex:none}.paper-reminder h2{font-size:19px}.paper-reminder p{font-size:14px;margin:0}.summary-footer{display:flex;gap:20px;justify-content:space-between;align-items:center}dialog{border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--ink);padding:30px;max-width:640px;width:calc(100% - 34px);max-height:90dvh;overflow:auto;box-shadow:0 24px 100px #1633242b;font-size:14px}dialog::backdrop{background:#20372db3;backdrop-filter:blur(3px)}.dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}.dialog-heading .eyebrow{margin-bottom:4px}.icon-button{width:44px;height:44px;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);font-size:28px;line-height:1}.field-label{display:block;font-size:15px;font-weight:700;margin-top:22px}.field-label span{display:block;font-size:12px;font-weight:400;color:var(--muted);margin:4px 0 8px}textarea{display:block;width:100%;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:13px 16px;resize:vertical;line-height:1.9;min-height:130px}.field-error{color:#9d4424;font-size:13px;min-height:20px;margin:6px 0}.teacher-selection{border:0;border-top:1px solid var(--line);padding:15px 0;margin-top:24px}.teacher-selection legend{font-size:16px;font-weight:700;padding:0 8px 0 0}#teacher-word-options{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}.word-option{display:flex;align-items:center;gap:9px;min-height:48px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.word-option:has(input:checked){background:var(--soft);border-color:#77977c}.word-option input{width:19px;height:19px;accent-color:var(--green)}.teacher-active{border-top:1px solid var(--line);margin-top:26px;padding-top:20px}.teacher-active .button{font-size:13px;margin-bottom:8px}details{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}summary{cursor:pointer;font-weight:700;min-height:36px}details p{font-size:12px;color:var(--muted);margin:12px 0}details a{font-size:12px;color:var(--green)}.history-item{border-bottom:1px solid var(--line);padding:11px 0;font-size:12px}.history-item button{margin-top:8px}.notice{font-size:13px;padding:12px 25px;background:#f0dfc4;color:#6a451f;text-align:center}.storage-notice{max-width:1280px;margin:auto}#rest-dialog{text-align:center;max-width:470px;padding:35px}#rest-dialog h2{font-size:23px}#rest-dialog p{color:var(--muted)}.rest-illustration{color:#78906a}.rest-illustration svg{width:140px;height:120px;stroke-width:2}.rest-illustration+p{margin-top:16px}.rest-illustration~.button{margin-top:10px}[hidden]{display:none!important}body.has-recall .brand{pointer-events:none}@media(min-width:1150px){.practice-view{gap:60px;grid-template-columns:260px 1fr}.grid-shell{width:390px}}@media(max-width:800px){.app-header{padding:20px 24px}main{padding:30px 24px}.practice-view{grid-template-columns:170px 1fr;gap:23px}.word-panel{padding-right:18px}.word-panel h1{font-size:30px}.step-rail{font-size:11px}.step-rail b{width:21px;height:21px;margin-right:3px}.practice-heading h2{font-size:21px}.word-example{font-size:14px}.button{padding-inline:13px}.demo-controls{gap:2px}.demo-controls .button{font-size:12px}.journey-note{display:none}.app-footer{padding-inline:24px}.word-card{padding:22px;grid-template-columns:1fr 112px}.word-card .word-photo{width:112px;height:112px}.word-card svg{width:64px;height:64px}.word-name{font-size:32px}.header-actions{gap:9px}.device-tag{display:none}}@media(max-width:570px){.app-header{padding:17px 18px}.brand{font-size:23px;gap:8px}.brand svg{width:32px}.brand small{font-size:9px;letter-spacing:1px}.header-actions .button{font-size:12px;padding:7px 9px;min-height:42px}main{padding:28px 18px 20px}h1{font-size:27px}.intro-copy{font-size:15px}.paper-seal{font-size:11px;padding:12px;letter-spacing:2px}.intro-line{gap:10px}.word-cards{gap:12px;grid-template-columns:1fr}.word-card{min-height:155px;padding:18px 22px;grid-template-columns:1fr 96px}.word-card .word-photo{width:96px;height:96px}.word-card .word-name{font-size:34px}.word-card .card-example{font-size:13px;margin-top:6px}.word-card .card-action{margin-top:10px}.session-line{font-size:11px;margin-top:18px;gap:8px}.journey-preview{gap:9px;font-size:12px;padding-top:22px}.journey-preview i{font-size:10px}.journey-preview b{width:23px;height:23px}.choice-footer .button{font-size:12px}.choice-footer p{font-size:12px}.practice-view{display:block}.word-panel{border:0;padding:0 0 17px;display:grid;grid-template-columns:1fr auto;column-gap:10px}.word-panel .eyebrow{grid-column:1/-1;margin-bottom:4px}.semantic-cue{display:none}.word-panel h1{font-size:28px;grid-column:1;margin:0}.word-example{font-size:12px;min-height:0;grid-column:1;margin:3px 0}.speech-button{grid-column:2;grid-row:2/4;width:auto;align-self:center;margin:0;font-size:12px;min-height:44px}.word-panel .small{font-size:10px;grid-column:1/-1;margin:3px 0}.oral-prompt{display:none}.word-panel>p:last-child{display:none}.step-rail{margin-bottom:17px;padding-top:12px;border-top:1px solid var(--line);font-size:12px}.practice-heading h2{font-size:22px}.practice-heading p{font-size:12px;min-height:20px;margin-bottom:14px}.grid-shell{width:min(100%,360px)}.demo-controls .button{font-size:12px;min-height:44px;padding:8px 10px}.writing-controls .button{font-size:12px;padding:8px 11px}.feedback-line{font-size:12px;min-height:43px}.next-row .large{font-size:15px}.next-row .rest-button{font-size:12px}.app-footer{padding:17px 18px;font-size:9px;letter-spacing:.4px}.summary-stats{gap:7px;grid-template-columns:repeat(2,1fr)}.stat{padding:13px}.stat b{font-size:25px}.summary-row{padding:15px;grid-template-columns:1fr;gap:6px}.summary-word{font-size:25px}.summary-footer{align-items:start;flex-direction:column}.paper-reminder{padding:18px;gap:12px}.paper-reminder h2{font-size:17px}.paper-reminder p{font-size:12px}.paper-reminder svg{width:38px}dialog{padding:23px}.dialog-heading h2{font-size:23px}.button{min-height:46px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}@media print{.app-header,.app-footer,.header-actions,.summary-footer,dialog,.notice{display:none!important}body{background:white}.summary-view{display:block!important}.choose-view,.practice-view{display:none!important}main{padding:0}.summary-row{break-inside:avoid}}
 
 </style>
@@ -43,7 +44,8 @@
         <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div>
         <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div>
         <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個詞語</button></div>
-        <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"></p><span id="stroke-progress"></span></div>
+        <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
+        <div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div>
         <div class="next-row"><button id="rest" class="button quiet rest-button">休息一下</button><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
       </div>
     </section>
@@ -445,6 +447,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   const prefix = 'bishun-school:v1:';
   let entries = S.parseEntries(C.words.join('\n')), selected = new Set(['w0', 'w1']);
   let state, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
+  let feedback = null, feedbackAnimation = null, tone = null;
+  let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
   const dataCache = new Map();
   const concealedText = new Map();
   function restoreRecallText() { concealedText.forEach((text, node) => { node.nodeValue = text; }); concealedText.clear(); }
@@ -479,17 +483,91 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function startSession() {
     stopEffects();
+    feedback = null;
     state = S.createSession({ id: id(), entries: entries.filter(entry => selected.has(entry.id)), startedAt: Date.now() });
     try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
     save(); render();
   }
   function stopSpeech() { if ('speechSynthesis' in window) speechSynthesis.cancel(); }
-  function stopEffects() { if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); }
+  function stopEffects() { if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
   function dispatch(event) {
+    const before = state;
     const next = S.transition(state, { at: Date.now(), ...event });
     if (next === state) return false;
-    state = next; save(); render(); return true;
+    state = next; cancelFeedbackEffects(); feedback = feedbackFor(before, next, event); save(); render();
+    if (feedback && feedback.celebrate) celebrateFeedback();
+    return true;
   }
+  function concealedCharacter(snapshot) {
+    if (!snapshot || snapshot.active.phase !== 'recall') return '';
+    const attempt = snapshot.attempts.find(item => item.id === snapshot.active.attemptId);
+    return attempt.help.length ? '' : snapshot.occurrences.find(item => item.id === snapshot.active.occurrenceId).character;
+  }
+  function safeText(variants, snapshot = state) { const target = concealedCharacter(snapshot); return variants.find(text => !target || !text.includes(target)); }
+  function feedbackFor(before, next, event) {
+    const make = (kind, icon, variants, celebrate = false) => ({ kind, icon, text: safeText(variants, next), celebrate });
+    const n = next.active.currentStroke;
+    switch (event.type) {
+      case 'STROKE_ACCEPTED': return before.active.missesOnCurrentStroke
+        ? make('recovered', '✓', ['再試後，完成第 ' + n + ' 畫！', '重試嗰筆已寫好，進度 ' + n + '。', '再做成功，已到 ' + n + '。'])
+        : make('step', '✓', ['完成第 ' + n + ' 畫！', '呢筆已寫好，進度 ' + n + '。', '做到第 ' + n + ' 步。']);
+      case 'STROKE_MISSED': return make('support', '↻', ['慢慢再試，需要提示都可以。', '由起點落筆，或者請老師幫手。', '停低諗吓，想求助就撳掣。']);
+      case 'REQUEST_HELP': return make('support', '•', ['提示已開，可以繼續寫。', '睇住幫手，再試吓。', '有需要就求助，慢慢嚟。']);
+      case 'RETRY': return make('support', '↻', ['重新試，由起點開始。', '可以再寫，之前嘅紀錄會保留。', '今趟慢慢做，隨時求助。']);
+      case 'RESUME': return make('support', '•', ['休息完，可以接住寫。', '返嚟喇，由而家呢筆繼續。', '準備好就再試，隨時求助。']);
+      case 'WRITING_COMPLETE': {
+        const attempt = next.attempts.find(item => item.id === next.active.attemptId);
+        if (before.active.phase === 'guided') return make('complete-guided', '✓', ['跟寫完成。下一步由你決定。'], true);
+        return attempt.help.length
+          ? make('complete-assisted', '✓', ['有提示完成。你完成咗今次書寫。'], true)
+          : make('complete-independent', '✓', ['自己完成。今次冇開提示。'], true);
+      }
+      default: return null;
+    }
+  }
+  function cancelFeedbackEffects() {
+    if (feedbackAnimation) feedbackAnimation.cancel(); feedbackAnimation = null;
+    if (tone) { const activeTone = tone; tone = null; activeTone.oscillator.onended = null; try { activeTone.oscillator.stop(); } catch (_) {} activeTone.oscillator.disconnect(); activeTone.gain.disconnect(); }
+  }
+  function renderSound() {
+    const labels = soundEnabled ? ['完成提示聲：開', '音效已啟用', '有聲慶祝'] : ['完成提示聲：關', '靜音', '不播放聲效'];
+    const notes = audioStatus === 'blocked' ? ['裝置未能播放，畫面回饋照常。', '聲效暫時用唔到，仍可繼續寫。', '可以安靜練習，圖示會保留。']
+      : audioStatus === 'preparing' ? ['聲效準備中，畫面回饋照常。', '等裝置開啟音效，仍可繼續寫。', '暫時安靜練習，圖示會保留。']
+      : ['寫好一個字，先有短聲。', '做妥今次書寫才響起。', '達成後播放提示。'];
+    const label = safeText(labels), note = safeText(notes);
+    if ($('feedback-sound').textContent !== label) $('feedback-sound').textContent = label;
+    $('feedback-sound').setAttribute('aria-pressed', String(soundEnabled));
+    if ($('feedback-sound-note').textContent !== note) $('feedback-sound-note').textContent = note;
+  }
+  function updateSound() { restoreRecallText(); renderSound(); maskRecallText(); }
+  function celebrateFeedback() {
+    if (document.hidden || state.resting || $('teacher-dialog').open) return;
+    const icon = $('feedback-icon');
+    if (icon.animate && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) feedbackAnimation = icon.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 450, iterations: 1 });
+    if (!soundEnabled || audioStatus !== 'ready' || !audioContext || audioContext.state !== 'running') return;
+    try {
+      const oscillator = audioContext.createOscillator(), gain = audioContext.createGain(), now = audioContext.currentTime;
+      tone = { oscillator, gain }; oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(660, now);
+      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.035, now + 0.025); gain.gain.linearRampToValueAtTime(0, now + 0.2);
+      oscillator.connect(gain); gain.connect(audioContext.destination);
+      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); if (tone && tone.oscillator === oscillator) tone = null; };
+      oscillator.start(now); oscillator.stop(now + 0.21);
+    } catch (_) { cancelFeedbackEffects(); soundEnabled = false; audioStatus = 'blocked'; updateSound(); }
+  }
+  $('feedback-sound').addEventListener('click', () => {
+    const version = ++soundVersion; soundEnabled = !soundEnabled; cancelFeedbackEffects();
+    if (!soundEnabled) { audioStatus = 'off'; updateSound(); return; }
+    audioStatus = 'preparing'; updateSound();
+    try {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      if (!Audio) throw new Error('Audio unavailable');
+      if (!audioContext) audioContext = new Audio();
+      Promise.resolve(audioContext.resume()).then(() => {
+        if (version !== soundVersion) return;
+        audioStatus = audioContext.state === 'running' ? 'ready' : 'blocked'; soundEnabled = audioStatus === 'ready'; updateSound();
+      }).catch(() => { if (version === soundVersion) { soundEnabled = false; audioStatus = 'blocked'; updateSound(); } });
+    } catch (_) { soundEnabled = false; audioStatus = 'blocked'; updateSound(); }
+  });
   function currentOccurrence() { return state.occurrences.find(item => item.id === state.active.occurrenceId); }
   function currentWord() { const o = currentOccurrence(); return o && state.entries.find(item => item.id === o.wordId); }
   function event(type, extra) { return dispatch({ type, token: state.active.token, newToken: id(), ...extra }); }
@@ -520,6 +598,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function render() {
     restoreRecallText();
+    renderSound();
     const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary';
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary; $('summary-view').hidden = !summary;
     document.body.classList.toggle('has-recall', a.phase === 'recall');
@@ -541,18 +620,24 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall'].includes(a.phase) && !a.writingDone);
     $('stroke-progress').textContent = a.strokeCount && ['guided', 'recall'].includes(a.phase) ? '已寫 ' + a.currentStroke + ' / ' + a.strokeCount + ' 畫' : a.strokeCount && a.phase === 'watch' ? '共 ' + a.strokeCount + ' 畫' : '';
     const attempt = state.attempts.find(item => item.id === a.attemptId);
-    let title = '', instruction = '', feedback = '';
+    let title = '', instruction = '', defaultFeedback = '';
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = '等一等，整理緊筆順。'; }
     if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = '唔係你寫錯。可以再試，或者請老師幫手。'; }
-    if (a.phase === 'watch') { title = '睇一睇，點樣寫'; instruction = '撳播放，眼睛跟住每一畫。'; feedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : '跟住起點，一畫一畫寫'; instruction = a.writingDone ? '而家試吓收起字形，用自己嘅方法記住。' : '由橙色起點開始。用手指或者觸控筆寫。'; feedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '一畫完成，再寫下一畫。'; $('main-next').textContent = '收起字形，自己試 →'; }
-    if (a.phase === 'recall') { title = '收起字形，自己試'; instruction = '先想一想。想要提示，隨時可以開。'; feedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
+    if (a.phase === 'watch') { title = '睇一睇，點樣寫'; instruction = '撳播放，眼睛跟住每一畫。'; defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : '跟住起點，一畫一畫寫'; instruction = a.writingDone ? '而家試吓收起字形，用自己嘅方法記住。' : '由橙色起點開始。用手指或者觸控筆寫。'; defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '一畫完成，再寫下一畫。'; $('main-next').textContent = '收起字形，自己試 →'; }
+    if (a.phase === 'recall') { title = '收起字形，自己試'; instruction = '先想一想。想要提示，隨時可以開。'; defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && attempt.help.length ? '有提示完成' : '自己完成';
-      title = label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '你完成咗今次書寫。準備好先行下一步。'; feedback = '每一次嘅嘗試都保留喺紀錄。';
+      title = label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '你完成咗今次書寫。準備好先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       $('main-next').textContent = occurrence.index + 1 < word.characters.length ? '下一個字 →' : '揀下一項詞語 →';
     }
-    $('practice-title').textContent = title; $('practice-instruction').textContent = instruction; $('feedback').textContent = feedback;
+    $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
+    const message = feedback ? feedback.text : defaultFeedback;
+    if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;
+    const icon = feedback ? feedback.icon : '';
+    if ($('feedback-icon').textContent !== icon) $('feedback-icon').textContent = icon;
+    if ($('feedback-icon').hidden !== !feedback) $('feedback-icon').hidden = !feedback;
+    $('feedback').setAttribute('data-kind', feedback ? feedback.kind : 'instruction');
     $('board-message').hidden = !['loading', 'unavailable'].includes(a.phase);
     $('board-message').textContent = a.phase === 'loading' ? '整理緊筆順…' : '未能載入字形\n請再試，或者請老師幫手。';
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
@@ -651,7 +736,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', updateVoices);
   $('teacher-open').addEventListener('click', () => {
     if (state.active.phase === 'recall') requestHelp('outline');
-    stopSpeech(); if (handle) handle.pause();
+    stopSpeech(); cancelFeedbackEffects(); if (handle) handle.pause();
     $('teacher-words').value = entries.map(entry => entry.text).join('\n'); $('teacher-error').textContent = ''; selectedOptions(); renderHistory();
     const active = !['choose-word', 'summary'].includes(state.active.phase); $('teacher-active').hidden = !active;
     $('teacher-skip').disabled = !['loading', 'unavailable', 'watch', 'guided', 'recall'].includes(state.active.phase) || state.active.writingDone;
@@ -681,7 +766,12 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   $('resume').addEventListener('click', () => { $('rest-dialog').close(); mountedKey = ''; dispatch({ type: 'RESUME' }); });
   $('rest-dialog').addEventListener('cancel', event => event.preventDefault());
   document.querySelector('.brand').addEventListener('click', click => { click.preventDefault(); if (state.active.phase === 'choose-word' || state.active.phase === 'summary') return; $('teacher-open').click(); });
-  window.addEventListener('pagehide', stopSpeech);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { stopSpeech(); cancelFeedbackEffects(); } });
+  window.addEventListener('pagehide', () => {
+    stopSpeech(); cancelFeedbackEffects(); soundVersion++; soundEnabled = false; audioStatus = 'off';
+    updateSound();
+    if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
+  });
   try {
     const previousId = sessionStorage.getItem(prefix + 'current');
     if (previousId) { const raw = localStorage.getItem(prefix + previousId); if (raw && raw.length < 1000000) { const previous = JSON.parse(raw); if (S.validateSnapshot(previous) && previous.active.phase !== 'summary') { const ended = S.transition(previous, { type: 'END_SESSION', at: Date.now() }); localStorage.setItem(prefix + previousId, JSON.stringify(ended)); } } }
