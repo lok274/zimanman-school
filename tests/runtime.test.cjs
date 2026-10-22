@@ -112,6 +112,20 @@ test('skipped word card shows pending practice instead of a completion stamp', (
   assert(e.$('word-cards').textContent.includes('有字待練'));
   assert(!e.$('word-cards').textContent.includes('完成今次練習'));
 });
+test('history counts each character once while retaining assisted and independent attempts', () => {
+  const e = environment(source('index.html'));
+  let snapshot = recallSnapshot('機');
+  for (const event of [{ type: 'REQUEST_HELP', kind: 'outline' }, { type: 'STROKE_ACCEPTED', strokeIndex: 0 }, { type: 'WRITING_COMPLETE' }, { type: 'RETRY' }, { type: 'STROKE_ACCEPTED', strokeIndex: 0 }, { type: 'WRITING_COMPLETE' }, { type: 'END_SESSION' }]) snapshot = S.transition(snapshot, { at: 3, token: snapshot.active.token, newToken: 'unassisted-retry', ...event });
+  e.store.set('bishun-school:v1:' + snapshot.id, JSON.stringify(snapshot));
+  e.context.BishunSession = S; e.context.BishunWriting = {};
+  e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
+  vm.runInContext(source('app.js'), e.context);
+  e.$('teacher-open').click();
+  const history = e.$('local-history').textContent;
+  assert(history.includes('自己完成 1 · 有提示完成 0 · 跳過 0 · 待練 0'));
+  assert(history.includes('自己試 完成，提示 1 次'));
+  assert(history.includes('自己試 完成，提示 0 次'));
+});
 test('recent history remains discoverable after more than 500 existing storage keys', () => {
   const e = environment(source('index.html'));
   for (let index = 0; index < 500; index++) e.store.set('other-app-' + index, 'unrelated');

@@ -620,7 +620,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     if (!all.length) { list.textContent = '暫時未有已儲存紀錄。'; return; }
     all.slice(0, 15).forEach(snapshot => { const rows = S.summarize(snapshot), div = textNode('div', '', 'history-item');
       div.append(textNode('strong', new Date(snapshot.startedAt).toLocaleString('zh-HK')), textNode('div', snapshot.entries.map(word => word.text).join('、')),
-        textNode('div', '自己完成 ' + rows.filter(r => r.independent).length + ' · 有提示完成 ' + rows.filter(r => r.assisted).length + ' · 跳過 ' + rows.filter(r => r.skipped).length + ' · 待練 ' + rows.filter(r => r.unfinished).length));
+        textNode('div', '自己完成 ' + rows.filter(r => r.independent).length + ' · 有提示完成 ' + rows.filter(r => r.assisted && !r.independent).length + ' · 跳過 ' + rows.filter(r => r.skipped && !r.independent && !r.assisted).length + ' · 待練 ' + rows.filter(r => r.unfinished).length));
       const details = document.createElement('details'); details.append(textNode('summary', '睇每次嘗試'));
       rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'guided' ? '引導' : a.phase === 'recall' ? '自己試' : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + '，提示 ' + a.help.length + ' 次').join('；') : '待練'))));
       div.append(details); list.append(div);
