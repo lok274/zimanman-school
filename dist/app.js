@@ -54,6 +54,12 @@
   function currentWord() { const o = currentOccurrence(); return o && state.entries.find(item => item.id === o.wordId); }
   function event(type, extra) { return dispatch({ type, token: state.active.token, newToken: id(), ...extra }); }
   function svgCue(text) { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 64 64'); svg.setAttribute('aria-hidden', 'true'); const p = document.createElementNS(svg.namespaceURI, 'path'); p.setAttribute('d', C.cue(text)[1]); svg.append(p); return svg; }
+  function visualCue(text) {
+    if (!C.photos || !C.photos[text]) return svgCue(text);
+    const image = document.createElement('img'); image.className = 'word-photo'; image.setAttribute('src', C.photos[text]); image.setAttribute('alt', '');
+    image.addEventListener('error', () => image.replaceWith(svgCue(text)), { once: true });
+    return image;
+  }
   function textNode(tag, text, className) { const element = document.createElement(tag); element.textContent = text; if (className) element.className = className; return element; }
   function renderChoices() {
     const container = $('word-cards'); container.replaceChildren();
@@ -65,7 +71,7 @@
       const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
       const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', C.cue(word.text)[0], 'card-example'), textNode('span', pending ? '今次先放低 · 紀錄入面再睇' : done ? '已練過 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
-      button.append(content, svgCue(word.text));
+      button.append(content, visualCue(word.text));
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
     });
@@ -83,7 +89,7 @@
     $('word-position').textContent = '今節第 ' + (state.entries.indexOf(word) + 1) + ' 項詞語';
     $('word-title').textContent = recall ? '詞語收埋咗' : word.text; $('word-title').classList.toggle('concealed', recall);
     $('word-example').textContent = recall ? '想聽，可以撳「聽一聽」。' : C.cue(word.text)[0];
-    $('semantic-cue').replaceChildren(svgCue(word.text));
+    $('semantic-cue').replaceChildren(visualCue(word.text));
     $('char-position').textContent = '第 ' + (occurrence.index + 1) + ' / ' + word.characters.length + ' 字';
     $('writer').setAttribute('aria-label', recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;

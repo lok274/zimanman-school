@@ -23,6 +23,7 @@ class Node {
   appendChild(node) { node.remove(); node.parentNode = this; this.childNodes.push(node); return node; }
   removeChild(node) { this.childNodes.splice(this.childNodes.indexOf(node), 1); node.parentNode = null; return node; }
   remove() { if (this.parentNode) this.parentNode.removeChild(this); }
+  replaceWith(node) { const parent = this.parentNode; if (!parent) return; const index = parent.childNodes.indexOf(this); node.remove(); parent.childNodes[index] = node; node.parentNode = parent; this.parentNode = null; }
   replaceChildren(...nodes) { this.childNodes.forEach(node => { node.parentNode = null; }); this.childNodes = []; this.append(...nodes); }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   setAttributeNS(_ns, name, value) { this.setAttribute(name, value); }
@@ -81,6 +82,32 @@ function visibleText(document) {
     return true;
   }).map(node => node.nodeValue).join('');
 }
+
+test('the six word cues use photos with empty alt text and retain SVG fallback', () => {
+  const words = ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去'];
+  const e = environment(source('index.html'));
+  e.context.BishunSession = { ...S, createSession: options => S.createSession({ ...options, entries: S.parseEntries(words.join('\n')) }) };
+  e.context.BishunWriting = {};
+  vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context);
+  const photos = walk(e.$('word-cards')).filter(node => node.nodeName === 'img');
+  assert.equal(photos.length, 6);
+  assert.equal(new Set(photos.map(image => image.attributes.src)).size, 6);
+  assert(photos.every(image => image.attributes.alt === ''));
+  photos[0].emit('error');
+  const firstCard = e.$('word-cards').childNodes[0];
+  assert(walk(firstCard).some(node => node.nodeName === 'svg'), 'failed photo falls back to its word cue');
+  assert(!walk(firstCard).some(node => node.nodeName === 'img'));
+  for (const word of [...words, '朋友']) {
+    const practice = environment(source('index.html'));
+    let initial = S.createSession({ id: 'photo-practice', entries: S.parseEntries(word), startedAt: 1 });
+    for (const event of [{ type: 'CHOOSE_WORD', wordId: 'w0' }, { type: 'DATA_READY', strokeCount: 1 }]) initial = S.transition(initial, { at: 2, token: initial.active.token, newToken: 'watch', ...event });
+    practice.context.BishunSession = { ...S, createSession: () => structuredClone(initial) }; practice.context.BishunWriting = {};
+    vm.runInContext(source('content.js'), practice.context); vm.runInContext(source('app.js'), practice.context);
+    const cue = practice.$('semantic-cue').childNodes[0];
+    assert.equal(cue.nodeName, words.includes(word) ? 'img' : 'svg');
+    if (cue.nodeName === 'img') { assert.equal(cue.attributes.alt, ''); cue.emit('error'); assert.equal(practice.$('semantic-cue').childNodes[0].nodeName, 'svg'); }
+  }
+});
 test('recall conceals generic targets in live labels and late voice messages, then restores labels', () => {
   for (const character of ['一', '字', '我', '機']) {
     const e = environment(source('index.html')), initial = recallSnapshot(character);

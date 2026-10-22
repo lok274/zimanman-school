@@ -10,6 +10,7 @@
   };
   globalThis.BishunContent = {
     words: ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去'], cues,
+    photos: { 粗: 'images/rope.webp', 濃: 'images/tea.webp', 鬍鬚: 'images/beard.webp', 密: 'images/leaves.webp', 剪草機: 'images/mower.webp', 推來推去: 'images/push-block.webp' },
     dataUrl: 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/',
     edbUrl: 'https://www.edbchinese.hk/lexlist_ch/',
     cue(text) { return cues[text] || ['一齊讀出呢個詞語。', 'M15 13H43V52H15ZM23 23H35M23 32H35M23 41H31M43 15L52 10L56 16L43 34']; }
