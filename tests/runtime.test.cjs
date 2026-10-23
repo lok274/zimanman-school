@@ -349,9 +349,11 @@ test('teacher selects a later word position without word-id drift and keeps the 
   chooseCharacters(e, ['w5:2']); assert.equal(e.$('teacher-selection-total').textContent, '已揀 1 個字 · 1 項詞語'); e.$('apply-words').click();
   const sessionId = e.store.get('bishun-school:v1:current'), snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + sessionId));
   assert.equal(snapshot().entries[0].text, '推來推去'); assert.equal(snapshot().occurrences.length, 1); assert.equal(snapshot().occurrences[0].id, 'w0:2');
-  assert(e.$('word-cards').textContent.includes('今次只練 第 3 字「推」')); assert(e.$('session-count').textContent.includes('指定 1 個字'));
+  assert.equal(e.$('word-cards').textContent, '推來推去');
+  assert.equal(e.$('session-count'), undefined); assert.equal(e.$('word-position'), undefined);
   e.$('word-cards').childNodes[0].click(); await waitFor(() => snapshot().active.phase === 'watch');
-  assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(e.$('word-position').textContent, '原詞第 3 字');
+  assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(snapshot().active.occurrenceId, 'w0:2');
+  assert.equal(snapshot().occurrences[0].index, 2); assert.equal(snapshot().occurrences[0].character, '推');
   e.$('main-next').click();
   for (let round = 0; round < 2; round++) { for (let i = 0; i < 2; i++) e.send('STROKE_ACCEPTED', { strokeIndex: i }); e.send('WRITING_COMPLETE'); if (round === 0) e.$('main-next').click(); }
   assert.equal(snapshot().active.phase, 'character-complete'); assert.equal(e.$('main-next').textContent, '睇今次紀錄 →'); e.$('main-next').click();

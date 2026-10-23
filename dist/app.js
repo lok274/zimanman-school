@@ -147,13 +147,11 @@
     const container = $('word-cards'); container.replaceChildren();
     const rows = S.summarize(state);
     const completedWords = state.entries.filter(word => state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id))).length;
-    $('session-count').textContent = '今次指定 ' + state.occurrences.length + ' 個字 · 已處理 ' + state.finished.length + ' 個';
-    state.entries.forEach((word, index) => {
+    state.entries.forEach(word => {
       const done = state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id));
       const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
-      const assignment = state.occurrences.filter(item => item.wordId === word.id).map(item => '第 ' + (item.index + 1) + ' 字「' + item.character + '」').join('、');
-      const content = document.createElement('span'); content.append(textNode('span', word.text, 'word-name'), textNode('span', '今次只練 ' + assignment, 'card-example'), textNode('span', pending ? '今次先放低 · 紀錄入面再睇' : done ? '今次指定字已練 · 紀錄入面再睇' : '由呢個開始 →', 'card-action'));
+      const content = textNode('span', word.text, 'word-name');
       button.append(content, visualCue(word.text));
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
@@ -172,9 +170,8 @@
     renderPresentation();
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
     if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else renderSummary(state); return; }
-    const occurrence = currentOccurrence(), word = currentWord();
+    const word = currentWord();
     const recall = a.phase === 'recall', complete = a.phase === 'character-complete';
-    $('word-position').textContent = safeText(['原詞第 ' + (occurrence.index + 1) + ' 字', '詞內位置 ' + (occurrence.index + 1), '原本序號 ' + (occurrence.index + 1)]);
     $('word-title').textContent = recall ? '詞語收埋咗' : word.text; $('word-title').classList.toggle('concealed', recall);
     $('word-example').textContent = recall ? '' : C.cue(word.text)[0];
     $('semantic-cue').replaceChildren(visualCue(word.text));
