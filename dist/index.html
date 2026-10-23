@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#214b3b">
   <title>字慢慢 · 一筆一筆，慢慢學</title>
-  <link rel="stylesheet" href="styles.css?v=20b68f6cdfee">
+  <link rel="stylesheet" href="styles.css?v=0a3bb0afcbb5">
 </head>
 <body>
   <header class="app-header">
@@ -60,7 +60,9 @@
   <footer class="app-footer"><button id="previous-step" class="button secondary" hidden>← 返回選字</button></footer>
   <dialog id="teacher-dialog" aria-labelledby="teacher-title">
     <div class="dialog-heading"><h2 id="teacher-title">老師工具</h2><button id="teacher-close" class="icon-button" aria-label="關閉老師工具">×</button></div>
-    <label class="field-label" for="teacher-words">課堂詞語</label>
+    <div class="teacher-words-heading"><label class="field-label" for="teacher-words">課堂詞語</label><button id="dictation-start" class="button secondary">粵語輸入</button><button id="dictation-stop" class="button secondary" hidden>停止</button></div>
+    <p id="dictation-status" class="small" role="status" aria-live="polite" hidden></p>
+    <div id="dictation-review" hidden><label class="field-label" for="dictation-pending">待確認詞語</label><input id="dictation-pending" type="text" autocomplete="off" spellcheck="false"><div class="dictation-actions"><button id="dictation-confirm" class="button primary">確認加入</button><button id="dictation-cancel" class="button secondary">取消</button></div></div>
     <textarea id="teacher-words" rows="6" spellcheck="false"></textarea>
     <p id="teacher-error" class="field-error" role="alert"></p>
     <button id="validate-words" class="button secondary">更新可選詞語</button>
@@ -80,6 +82,6 @@
   <script src="quiz-results.js?v=6f36d387a7d2"></script>
   <script src="classroom.js?v=f252cb4b7a03"></script>
   <script src="writing.js?v=c68d756c7bb6"></script>
-  <script src="app.js?v=4cfefd08cc4d"></script>
+  <script src="app.js?v=79578b77ab5b"></script>
 </body>
 </html>

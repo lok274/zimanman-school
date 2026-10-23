@@ -55,6 +55,7 @@
 @media(max-width:570px){.mode-cards{grid-template-columns:1fr;gap:16px}.mode-card{min-height:200px;padding:20px}.mode-card span{font-size:17px}.home-view{margin:14px auto}.quiz-mode .practice-actions{flex-basis:100%;margin:0}.quiz-mode.simplified-practice .grid-shell{width:min(100%,360px)}}
 .quiz-clock{margin:10px 0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);text-align:right;width:fit-content;max-width:100%;font-variant-numeric:tabular-nums;line-height:1.4}.quiz-clock span{display:block;font-size:12px}.quiz-clock strong{font-size:22px}.quiz-mode .practice-side{display:flex;flex-direction:column;align-self:stretch}.quiz-mode .quiz-clock{margin-top:auto}.quiz-mode .next-row{margin-bottom:10px}.class-entry{margin-top:22px}#class-join-fields input{display:block;width:100%;padding:10px;border:1px solid #acb8a2;border-radius:8px;margin:8px 0 16px;background:#fffefb}#class-code{text-transform:uppercase;letter-spacing:3px}#class-dialog .button{margin:4px 4px 4px 0;white-space:normal}.quiz-results{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.class-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.podium-place{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:14px 8px;border-radius:10px;background:var(--soft);overflow-wrap:anywhere}.podium-place strong{color:var(--green)}.podium-place small{font-size:12px}.quiz-results table,#class-dialog table{width:100%;border-collapse:collapse;font-size:14px}.quiz-results th,.quiz-results td,#class-dialog th,#class-dialog td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.quiz-results caption,#class-dialog caption{font-size:12px;text-align:left}.is-me{background:var(--soft)}#class-again{margin-top:20px}@media(max-width:570px){.class-podium{grid-template-columns:1fr}.quiz-results{padding:12px}.quiz-clock strong{font-size:20px}}
 .leaderboard-page{max-width:980px}.leaderboard-page table{width:100%;border-collapse:collapse;font-size:17px}.leaderboard-page td,.leaderboard-page th{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.leaderboard-page caption{text-align:left;font-size:14px}#board-best{margin:22px 0;font-weight:700}.leaderboard-page .podium-place{padding:24px 12px;font-size:22px}.leaderboard-page .podium-place small{font-size:15px}.leaderboard-page .podium-place strong{font-size:28px}.standalone-class-note{display:none}body[data-standalone] #class-open,body[data-standalone] #teacher-class{display:none}body[data-standalone] .standalone-class-note{display:block}
+.teacher-words-heading,.dictation-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.teacher-words-heading{margin:18px 0 10px}.teacher-words-heading .field-label{margin:0 auto 0 0}.teacher-words-heading .button,.dictation-actions .button{min-height:64px;font-size:22px}#dictation-pending{display:block;width:100%;min-height:64px;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:10px 14px;font-size:22px;margin:8px 0}#dictation-review{margin-bottom:16px}#dictation-status{margin:8px 0}
 @media(orientation:portrait),(max-width:759px){
   .quiz-mode.simplified-practice .practice-side{display:grid;grid-template-columns:minmax(0,1fr) auto}
   .quiz-mode.simplified-practice .practice-side>*{grid-column:1/-1}
@@ -117,7 +118,9 @@
   <footer class="app-footer"><button id="previous-step" class="button secondary" hidden>← 返回選字</button></footer>
   <dialog id="teacher-dialog" aria-labelledby="teacher-title">
     <div class="dialog-heading"><h2 id="teacher-title">老師工具</h2><button id="teacher-close" class="icon-button" aria-label="關閉老師工具">×</button></div>
-    <label class="field-label" for="teacher-words">課堂詞語</label>
+    <div class="teacher-words-heading"><label class="field-label" for="teacher-words">課堂詞語</label><button id="dictation-start" class="button secondary">粵語輸入</button><button id="dictation-stop" class="button secondary" hidden>停止</button></div>
+    <p id="dictation-status" class="small" role="status" aria-live="polite" hidden></p>
+    <div id="dictation-review" hidden><label class="field-label" for="dictation-pending">待確認詞語</label><input id="dictation-pending" type="text" autocomplete="off" spellcheck="false"><div class="dictation-actions"><button id="dictation-confirm" class="button primary">確認加入</button><button id="dictation-cancel" class="button secondary">取消</button></div></div>
     <textarea id="teacher-words" rows="6" spellcheck="false"></textarea>
     <p id="teacher-error" class="field-error" role="alert"></p>
     <button id="validate-words" class="button secondary">更新可選詞語</button>
@@ -760,6 +763,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   let readyMount = null, mountGeneration = 0, segment = null, leaving = false;
   let clockTick = null;
   let boardNavigationRun = null;
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let dictation = { phase: Recognition ? 'idle' : 'unsupported', token: 0, recognition: null, timer: null, deadline: 0, message: '' };
   const Q = globalThis.BishunQuizResults;
   const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
   const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
@@ -796,6 +801,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
   }
   function availabilityChanged() {
+    if (document.hidden || leaving || !$('teacher-dialog').open) cancelDictation();
     checkpoint();
     if (!available()) {
       feedback = null; cancelFeedbackEffects(); stopSpeech();
@@ -844,6 +850,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     return S.createSession({ id: id(), entries: assigned, startedAt: Date.now(), mode });
   }
   function startSession(candidate = sessionCandidate()) {
+    cancelDictation();
     stopEffects();
     boardNavigationRun = null;
     feedback = null;
@@ -853,6 +860,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function stopSpeech() { speechGeneration++; instructionStatus = ''; $('instruction-voice-note').textContent = ''; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {} }
   function goHome() {
+    cancelDictation();
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
     else save();
     stopEffects(); state = null; feedback = null; boardNavigationRun = null;
@@ -1190,6 +1198,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function retryClassResult() { boardNavigationRun = classroom?.view().boundRunId; classroom?.retry(); }
   $('class-retry').addEventListener('click', retryClassResult); $('class-pending-retry').addEventListener('click', retryClassResult);
   $('teacher-class').addEventListener('click', () => {
+    cancelDictation();
     try {
       const parsed = S.parseEntries($('teacher-words').value);
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
@@ -1210,6 +1219,83 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     renderSelectionTotal();
   }
   function renderSelectionTotal() { $('teacher-selection-total').textContent = '已揀 ' + draftSelected.size + ' 個字 · ' + draftEntries.filter(entry => entry.characters.some((_, index) => draftSelected.has(entry.id + ':' + index))).length + ' 項詞語'; }
+  const dictationFallback = '可直接打字或用鍵盤語音輸入。';
+  function renderDictation() {
+    const active = ['starting', 'listening', 'finishing'].includes(dictation.phase);
+    $('dictation-start').disabled = active || dictation.phase === 'review' || dictation.phase === 'unsupported';
+    $('dictation-start').textContent = ({ starting: '準備收音…', listening: '聆聽中', finishing: '處理中…' })[dictation.phase] || '粵語輸入';
+    $('dictation-stop').hidden = !active;
+    $('dictation-stop').disabled = dictation.phase === 'finishing';
+    $('dictation-review').hidden = dictation.phase !== 'review';
+    $('dictation-status').textContent = dictation.phase === 'unsupported' ? '此瀏覽器未提供語音輸入。' + dictationFallback : dictation.message;
+    $('dictation-status').hidden = !$('dictation-status').textContent;
+  }
+  function cancelDictation(phase = Recognition ? 'idle' : 'unsupported', message = '') {
+    const previous = dictation;
+    dictation = { phase, token: previous.token + 1, recognition: null, timer: null, deadline: 0, message };
+    clearTimeout(previous.timer);
+    $('dictation-pending').value = '';
+    renderDictation();
+    try { previous.recognition?.abort(); } catch (_) {}
+  }
+  function dictationFailed(error) {
+    const messages = { 'not-allowed': '未獲准用咪。', 'service-not-allowed': '未獲准使用語音服務。', 'audio-capture': '未能使用咪。', network: '語音服務連線失敗。', 'language-not-supported': '語音服務未支援粵語。', 'no-speech': '未聽到詞語。', timeout: '收音已逾時並停止。' };
+    cancelDictation('error', (messages[error] || '未能使用語音輸入。') + dictationFallback);
+  }
+  function startDictation() {
+    if (!Recognition || !['idle', 'error'].includes(dictation.phase) || !$('teacher-dialog').open || document.hidden || leaving) return;
+    stopSpeech();
+    cancelDictation();
+    try {
+      const recognition = new Recognition(), token = dictation.token;
+      dictation = { phase: 'starting', token, recognition, timer: null, deadline: performance.now() + 20000, message: '請講一項詞語，完成後先確認加入。' };
+      const current = () => dictation.token === token && dictation.recognition === recognition;
+      recognition.lang = 'yue-Hant-HK'; recognition.continuous = false; recognition.interimResults = false; recognition.maxAlternatives = 1;
+      recognition.onstart = () => {
+        if (!current()) { try { recognition.abort(); } catch (_) {} return; }
+        if (dictation.phase === 'finishing') { try { recognition.stop(); } catch (_) { dictationFailed(); } return; }
+        dictation.phase = 'listening'; renderDictation();
+      };
+      recognition.onresult = event => {
+        if (!current()) return;
+        for (let index = event.resultIndex || 0; index < event.results.length; index++) {
+          if (!event.results[index].isFinal) continue;
+          const phrase = event.results[index][0]?.transcript || '';
+          if (!phrase.trim()) { dictationFailed('no-speech'); return; }
+          cancelDictation('review', '請核對或修改詞語，再確認加入。');
+          $('dictation-pending').value = phrase;
+          return;
+        }
+      };
+      recognition.onerror = event => { if (current()) dictationFailed(event.error); };
+      recognition.onend = () => { if (current()) dictationFailed('no-speech'); };
+      dictation.timer = setTimeout(() => { if (current()) dictationFailed('timeout'); }, 20000);
+      renderDictation(); recognition.start();
+    } catch (error) { dictationFailed(error.name === 'NotAllowedError' ? 'not-allowed' : undefined); }
+  }
+  $('dictation-start').addEventListener('click', startDictation);
+  $('dictation-stop').addEventListener('click', () => {
+    if (!['starting', 'listening'].includes(dictation.phase)) return;
+    dictation.phase = 'finishing'; renderDictation();
+    clearTimeout(dictation.timer);
+    const token = dictation.token;
+    dictation.timer = setTimeout(() => { if (dictation.token === token) dictationFailed('timeout'); }, Math.max(0, Math.min(3000, dictation.deadline - performance.now())));
+    try { dictation.recognition.stop(); } catch (_) { dictationFailed(); }
+  });
+  $('dictation-cancel').addEventListener('click', () => cancelDictation());
+  $('dictation-confirm').addEventListener('click', () => {
+    if (dictation.phase !== 'review') return;
+    try {
+      const word = $('dictation-pending').value.normalize('NFC').replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '');
+      if (!/^\p{Script=Han}{1,8}$/u.test(word)) throw new Error('每次只可加入一項 1 至 8 個中文字嘅詞語，請修改後再確認。');
+      const before = $('teacher-words').value;
+      if (before.trim() && S.parseEntries(before).some(entry => entry.text === word)) throw new Error('已有相同詞語，未有重複加入。');
+      const combined = before + (before && !/[\r\n]$/.test(before) ? '\n' : '') + word;
+      S.parseEntries(combined);
+      $('teacher-words').value = combined;
+      cancelDictation('idle', '已加入文字框。撳「更新可選詞語」先選擇範圍。');
+    } catch (error) { dictation.message = error.message; renderDictation(); }
+  });
   function durationLabel(attempts, unstarted = false) {
     if (!attempts.length) return unstarted ? '未開始' : '未有計時資料';
     const measured = attempts.filter(attempt => Number.isFinite(attempt.elapsedMs));
@@ -1256,6 +1342,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     maskRecallText();
   }
   function speakText(text, operation) {
+    cancelDictation();
     stopSpeech(); const generation = speechGeneration;
     if (!cantoneseVoice) { if (operation) instructionStatus = speechUnavailable; else $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; refreshSpeechNotice(); return; }
     try {
@@ -1275,6 +1362,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   });
   if ('speechSynthesis' in window && speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', updateVoices);
   $('teacher-open').addEventListener('click', () => {
+    cancelDictation();
     if (state && state.active.phase === 'recall') requestHelp('outline');
     draftEntries = entries; draftSelected = new Set(selected);
     $('teacher-words').value = draftEntries.map(entry => entry.text).join('\n'); $('teacher-error').textContent = ''; selectedOptions();
@@ -1282,10 +1370,12 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('teacher-skip').disabled = !active || !['loading', 'unavailable', 'watch', 'guided', 'recall', 'quiz'].includes(state.active.phase) || state.active.writingDone;
     $('teacher-dialog').showModal(); availabilityChanged(); renderHistory();
   });
-  $('teacher-close').addEventListener('click', () => $('teacher-dialog').close());
-  $('teacher-dialog').addEventListener('close', availabilityChanged);
+  $('teacher-close').addEventListener('click', () => { cancelDictation(); $('teacher-dialog').close(); });
+  $('teacher-dialog').addEventListener('cancel', () => cancelDictation());
+  $('teacher-dialog').addEventListener('close', () => { cancelDictation(); availabilityChanged(); });
   $('validate-words').addEventListener('click', () => { try { draftEntries = S.parseEntries($('teacher-words').value); draftSelected = allCharacterPositions(draftEntries); selectedOptions(); $('teacher-error').textContent = '已更新可選詞語。'; } catch (error) { $('teacher-error').textContent = error.message; } });
   $('apply-words').addEventListener('click', () => {
+    cancelDictation();
     try {
       const parsed = S.parseEntries($('teacher-words').value);
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動。先撳「更新可選詞語」，再選擇範圍。');
@@ -1294,8 +1384,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       goHome(); $('teacher-dialog').close();
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
-  $('teacher-skip').addEventListener('click', () => { if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
-  $('teacher-end').addEventListener('click', () => { dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
+  $('teacher-skip').addEventListener('click', () => { cancelDictation(); if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
+  $('teacher-end').addEventListener('click', () => { cancelDictation(); dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
   $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
   $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
@@ -1312,6 +1402,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   document.querySelector('.brand').addEventListener('click', click => { click.preventDefault(); goHome(); });
   document.addEventListener('visibilitychange', availabilityChanged);
   window.addEventListener('pageshow', () => { leaving = false; availabilityChanged(); });
+  for (const name of ['beforeunload', 'popstate', 'hashchange']) window.addEventListener(name, () => cancelDictation());
   window.addEventListener('pagehide', () => {
     leaving = true; availabilityChanged(); soundVersion++; soundEnabled = false; audioStatus = 'off';
     updateSound();

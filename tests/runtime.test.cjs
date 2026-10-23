@@ -88,6 +88,155 @@ function visibleText(document) {
   }).map(node => node.nodeValue).join('');
 }
 
+function dictationApp({ prefixed = false, unsupported = false } = {}) {
+  const e = environment(source('index.html')), timers = new Map(), speech = { instances: [] };
+  let now = 0, timerId = 0;
+  e.context.performance = { now: () => now };
+  e.context.setTimeout = (callback, delay) => { timers.set(++timerId, { callback, at: now + delay }); return timerId; };
+  e.context.clearTimeout = id => timers.delete(id);
+  e.advance = milliseconds => {
+    const until = now + milliseconds;
+    while (true) {
+      const next = [...timers.entries()].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next) break;
+      now = next[1].at; timers.delete(next[0]); next[1].callback();
+    }
+    now = until;
+  };
+  class Recognition {
+    constructor() { if (speech.constructorError) throw speech.constructorError; this.starts = 0; this.stops = 0; this.aborts = 0; this.active = false; speech.instances.push(this); }
+    start() { this.starts++; if (speech.startError) throw speech.startError; }
+    stop() { this.stops++; if (speech.stopError) throw speech.stopError; }
+    abort() { this.aborts++; this.active = false; this.onerror?.({ error: 'aborted' }); this.onend?.(); }
+    begin() { this.active = true; this.onstart?.(); }
+    result(text, final = true) { const result = [{ transcript: text }]; result.isFinal = final; this.onresult?.({ resultIndex: 0, results: [result] }); }
+    end() { this.active = false; this.onend?.(); }
+    fail(error) { this.active = false; this.onerror?.({ error }); }
+  }
+  if (!unsupported) e.context[prefixed ? 'webkitSpeechRecognition' : 'SpeechRecognition'] = Recognition;
+  e.context.BishunSession = S; e.context.BishunWriting = {};
+  vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context);
+  e.speech = speech;
+  e.begin = () => { e.$('dictation-start').click(); const recognition = speech.instances.at(-1); recognition.begin(); return recognition; };
+  e.review = text => { const recognition = e.begin(); recognition.result(text); return recognition; };
+  return e;
+}
+
+test('Cantonese dictation starts only on tap, reviews an editable final phrase and appends to the current draft once', () => {
+  const e = dictationApp();
+  assert.equal(e.speech.instances.length, 0);
+  e.$('teacher-open').click(); assert.equal(e.speech.instances.length, 0);
+  const options = e.$('teacher-word-options').childNodes.slice(), cancelCount = e.voices.cancels;
+  const recognition = e.begin();
+  assert(e.voices.cancels > cancelCount, 'dictation stops playback');
+  assert.equal(recognition.lang, 'yue-Hant-HK'); assert.equal(recognition.continuous, false); assert.equal(recognition.interimResults, false); assert.equal(recognition.maxAlternatives, 1);
+  assert.equal(e.$('dictation-start').textContent, '聆聽中'); assert.equal(e.$('dictation-stop').hidden, false);
+  e.$('dictation-start').emit('click'); assert.equal(e.speech.instances.length, 1, 'repeated taps cannot overlap attempts');
+  recognition.result('未完成', false); assert.equal(e.$('dictation-review').hidden, true);
+  recognition.result('朋友。'); assert.equal(e.$('dictation-review').hidden, false); assert.equal(e.$('dictation-pending').value, '朋友。'); assert.equal(recognition.active, false);
+  e.$('dictation-pending').value = ' 「同學」  ';
+  recognition.result('遲到'); recognition.end(); recognition.fail('network');
+  assert.equal(e.$('dictation-pending').value, ' 「同學」  ', 'late events preserve the edited review');
+  e.$('teacher-words').value = ' 朋友，\n朋友\n';
+  e.$('dictation-confirm').click(); e.$('dictation-confirm').emit('click');
+  assert.equal(e.$('teacher-words').value, ' 朋友，\n朋友\n同學'); assert.equal(e.$('dictation-review').hidden, true); assert.equal(e.$('dictation-pending').value, '');
+  assert.deepEqual(e.$('teacher-word-options').childNodes, options, 'confirmation does not rebuild selections'); assert.equal(e.store.size, 0, 'confirmation does not create or apply a session');
+  e.$('apply-words').click(); assert.equal(e.$('teacher-dialog').open, true); assert.match(e.$('teacher-error').textContent, /更新可選詞語/);
+  e.$('validate-words').click(); assert(walk(e.$('teacher-word-options')).filter(node => node.nodeName === 'input').every(input => input.checked));
+  e.$('apply-words').click(); e.$('start-practice').click();
+  const snapshot = JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  assert.deepEqual(snapshot.entries.map(entry => entry.text), ['朋友', '同學']); assert.equal(snapshot.occurrences.length, 4);
+});
+
+test('dictation validates one Han word without joining, splitting, replacing or losing rejected drafts', () => {
+  for (const phrase of ['朋友 同學', '朋友，同學', 'abc', '朋友1', '一二三四五六七八九', '', '🙂朋友']) {
+    const e = dictationApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗'; e.review('朋友'); e.$('dictation-pending').value = phrase; e.$('dictation-confirm').click();
+    assert.equal(e.$('teacher-words').value, '粗', phrase); assert.equal(e.$('dictation-pending').value, phrase); assert.equal(e.$('dictation-review').hidden, false); assert.match(e.$('dictation-status').textContent, /1 至 8/);
+  }
+  for (const before of ['', '   ', '粗', '粗\r\n']) {
+    const e = dictationApp(); e.$('teacher-open').click(); e.$('teacher-words').value = before; e.review('「朋友。」'); e.$('dictation-confirm').click();
+    assert.equal(e.$('teacher-words').value, before + (before && !/[\r\n]$/.test(before) ? '\n' : '') + '朋友');
+  }
+  const e = dictationApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗'; e.review('朋友'); e.$('teacher-words').value = '朋友，朋友\n粗'; e.$('dictation-confirm').click();
+  assert.equal(e.$('teacher-words').value, '朋友，朋友\n粗'); assert.equal(e.$('dictation-pending').value, '朋友'); assert.match(e.$('dictation-status').textContent, /相同詞語/);
+  e.$('dictation-pending').value = '学习'; e.$('dictation-confirm').click(); assert.equal(e.$('teacher-words').value, '朋友，朋友\n粗\n学习', 'recognition text is not guessed into Traditional Chinese');
+});
+
+test('dictation respects the vocabulary parser limits and keeps the six-word session limit', () => {
+  for (const before of ['一\n二\n三\n四\n五\n六\n七\n八\n九\n十\n百\n千', '粗' + ' '.repeat(397), 'invalid']) {
+    const e = dictationApp(); e.$('teacher-open').click(); e.$('teacher-words').value = before; e.review('朋友'); e.$('dictation-confirm').click();
+    assert.equal(e.$('teacher-words').value, before); assert.equal(e.$('dictation-pending').value, '朋友'); assert.equal(e.$('dictation-review').hidden, false);
+  }
+  const e = dictationApp(); e.$('teacher-open').click(); e.review('朋友'); e.$('dictation-confirm').click();
+  assert.equal(e.$('teacher-word-options').childNodes.length, 6);
+  e.$('validate-words').click(); assert.equal(e.$('teacher-word-options').childNodes.length, 7);
+  e.$('apply-words').click(); assert.equal(e.$('teacher-dialog').open, true); assert.match(e.$('teacher-error').textContent, /1 至 6 項詞語/);
+  const first = walk(e.$('teacher-word-options')).find(node => node.nodeName === 'input'); first.checked = false; first.emit('change');
+  e.$('apply-words').click(); assert.equal(e.$('teacher-dialog').open, false);
+  e.$('start-practice').click();
+  const snapshot = JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  assert.equal(snapshot.entries.length, 6); assert.equal(snapshot.occurrences.length, 13); assert(snapshot.entries.some(entry => entry.text === '朋友'));
+});
+
+test('stop can deliver a final phrase and both starting and finishing have bounded deadlines', () => {
+  const e = dictationApp(); e.$('teacher-open').click();
+  let recognition = e.begin(); e.$('dictation-stop').click(); assert.equal(recognition.stops, 1); assert.equal(e.$('dictation-stop').disabled, true);
+  recognition.result('朋友'); e.advance(20000); assert.equal(e.$('dictation-pending').value, '朋友');
+  e.$('dictation-cancel').click(); assert.equal(e.$('dictation-pending').value, ''); assert.equal(e.$('dictation-review').hidden, true);
+  e.$('dictation-start').click(); recognition = e.speech.instances.at(-1);
+  e.advance(19999); assert.equal(recognition.aborts, 0); e.advance(1); assert.equal(recognition.aborts, 1); assert.match(e.$('dictation-status').textContent, /逾時/);
+  recognition.begin(); recognition.result('遲到'); assert.equal(recognition.active, false); assert.equal(e.$('dictation-review').hidden, true);
+  recognition = e.begin(); e.advance(19000); e.$('dictation-stop').click(); e.advance(1000); assert.equal(recognition.active, false); assert.match(e.$('dictation-status').textContent, /逾時/);
+  recognition = e.begin(); e.$('dictation-stop').click(); e.advance(2999); assert.equal(recognition.active, true); e.advance(1); assert.equal(recognition.active, false);
+  assert.equal(e.speech.instances.length, 4, 'timeouts never retry automatically');
+});
+
+test('closing, Escape, background and navigation discard dictation and ignore stale callbacks before or after start', () => {
+  const exits = [e => e.$('teacher-close').click(), e => e.$('teacher-dialog').emit('cancel'), e => e.$('teacher-dialog').close(), e => { e.document.hidden = true; e.document.emit('visibilitychange'); }, e => e.emitWindow('pagehide'), e => e.emitWindow('beforeunload'), e => e.emitWindow('popstate'), e => e.emitWindow('hashchange'), e => e.document.querySelector('.brand').click(), e => e.$('teacher-class').click()];
+  for (const exit of exits) for (const stage of ['starting', 'listening', 'review']) {
+    const e = dictationApp(); e.$('teacher-open').click(); e.$('dictation-start').click(); const recognition = e.speech.instances.at(-1);
+    if (stage !== 'starting') recognition.begin();
+    if (stage === 'review') recognition.result('朋友');
+    const before = e.$('teacher-words').value; exit(e);
+    recognition.begin(); recognition.result('遲到'); recognition.end(); recognition.fail('network');
+    assert.equal(recognition.active, false, stage); assert.equal(e.$('dictation-review').hidden, true); assert.equal(e.$('dictation-pending').value, ''); assert.equal(e.$('teacher-words').value, before);
+    e.document.hidden = false; e.emitWindow('pageshow');
+    if (e.$('teacher-dialog').open) e.$('teacher-dialog').close(); e.$('teacher-open').click(); assert.equal(e.speech.instances.length, 1, 'reopening never starts recognition');
+  }
+});
+
+test('a cancelled old attempt cannot overwrite a new attempt or its reviewed text', () => {
+  const e = dictationApp(); e.$('teacher-open').click(); const old = e.begin(); e.$('teacher-close').click(); e.$('teacher-open').click(); const current = e.begin();
+  old.begin(); old.result('舊詞'); old.fail('network'); old.end(); assert.equal(old.active, false); assert.equal(current.active, true); assert.equal(e.$('dictation-start').textContent, '聆聽中');
+  current.result('朋友'); e.$('dictation-pending').value = '同學'; old.result('舊詞'); old.begin(); current.result('重複'); current.end();
+  assert.equal(e.$('dictation-pending').value, '同學'); e.$('dictation-confirm').click(); assert(e.$('teacher-words').value.endsWith('\n同學'));
+});
+
+test('recognition failures and unsupported browsers retain typing and keyboard dictation fallback', () => {
+  for (const error of ['not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'language-not-supported', 'no-speech', 'aborted']) {
+    const e = dictationApp(); e.$('teacher-open').click(); const recognition = e.begin(), before = e.$('teacher-words').value;
+    recognition.fail(error); recognition.result('遲到'); assert.equal(recognition.active, false); assert.equal(e.$('teacher-words').value, before); assert.equal(e.$('dictation-review').hidden, true); assert.match(e.$('dictation-status').textContent, /打字.*鍵盤語音/); e.advance(30000); assert.equal(e.speech.instances.length, 1);
+  }
+  for (const failure of ['constructorError', 'startError', 'stopError']) {
+    const e = dictationApp(); e.$('teacher-open').click(); e.speech[failure] = Object.assign(new Error('blocked'), { name: 'NotAllowedError' }); e.$('dictation-start').click(); if (failure === 'stopError') e.$('dictation-stop').click();
+    assert.equal(e.$('dictation-start').disabled, false); assert.match(e.$('dictation-status').textContent, /打字.*鍵盤語音/);
+  }
+  const noSpeech = dictationApp(); noSpeech.$('teacher-open').click(); noSpeech.begin().end(); assert.match(noSpeech.$('dictation-status').textContent, /未聽到/);
+  const unsupported = dictationApp({ unsupported: true }); unsupported.$('teacher-open').click(); assert.equal(unsupported.$('dictation-start').disabled, true); assert.match(unsupported.$('dictation-status').textContent, /打字.*鍵盤語音/);
+  unsupported.$('teacher-words').value = '朋友'; unsupported.$('validate-words').click(); unsupported.$('apply-words').click(); assert.equal(unsupported.$('teacher-dialog').open, false);
+  const prefixed = dictationApp({ prefixed: true }); prefixed.$('teacher-open').click(); prefixed.review('朋友'); assert.equal(prefixed.$('dictation-pending').value, '朋友');
+});
+
+test('teacher actions and deliberate playback stop dictation without changing the active session', () => {
+  for (const action of ['teacher-skip', 'teacher-end', 'hear-instruction', 'speak']) {
+    const e = dictationApp(); e.$('start-practice').click(); e.$('word-cards').childNodes[0].click(); e.$('teacher-open').click(); const recognition = e.begin();
+    e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.voices.changed(); e.$(action).click();
+    assert.equal(recognition.active, false, action); recognition.result('遲到'); assert.equal(e.$('dictation-review').hidden, true);
+  }
+  const e = dictationApp(); e.$('start-practice').click(); const current = e.store.get('bishun-school:v1:current'); e.$('teacher-open').click(); const before = e.store.get('bishun-school:v1:' + current);
+  e.review('朋友'); e.$('dictation-confirm').click(); assert.equal(e.store.get('bishun-school:v1:' + current), before, 'confirmed draft does not alter the active session');
+});
+
 test('both modes assign all twelve default positions with six photo cards and SVG fallbacks', () => {
   const words = ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去'];
   for (const mode of ['practice', 'quiz']) {

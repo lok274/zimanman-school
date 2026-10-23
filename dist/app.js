@@ -13,6 +13,8 @@
   let readyMount = null, mountGeneration = 0, segment = null, leaving = false;
   let clockTick = null;
   let boardNavigationRun = null;
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let dictation = { phase: Recognition ? 'idle' : 'unsupported', token: 0, recognition: null, timer: null, deadline: 0, message: '' };
   const Q = globalThis.BishunQuizResults;
   const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
   const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
@@ -49,6 +51,7 @@
     }
   }
   function availabilityChanged() {
+    if (document.hidden || leaving || !$('teacher-dialog').open) cancelDictation();
     checkpoint();
     if (!available()) {
       feedback = null; cancelFeedbackEffects(); stopSpeech();
@@ -97,6 +100,7 @@
     return S.createSession({ id: id(), entries: assigned, startedAt: Date.now(), mode });
   }
   function startSession(candidate = sessionCandidate()) {
+    cancelDictation();
     stopEffects();
     boardNavigationRun = null;
     feedback = null;
@@ -106,6 +110,7 @@
   }
   function stopSpeech() { speechGeneration++; instructionStatus = ''; $('instruction-voice-note').textContent = ''; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {} }
   function goHome() {
+    cancelDictation();
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
     else save();
     stopEffects(); state = null; feedback = null; boardNavigationRun = null;
@@ -443,6 +448,7 @@
   function retryClassResult() { boardNavigationRun = classroom?.view().boundRunId; classroom?.retry(); }
   $('class-retry').addEventListener('click', retryClassResult); $('class-pending-retry').addEventListener('click', retryClassResult);
   $('teacher-class').addEventListener('click', () => {
+    cancelDictation();
     try {
       const parsed = S.parseEntries($('teacher-words').value);
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
@@ -463,6 +469,83 @@
     renderSelectionTotal();
   }
   function renderSelectionTotal() { $('teacher-selection-total').textContent = '已揀 ' + draftSelected.size + ' 個字 · ' + draftEntries.filter(entry => entry.characters.some((_, index) => draftSelected.has(entry.id + ':' + index))).length + ' 項詞語'; }
+  const dictationFallback = '可直接打字或用鍵盤語音輸入。';
+  function renderDictation() {
+    const active = ['starting', 'listening', 'finishing'].includes(dictation.phase);
+    $('dictation-start').disabled = active || dictation.phase === 'review' || dictation.phase === 'unsupported';
+    $('dictation-start').textContent = ({ starting: '準備收音…', listening: '聆聽中', finishing: '處理中…' })[dictation.phase] || '粵語輸入';
+    $('dictation-stop').hidden = !active;
+    $('dictation-stop').disabled = dictation.phase === 'finishing';
+    $('dictation-review').hidden = dictation.phase !== 'review';
+    $('dictation-status').textContent = dictation.phase === 'unsupported' ? '此瀏覽器未提供語音輸入。' + dictationFallback : dictation.message;
+    $('dictation-status').hidden = !$('dictation-status').textContent;
+  }
+  function cancelDictation(phase = Recognition ? 'idle' : 'unsupported', message = '') {
+    const previous = dictation;
+    dictation = { phase, token: previous.token + 1, recognition: null, timer: null, deadline: 0, message };
+    clearTimeout(previous.timer);
+    $('dictation-pending').value = '';
+    renderDictation();
+    try { previous.recognition?.abort(); } catch (_) {}
+  }
+  function dictationFailed(error) {
+    const messages = { 'not-allowed': '未獲准用咪。', 'service-not-allowed': '未獲准使用語音服務。', 'audio-capture': '未能使用咪。', network: '語音服務連線失敗。', 'language-not-supported': '語音服務未支援粵語。', 'no-speech': '未聽到詞語。', timeout: '收音已逾時並停止。' };
+    cancelDictation('error', (messages[error] || '未能使用語音輸入。') + dictationFallback);
+  }
+  function startDictation() {
+    if (!Recognition || !['idle', 'error'].includes(dictation.phase) || !$('teacher-dialog').open || document.hidden || leaving) return;
+    stopSpeech();
+    cancelDictation();
+    try {
+      const recognition = new Recognition(), token = dictation.token;
+      dictation = { phase: 'starting', token, recognition, timer: null, deadline: performance.now() + 20000, message: '請講一項詞語，完成後先確認加入。' };
+      const current = () => dictation.token === token && dictation.recognition === recognition;
+      recognition.lang = 'yue-Hant-HK'; recognition.continuous = false; recognition.interimResults = false; recognition.maxAlternatives = 1;
+      recognition.onstart = () => {
+        if (!current()) { try { recognition.abort(); } catch (_) {} return; }
+        if (dictation.phase === 'finishing') { try { recognition.stop(); } catch (_) { dictationFailed(); } return; }
+        dictation.phase = 'listening'; renderDictation();
+      };
+      recognition.onresult = event => {
+        if (!current()) return;
+        for (let index = event.resultIndex || 0; index < event.results.length; index++) {
+          if (!event.results[index].isFinal) continue;
+          const phrase = event.results[index][0]?.transcript || '';
+          if (!phrase.trim()) { dictationFailed('no-speech'); return; }
+          cancelDictation('review', '請核對或修改詞語，再確認加入。');
+          $('dictation-pending').value = phrase;
+          return;
+        }
+      };
+      recognition.onerror = event => { if (current()) dictationFailed(event.error); };
+      recognition.onend = () => { if (current()) dictationFailed('no-speech'); };
+      dictation.timer = setTimeout(() => { if (current()) dictationFailed('timeout'); }, 20000);
+      renderDictation(); recognition.start();
+    } catch (error) { dictationFailed(error.name === 'NotAllowedError' ? 'not-allowed' : undefined); }
+  }
+  $('dictation-start').addEventListener('click', startDictation);
+  $('dictation-stop').addEventListener('click', () => {
+    if (!['starting', 'listening'].includes(dictation.phase)) return;
+    dictation.phase = 'finishing'; renderDictation();
+    clearTimeout(dictation.timer);
+    const token = dictation.token;
+    dictation.timer = setTimeout(() => { if (dictation.token === token) dictationFailed('timeout'); }, Math.max(0, Math.min(3000, dictation.deadline - performance.now())));
+    try { dictation.recognition.stop(); } catch (_) { dictationFailed(); }
+  });
+  $('dictation-cancel').addEventListener('click', () => cancelDictation());
+  $('dictation-confirm').addEventListener('click', () => {
+    if (dictation.phase !== 'review') return;
+    try {
+      const word = $('dictation-pending').value.normalize('NFC').replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '');
+      if (!/^\p{Script=Han}{1,8}$/u.test(word)) throw new Error('每次只可加入一項 1 至 8 個中文字嘅詞語，請修改後再確認。');
+      const before = $('teacher-words').value;
+      if (before.trim() && S.parseEntries(before).some(entry => entry.text === word)) throw new Error('已有相同詞語，未有重複加入。');
+      const combined = before + (before && !/[\r\n]$/.test(before) ? '\n' : '') + word;
+      S.parseEntries(combined);
+      $('teacher-words').value = combined;
+      cancelDictation('idle', '已加入文字框。撳「更新可選詞語」先選擇範圍。');
+    } catch (error) { dictation.message = error.message; renderDictation(); }
+  });
   function durationLabel(attempts, unstarted = false) {
     if (!attempts.length) return unstarted ? '未開始' : '未有計時資料';
     const measured = attempts.filter(attempt => Number.isFinite(attempt.elapsedMs));
@@ -509,6 +592,7 @@
     maskRecallText();
   }
   function speakText(text, operation) {
+    cancelDictation();
     stopSpeech(); const generation = speechGeneration;
     if (!cantoneseVoice) { if (operation) instructionStatus = speechUnavailable; else $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; refreshSpeechNotice(); return; }
     try {
@@ -528,6 +612,7 @@
   });
   if ('speechSynthesis' in window && speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', updateVoices);
   $('teacher-open').addEventListener('click', () => {
+    cancelDictation();
     if (state && state.active.phase === 'recall') requestHelp('outline');
     draftEntries = entries; draftSelected = new Set(selected);
     $('teacher-words').value = draftEntries.map(entry => entry.text).join('\n'); $('teacher-error').textContent = ''; selectedOptions();
@@ -535,10 +620,12 @@
     $('teacher-skip').disabled = !active || !['loading', 'unavailable', 'watch', 'guided', 'recall', 'quiz'].includes(state.active.phase) || state.active.writingDone;
     $('teacher-dialog').showModal(); availabilityChanged(); renderHistory();
   });
-  $('teacher-close').addEventListener('click', () => $('teacher-dialog').close());
-  $('teacher-dialog').addEventListener('close', availabilityChanged);
+  $('teacher-close').addEventListener('click', () => { cancelDictation(); $('teacher-dialog').close(); });
+  $('teacher-dialog').addEventListener('cancel', () => cancelDictation());
+  $('teacher-dialog').addEventListener('close', () => { cancelDictation(); availabilityChanged(); });
   $('validate-words').addEventListener('click', () => { try { draftEntries = S.parseEntries($('teacher-words').value); draftSelected = allCharacterPositions(draftEntries); selectedOptions(); $('teacher-error').textContent = '已更新可選詞語。'; } catch (error) { $('teacher-error').textContent = error.message; } });
   $('apply-words').addEventListener('click', () => {
+    cancelDictation();
     try {
       const parsed = S.parseEntries($('teacher-words').value);
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動。先撳「更新可選詞語」，再選擇範圍。');
@@ -547,8 +634,8 @@
       goHome(); $('teacher-dialog').close();
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
-  $('teacher-skip').addEventListener('click', () => { if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
-  $('teacher-end').addEventListener('click', () => { dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
+  $('teacher-skip').addEventListener('click', () => { cancelDictation(); if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
+  $('teacher-end').addEventListener('click', () => { cancelDictation(); dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
   $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
   $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
@@ -565,6 +652,7 @@
   document.querySelector('.brand').addEventListener('click', click => { click.preventDefault(); goHome(); });
   document.addEventListener('visibilitychange', availabilityChanged);
   window.addEventListener('pageshow', () => { leaving = false; availabilityChanged(); });
+  for (const name of ['beforeunload', 'popstate', 'hashchange']) window.addEventListener(name, () => cancelDictation());
   window.addEventListener('pagehide', () => {
     leaving = true; availabilityChanged(); soundVersion++; soundEnabled = false; audioStatus = 'off';
     updateSound();
