@@ -1,0 +1,140 @@
+import Q from './quiz-results.js';
+import teacherHTML from './teacher-page.js';
+
+const allowedOrigins = new Set(['https://lok274.github.io', 'http://127.0.0.1:4173', 'http://localhost:4173']);
+const keyPattern = /^[\w-]{1,100}$/;
+function fail(status, code, message) { throw Object.assign(new Error(message), { status, code }); }
+async function hash(value) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(n => n.toString(16).padStart(2, '0')).join(''); }
+function teacher(request) {
+  const id = request.headers.get('oai-authenticated-user-id');
+  if (!id || !request.headers.get('oai-authenticated-user-email')) fail(401, 'SIGN_IN', '請先用 ChatGPT 登入老師頁面。');
+  return id;
+}
+function sameOrigin(request) {
+  if (request.headers.get('origin') !== new URL(request.url).origin) fail(403, 'ORIGIN', '請在老師頁面建立班級。');
+}
+async function body(request) {
+  if (!request.headers.get('content-type')?.startsWith('application/json')) fail(415, 'JSON_REQUIRED', '請傳送 JSON。');
+  const reader = request.body?.getReader();
+  if (!reader) fail(400, 'INVALID_BODY', '資料無效。');
+  const chunks = []; let size = 0;
+  while (true) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > 262144) { await reader.cancel(); fail(413, 'TOO_LARGE', '紀錄太大。'); } chunks.push(value); }
+  const bytes = new Uint8Array(size); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  try { const value = JSON.parse(new TextDecoder().decode(bytes)); if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error(); return value; }
+  catch { fail(400, 'INVALID_BODY', '資料無效。'); }
+}
+function key(value) { if (typeof value !== 'string' || !keyPattern.test(value)) fail(400, 'INVALID_ID', '紀錄編號無效。'); return value; }
+function canonicalAssignment(entries) { try { return Q.assignment(entries); } catch (error) { fail(400, 'INVALID_ASSIGNMENT', error.message); } }
+function roomReply(room) { return { code: room.code, assignment: JSON.parse(room.assignment_json), expiresAt: room.expires_at }; }
+async function roomFor(db, code) {
+  const room = await db.prepare('SELECT * FROM classes WHERE code = ?').bind(code).first();
+  if (!room) fail(404, 'CLASS_NOT_FOUND', '搵唔到呢個班級，請核對班級碼。');
+  if (room.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期，請老師開新一班。');
+  return room;
+}
+async function memberFor(request, db, code) {
+  const token = request.headers.get('authorization')?.replace(/^Bearer /, '');
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) fail(401, 'MEMBERSHIP_REQUIRED', '請重新加入班級。');
+  const member = await db.prepare('SELECT * FROM members WHERE code = ? AND token_hash = ?').bind(code, await hash(token)).first();
+  if (!member) fail(401, 'MEMBERSHIP_REQUIRED', '參加身份無效。');
+  return member;
+}
+async function board(db, code, memberId) {
+  const { results } = await db.prepare(`WITH best AS (
+    SELECT m.id AS memberId, m.alias, r.mistakes, r.elapsed_ms AS elapsedMs,
+      ROW_NUMBER() OVER (PARTITION BY m.id ORDER BY r.mistakes, r.elapsed_ms, r.id) AS choice
+    FROM members m JOIN runs r ON r.member_id = m.id WHERE m.code = ? AND r.reason IS NULL
+  ) SELECT memberId, alias, mistakes, elapsedMs FROM best WHERE choice = 1`).bind(code).all();
+  const rows = Q.ranks(results).map(row => ({ ...row, isMe: row.memberId === memberId }));
+  return { rows, personalBest: rows.find(row => row.isMe) || null };
+}
+async function api(request, env, url) {
+  const db = env.DB;
+  if (!db) fail(503, 'UNAVAILABLE', '班級服務暫未準備好。');
+  const route = url.pathname.split('/').filter(Boolean).slice(3);
+  if (!route.length && request.method === 'POST') {
+    sameOrigin(request); const owner = teacher(request), data = await body(request);
+    const requestId = key(data.requestId), assignment = canonicalAssignment(data.entries), payloadHash = await hash(JSON.stringify(assignment));
+    const existing = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
+    if (existing) { if (existing.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (existing.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(existing); }
+    await db.prepare('DELETE FROM classes WHERE code IN (SELECT code FROM classes WHERE expires_at <= ? ORDER BY expires_at LIMIT 10)').bind(Date.now()).run();
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const code = [...crypto.getRandomValues(new Uint8Array(8))].map(n => alphabet[n % alphabet.length]).join('');
+      const now = Date.now();
+      await db.prepare(`INSERT OR IGNORE INTO classes(code, owner_id, assignment_json, expires_at, request_id, payload_hash)
+        SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM classes WHERE owner_id = ? AND expires_at > ?) < 10`)
+        .bind(code, owner, JSON.stringify(assignment), now + 86400000, requestId, payloadHash, owner, now).run();
+      const saved = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
+      if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); return roomReply(saved); }
+      const count = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE owner_id = ? AND expires_at > ?').bind(owner, now).first();
+      if (count.n >= 10) fail(429, 'CLASS_LIMIT', '最多同時開 10 班，請等舊班到期。');
+    }
+    fail(503, 'TRY_AGAIN', '暫未能建立班級，請重試。');
+  }
+  const [code, action, runId] = route;
+  if (!/^[A-Z2-9]{8}$/.test(code || '') || route.length > 3) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
+  const room = await roomFor(db, code);
+  if (action === 'members' && route.length === 2 && request.method === 'POST') {
+    const data = await body(request), requestId = key(data.requestId);
+    if (typeof data.alias !== 'string') fail(400, 'INVALID_ALIAS', '請輸入暱稱。');
+    const alias = data.alias.normalize('NFC').trim();
+    if (!alias || Array.from(alias).length > 20 || /[\p{Cc}\p{Cf}]/u.test(alias)) fail(400, 'INVALID_ALIAS', '暱稱限 1 至 20 個字，不可用控制字元。');
+    if (typeof data.memberToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.memberToken)) fail(400, 'INVALID_TOKEN', '參加身份無效。');
+    const tokenHash = await hash(data.memberToken), aliasKey = alias.toLocaleLowerCase('en-US'), payloadHash = await hash(JSON.stringify({ alias, tokenHash }));
+    await db.prepare(`INSERT OR IGNORE INTO members(id, code, alias, alias_key, token_hash, request_id, payload_hash)
+      SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM members WHERE code = ?) < 100 AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)`)
+      .bind(crypto.randomUUID(), code, alias, aliasKey, tokenHash, requestId, payloadHash, code, code, Date.now()).run();
+    const saved = await db.prepare('SELECT * FROM members WHERE code = ? AND request_id = ?').bind(code, requestId).first();
+    if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同加入編號已有另一份資料。'); return { ...roomReply(room), memberId: saved.id, alias: saved.alias }; }
+    const taken = await db.prepare('SELECT id FROM members WHERE code = ? AND alias_key = ?').bind(code, aliasKey).first();
+    if (taken) fail(409, 'ALIAS_TAKEN', '呢個暱稱已有人用，請用另一個；同名唔會接管原有紀錄。');
+    fail(429, 'MEMBER_LIMIT', '班級已滿或身份已使用，請聯絡老師。');
+  }
+  if (action === 'runs' && route.length === 3 && request.method === 'PUT') {
+    key(runId); const member = await memberFor(request, db, code), data = await body(request);
+    if (data.runId !== runId) fail(400, 'INVALID_ID', '紀錄編號唔一致。');
+    let result;
+    try { result = Q.evaluate(JSON.parse(room.assignment_json).entries, data); } catch (error) { fail(400, 'INVALID_RUN', error.message); }
+    if (!result.terminal) fail(422, 'INCOMPLETE', '完成全部題目後先可以睇班級榜。');
+    const payloadHash = await hash(JSON.stringify(result.evidence));
+    await db.prepare(`INSERT OR IGNORE INTO runs(id, member_id, payload_hash, mistakes, elapsed_ms, reason, submitted_at)
+      SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM runs WHERE member_id = ?) < 20 AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)`)
+      .bind(runId, member.id, payloadHash, result.score?.mistakes ?? null, result.score?.elapsedMs ?? null, result.reason, Date.now(), member.id, code, Date.now()).run();
+    const saved = await db.prepare('SELECT * FROM runs WHERE member_id = ? AND id = ?').bind(member.id, runId).first();
+    if (!saved) fail(429, 'RUN_LIMIT', '已交 20 次測驗，請老師開新一班。');
+    if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同測驗編號已有另一份紀錄。');
+    return { runId, ranked: saved.reason === null, reason: saved.reason, score: saved.reason === null ? { mistakes: saved.mistakes, elapsedMs: saved.elapsed_ms } : null };
+  }
+  if (action === 'board' && route.length === 2 && request.method === 'GET') {
+    let memberId = null;
+    if (request.headers.has('authorization')) {
+      const member = await memberFor(request, db, code); memberId = member.id;
+      if (!await db.prepare('SELECT id FROM runs WHERE member_id = ? LIMIT 1').bind(memberId).first()) fail(403, 'FINISH_FIRST', '完成全部題目後先可以睇班級榜。');
+    } else if (teacher(request) !== room.owner_id) fail(403, 'OWNER_REQUIRED', '只限開班老師查看。');
+    return { ...await board(db, code, memberId), expiresAt: room.expires_at };
+  }
+  fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
+}
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url), origin = request.headers.get('origin');
+    const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Vary': 'Origin' };
+    if (origin && (allowedOrigins.has(origin) || origin === url.origin)) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS';
+      headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+    }
+    try {
+      if (origin && !headers['Access-Control-Allow-Origin']) fail(403, 'ORIGIN', '來源未獲允許。');
+      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+      if (['/', '/teacher'].includes(url.pathname) && request.method === 'GET') return new Response(teacherHTML, { headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8' } });
+      if (url.pathname !== '/api/v1/classes' && !url.pathname.startsWith('/api/v1/classes/')) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
+      return Response.json(await api(request, env, url), { headers });
+    } catch (error) {
+      if (!error.status) console.error('Classroom request failed', error.name);
+      return Response.json({ error: { code: error.code || 'SERVICE_ERROR', message: error.status ? error.message : '班級服務暫時未能連線，請稍後重試。' } }, { status: error.status || 503, headers });
+    }
+  },
+};

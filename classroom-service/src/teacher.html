@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-Hant-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>字慢慢 · 班級測驗</title>
+<style>body{font:18px/1.7 system-ui,sans-serif;background:#f6f3e9;color:#243d32;margin:0}main{max-width:800px;padding:24px;margin:auto}button,a{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px}button{background:#214b3b;color:white;border:0;cursor:pointer}button:disabled{opacity:.5}a{color:#214b3b}section{background:#fffdf6;padding:20px;border:1px solid #d9dece;border-radius:12px;margin:20px 0}#code{font-size:42px;letter-spacing:5px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #d9dece}p{overflow-wrap:anywhere}[hidden]{display:none!important}:focus-visible{outline:3px solid #ba642d;outline-offset:4px}</style></head>
+<body><main><h1>班級測驗</h1><p>老師登入開班，同學只需班級碼和暱稱。全班做同一份題目，完成全份測驗先見排行榜。</p>
+<a href="/signin-with-chatgpt?return_to=%2Fteacher">用 ChatGPT 登入</a>
+<section><h2>今次題目</h2><p id="assignment"></p><button id="create">建立班級</button></section>
+<p id="status" role="status"></p>
+<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p>同學到 <a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">字慢慢學生頁面</a>，撳「加入班級測驗」。請用暱稱，唔好填真名。</p><button id="refresh">更新班級榜</button><div id="board"></div></section>
+<p>先比錯誤次數，再比有效書寫時間；所有重試都計算。每位只顯示最好一次，同分同名次。跳過題目或缺少時間嘅紀錄不排名。</p>
+<p>暱稱、測驗結果會存喺班級服務；班級 24 小時後停止使用。呢個係課堂活動，瀏覽器提交嘅成績唔能夠防作弊。共用平板要先撳「換下一位同學」。</p></main>
+<script>
+const $ = id => document.getElementById(id);
+const storageKey = 'zimanman:teacher';
+let draft = null;
+try {
+  draft = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+  if (location.hash.length > 1) {
+    const assignment = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+    draft = { requestId: crypto.randomUUID(), entries: assignment.entries };
+    sessionStorage.setItem(storageKey, JSON.stringify(draft)); history.replaceState(null, '', '/teacher');
+  }
+} catch { $('status').textContent = '設定未能保存，請由學生頁面嘅老師工具再開一次。'; }
+$('assignment').textContent = draft?.entries?.map(word => word.selectedIndexes.map(index => Array.from(word.text)[index]).join('、')).join(' / ') || '請先喺學生頁面嘅老師工具揀好範圍，再開班級測驗。';
+$('create').disabled = !draft?.entries;
+async function request(path, options) {
+  const response = await fetch('/api/v1/classes' + path, options), data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || '未能連線，請重試。');
+  return data;
+}
+function showRoom(room) { $('room').hidden = false; $('code').textContent = room.code; $('expiry').textContent = '到期時間：' + new Date(room.expiresAt).toLocaleString('zh-HK'); }
+if (draft?.room) showRoom(draft.room);
+$('create').addEventListener('click', async () => {
+  $('create').disabled = true; $('status').textContent = '建立中…';
+  try {
+    const room = await request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: draft.requestId, entries: draft.entries }) });
+    draft.room = room; showRoom(room);
+    try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { $('status').textContent = '已開班，請記低班級碼；此頁未能保存。'; return; }
+    $('status').textContent = '班級已建立。將班級碼交畀同學。';
+  } catch (error) { $('status').textContent = error.message; }
+  finally { $('create').disabled = false; }
+});
+$('refresh').addEventListener('click', async () => {
+  $('refresh').disabled = true;
+  try {
+    const data = await request('/' + draft.room.code + '/board');
+    const table = document.createElement('table');
+    const caption = document.createElement('caption'); caption.textContent = '全份測驗最佳成績'; table.append(caption);
+    const header = document.createElement('tr');
+    for (const text of ['名次', '暱稱', '錯誤', '秒']) { const cell = document.createElement('th'); cell.textContent = text; cell.scope = 'col'; header.append(cell); } table.append(header);
+    for (const row of data.rows) { const tr = document.createElement('tr'); for (const text of [row.rank, row.alias, row.mistakes, (row.elapsedMs / 1000).toFixed(1)]) { const td = document.createElement('td'); td.textContent = text; tr.append(td); } table.append(tr); }
+    $('board').replaceChildren(table); $('status').textContent = data.rows.length ? '已更新。' : '未有可排名嘅完成紀錄。';
+  } catch (error) { $('status').textContent = error.message; }
+  finally { $('refresh').disabled = false; }
+});
+</script></body></html>

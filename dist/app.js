@@ -10,6 +10,11 @@
   let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
   let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
   let readyMount = null, mountGeneration = 0, segment = null, leaving = false;
+  let clockTick = null;
+  let boardNavigationRun = null;
+  const Q = globalThis.BishunQuizResults;
+  const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
+  const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
   const dataCache = new Map();
   function available() { return state && !state.resting && !document.hidden && !$('teacher-dialog').open && !leaving; }
   function checkpoint() {
@@ -24,6 +29,23 @@
     const attempt = state.attempts.find(item => item.id === state.active.attemptId);
     if (!attempt || attempt.outcome !== 'active' || !Number.isFinite(attempt.elapsedMs)) return;
     segment = { attemptId: attempt.id, token: state.active.token, baseMs: attempt.elapsedMs, openedMono: performance.now() };
+    renderClock();
+  }
+  function renderClock() {
+    if (clockTick !== null) clearTimeout(clockTick); clockTick = null;
+    const visible = state?.mode === 'quiz' && !['choose-word', 'summary'].includes(state.active.phase);
+    $('quiz-clock').hidden = !visible;
+    if (!visible) return;
+    const measured = state.attempts.filter(item => Number.isFinite(item.elapsedMs));
+    let elapsed = measured.reduce((total, item) => total + item.elapsedMs, 0);
+    if (segment && segment.token === state.active.token && segment.attemptId === state.active.attemptId) elapsed = Math.min(Number.MAX_SAFE_INTEGER, elapsed + Math.max(0, performance.now() - segment.openedMono));
+    const unknown = state.attempts.some(item => item.elapsedMs === null && item.outcome !== 'active');
+    const label = measured.length ? (elapsed / 1000).toFixed(1) + ' 秒' + (unknown ? '（部分時間未記錄）' : '') : unknown ? '未有計時資料' : '未開始';
+    if ($('quiz-clock-value').textContent !== label) $('quiz-clock-value').textContent = label;
+    if (segment && available()) {
+      const sessionId = state.id, token = state.active.token, attemptId = state.active.attemptId;
+      clockTick = setTimeout(() => { clockTick = null; if (state?.id === sessionId && state.active.token === token && state.active.attemptId === attemptId) renderClock(); }, 100);
+    }
   }
   function availabilityChanged() {
     checkpoint();
@@ -74,6 +96,7 @@
   }
   function startSession(candidate = sessionCandidate()) {
     stopEffects();
+    boardNavigationRun = null;
     feedback = null;
     state = candidate;
     try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
@@ -83,7 +106,7 @@
   function goHome() {
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
     else save();
-    stopEffects(); state = null; feedback = null;
+    stopEffects(); state = null; feedback = null; boardNavigationRun = null;
     try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {}
     render();
   }
@@ -204,6 +227,7 @@
     restoreRecallText();
     renderSound();
     renderWordVoiceLabel();
+    renderClock();
     $('home-view').hidden = !!state;
     document.body.classList.toggle('quiz-mode', !!state && state.mode === 'quiz');
     if (!state) {
@@ -217,7 +241,7 @@
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
-    if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else renderSummary(state); return; }
+    if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
     $('word-title').textContent = recall ? '詞語收埋咗' : currentOccurrence().character; $('word-title').classList.toggle('concealed', recall);
@@ -248,6 +272,7 @@
       title = quiz && a.completedPhase === 'quiz' ? '測驗完成' : label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
+      if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
     }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
     instructionText = instruction;
@@ -341,6 +366,85 @@
     });
     $('saved-message').textContent = storageOkay ? '紀錄只儲存喺呢個瀏覽器。無需帳戶。' : '紀錄未能儲存。離開前可請老師記低結果。';
   }
+  function scoreLabel(score) { return '錯誤 ' + score.mistakes + ' 次 · ' + (score.elapsedMs / 1000).toFixed(1) + ' 秒'; }
+  function renderClassroom() {
+    if (!classroom) return;
+    const view = classroom.view(), member = view.member;
+    $('class-join-fields').hidden = !!member;
+    $('class-join').disabled = view.busy;
+    $('class-identity').textContent = member ? '班級 ' + member.code + ' · ' + member.alias : '';
+    $('class-status').textContent = view.message;
+    $('class-storage').hidden = view.storageOkay;
+    $('class-continue').hidden = !view.needsContinue;
+    $('class-start').hidden = !view.accepted || view.pending;
+    $('class-start').disabled = view.busy;
+    $('class-pending-retry').hidden = !view.accepted || !view.pending;
+    $('class-pending-retry').disabled = view.busy;
+    $('class-leave').hidden = !member;
+    $('class-leave').textContent = view.pending ? '換下一位（未交紀錄會清除）' : '換下一位同學';
+    $('class-switch-note').hidden = !member;
+    $('class-dialog-board-link').hidden = !view.accepted || !view.receipt;
+    const classSummary = state?.active.phase === 'summary' && view.boundRunId === state.id;
+    $('class-result-status').textContent = classSummary ? view.message + (!view.storageOkay ? ' 此頁未能保存待交紀錄，請勿關閉。' : '') : '';
+    $('class-retry').hidden = !classSummary || !view.pending;
+    $('class-retry').disabled = view.busy;
+    $('class-board-link').hidden = !classSummary || !view.receipt;
+    $('class-again').hidden = !classSummary || !view.accepted || view.pending;
+    $('class-again').disabled = view.busy;
+    if (classSummary) { $('personal-best').textContent = member.alias + ' · 個人最佳及全班排名會喺排行榜頁顯示。'; $('saved-message').textContent = '本機紀錄留喺此瀏覽器；班級交卷成功後，暱稱和結果亦會儲存喺班級服務。'; }
+    if (classSummary && available() && !$('class-dialog').open && view.accepted && view.receipt?.runId === state.id && boardNavigationRun === view.receipt.runId) {
+      boardNavigationRun = null;
+      try {
+        if (!view.storageOkay) throw new Error('身份未能保存。');
+        sessionStorage.setItem('bishun:board-handoff', JSON.stringify({ memberId: member.memberId, runId: view.receipt.runId, at: Date.now() }));
+        window.location.assign('leaderboard.html');
+      } catch { $('class-result-status').textContent = '已交卷，但此頁未能保存參加身份，暫時無法轉去排行榜。'; }
+    }
+  }
+  function renderQuizResults() {
+    $('quiz-results').hidden = state.mode !== 'quiz';
+    if (state.mode !== 'quiz' || !Q) return;
+    const result = Q.fromSession(state);
+    $('quiz-result-score').textContent = result?.ranked ? scoreLabel(result.score) : result?.terminal ? '今次有跳過或未有計時資料，不列入排名。' : '今次未完成全部題目，不列入排名。';
+    const view = classroom?.view();
+    if (view?.accepted && view.boundRunId === state.id) {
+      if (!view.receipt) boardNavigationRun = state.id;
+      classroom.finish(result); renderClassroom(); return;
+    }
+    const assigned = JSON.stringify(Q.assignment(Q.entriesFromSession(state)));
+    const scores = history().flatMap(snapshot => {
+      try {
+        if (snapshot.mode !== 'quiz' || snapshot.active.phase !== 'summary' || JSON.stringify(Q.assignment(Q.entriesFromSession(snapshot))) !== assigned) return [];
+        const result = Q.fromSession(snapshot); return result?.ranked ? [result.score] : [];
+      } catch { return []; }
+    }).sort(Q.compare);
+    $('personal-best').textContent = scores.length ? '此瀏覽器最佳（最近 40 筆、相同題目）：' + scoreLabel(scores[0]) + '。共用平板未能分辨同學。' : '此瀏覽器未有相同題目嘅完整最佳紀錄。';
+    renderClassroom();
+  }
+  function startClassQuiz() {
+    try {
+      const member = classroom.view().member;
+      const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
+      classroom.bindRun(candidate.id); $('class-dialog').close(); startSession(candidate);
+    } catch (error) { $('class-status').textContent = error.message; }
+  }
+  $('class-open').addEventListener('click', () => { renderClassroom(); $('class-dialog').showModal(); });
+  $('class-close').addEventListener('click', () => $('class-dialog').close());
+  $('class-dialog').addEventListener('close', renderClassroom);
+  $('class-join').addEventListener('click', () => classroom?.join($('class-code').value || '', $('class-alias').value || ''));
+  $('class-continue').addEventListener('click', () => classroom?.continueMember());
+  $('class-leave').addEventListener('click', () => { boardNavigationRun = null; classroom?.leave(); $('class-alias').value = ''; $('class-code').value = ''; });
+  $('class-start').addEventListener('click', startClassQuiz); $('class-again').addEventListener('click', startClassQuiz);
+  function retryClassResult() { boardNavigationRun = classroom?.view().boundRunId; classroom?.retry(); }
+  $('class-retry').addEventListener('click', retryClassResult); $('class-pending-retry').addEventListener('click', retryClassResult);
+  $('teacher-class').addEventListener('click', () => {
+    try {
+      const parsed = S.parseEntries($('teacher-words').value);
+      if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
+      const candidate = sessionCandidate('quiz', draftEntries, draftSelected);
+      window.open(classOrigin + '/teacher#' + encodeURIComponent(JSON.stringify(Q.assignment(Q.entriesFromSession(candidate)))), '_blank', 'noopener,noreferrer');
+    } catch (error) { $('teacher-error').textContent = error.message; }
+  });
   function selectedOptions() {
     const div = $('teacher-word-options'); div.replaceChildren();
     draftEntries.forEach(entry => {

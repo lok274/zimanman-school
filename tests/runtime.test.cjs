@@ -28,6 +28,7 @@ class Node {
   replaceWith(node) { const parent = this.parentNode; if (!parent) return; const index = parent.childNodes.indexOf(this); node.remove(); parent.childNodes[index] = node; node.parentNode = parent; this.parentNode = null; }
   replaceChildren(...nodes) { this.childNodes.forEach(node => { node.parentNode = null; }); this.childNodes = []; this.append(...nodes); }
   setAttribute(name, value) { this.attributes[name] = String(value); }
+  getAttribute(name) { return this.attributes[name] ?? null; }
   setAttributeNS(_ns, name, value) { this.setAttribute(name, value); }
   removeAttribute(name) { delete this.attributes[name]; }
   closest(selector) { const tags = selector.split(',').map(s => s.trim().toUpperCase()); let node = this; while (node) { if (tags.includes(node.nodeName.toUpperCase())) return node; node = node.parentNode; } return null; }
@@ -65,7 +66,7 @@ function environment(html = '<html><body><div id="writer"></div></body></html>')
   const storage = { get length() { return store.size; }, key: i => [...store.keys()][i], getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) };
   const observers = new Set(), windowListeners = {}, motion = { reduced: false }; let nextId = 0;
   document.hidden = false;
-  const context = vm.createContext({ document, console, setTimeout, clearTimeout, performance, AbortController, NodeFilter: { SHOW_TEXT: 4 },
+  const context = vm.createContext({ document, console, setTimeout: (...args) => { const timer = setTimeout(...args); timer.unref(); return timer; }, clearTimeout, performance, AbortController, NodeFilter: { SHOW_TEXT: 4 },
     localStorage: storage, sessionStorage: storage, crypto: { randomUUID: () => 'runtime-test-' + ++nextId },
     ResizeObserver: class { constructor(callback) { this.callback = callback; } observe() { observers.add(this); } disconnect() { observers.delete(this); } },
     speechSynthesis: { getVoices: () => voices.current, cancel() { voices.cancels++; }, speak(utterance) { if (voices.fail) throw new Error("speech blocked"); voices.spoken.push(utterance); }, addEventListener(_name, fn) { voices.changed = fn; } },
@@ -564,7 +565,7 @@ test('quiz emits immediate X and completion O without hints, ticks, outlines or 
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.$('stroke-progress').textContent, '');
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete'); assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.snapshot().active.phase, 'character-complete');
-  assert(!visibleText(e.document).includes('秒')); const attempts = e.snapshot().attempts.length;
+  assert.equal(e.$('quiz-clock-value').textContent, '0.0 秒'); const attempts = e.snapshot().attempts.length;
   e.$('retry-writing').click(); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.$('teacher-open').click(); e.$('teacher-skip').click(); assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.snapshot().active.completedPhase, 'skipped');
   e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(!e.$('summary-view').textContent.includes('秒'));
@@ -584,8 +585,97 @@ test('quiz clock counts only ready foreground writing and checkpoints exact mill
   e.clock = 30000; e.emitWindow('pagehide'); assert.equal(e.snapshot().attempts[0].elapsedMs, 723.5);
   e.emitWindow('pageshow'); e.mounts[3].onReady(); e.clock = 30500; e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE'); assert.equal(e.snapshot().attempts[0].elapsedMs, 1223.5);
   e.clock = 40000; e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].elapsedMs, 1223.5); assert(e.$('local-history').textContent.includes('1.2 秒'));
-  e.$('teacher-close').click(); assert(!visibleText(e.document).includes('秒')); e.document.querySelector('.brand').click();
+  e.$('teacher-close').click(); assert.equal(e.$('quiz-clock-value').textContent, '1.2 秒'); e.document.querySelector('.brand').click();
   const closed = [...e.store.values()].map(value => { try { return JSON.parse(value); } catch { return null; } }).find(value => value && value.mode === 'quiz'); assert.equal(closed.attempts[0].elapsedMs, 1223.5); assert.equal(closed.active.phase, 'summary');
+});
+test('visible timer ticks read the sole controller clock without storage writes and freeze at pauses and completion', async () => {
+  const e = await quizApp({ autoReady: false }), timers = new Map(); let timerId = 0;
+  e.context.setTimeout = callback => { timers.set(++timerId, callback); return timerId; }; e.context.clearTimeout = id => timers.delete(id);
+  await e.enter(); assert.equal(e.$('quiz-clock-value').textContent, '未開始');
+  e.mounts.at(-1).onReady(); const saved = e.snapshot(); let writes = 0;
+  const original = e.context.localStorage.setItem; e.context.localStorage.setItem = (...args) => { writes++; original(...args); };
+  const tick = () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); };
+  e.clock = 1334; tick(); assert.equal(e.$('quiz-clock-value').textContent, '1.2 秒'); assert.equal(writes, 0); assert.deepEqual(e.snapshot(), saved);
+  e.$('rest').click(); const pausedWrites = writes; e.clock = 9000; tick(); assert.equal(e.$('quiz-clock-value').textContent, '1.2 秒'); assert.equal(writes, pausedWrites); assert.equal(timers.size, 0);
+  e.$('resume').click(); e.mounts.at(-1).onReady(); e.clock = 9500;
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
+  assert.equal(e.$('quiz-clock-value').textContent, '1.7 秒'); const doneWrites = writes; e.clock = 20000; tick(); assert.equal(writes, doneWrites); assert.equal(timers.size, 0);
+});
+
+async function classroomApp({ uploadFails = false, holdUpload = false } = {}) {
+  const e = environment(source('index.html')); e.mounts = []; e.calls = []; e.navigation = []; e.clock = 10;
+  e.context.crypto = require('node:crypto').webcrypto; e.context.performance = { now: () => e.clock };
+  e.context.HanziWriter = {};
+  e.context.location.assign = url => e.navigation.push(url);
+  e.context.BishunSession = S; e.context.BishunWriting = {
+    loadCharacter: () => Promise.resolve({ strokes: ['M1 1L2 2'] }),
+    mount(_el, _char, _data, options) { e.mounts.push(options); queueMicrotask(options.onReady); return { dispose() {}, pause() {} }; }
+  };
+  e.context.fetch = async (url, options) => {
+    e.calls.push({ url, ...options });
+    if (url.endsWith('/members')) return { ok: true, json: async () => ({ code: 'ABCDEFGH', memberId: 'member-1', alias: '小星', expiresAt: Date.now() + 100000, assignment: { version: 1, entries: [{ text: '二一', selectedIndexes: [0, 1] }] } }) };
+    if (uploadFails) throw new Error('offline');
+    const response = { ok: true, json: async () => ({ runId: JSON.parse(options.body).runId, ranked: true, reason: null, score: { mistakes: 0, elapsedMs: 200 } }) };
+    return holdUpload ? new Promise(resolve => { e.releaseUpload = () => resolve(response); }) : response;
+  };
+  for (const file of ['content.js', 'quiz-results.js', 'classroom.js', 'app.js']) vm.runInContext(source(file), e.context);
+  e.$('class-open').click(); e.$('class-code').value = 'ABCDEFGH'; e.$('class-alias').value = '小星'; e.$('class-join').click();
+  await waitFor(() => e.$('class-identity').textContent.includes('小星'));
+  e.$('class-start').click(); e.$('word-cards').childNodes[0].click(); await waitFor(() => e.mounts.length === 1);
+  e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  e.complete = () => { const mount = e.mounts.at(-1); e.clock += 100; mount.onEvent({ type: 'STROKE_ACCEPTED', strokeIndex: 0, token: mount.token }); mount.onEvent({ type: 'WRITING_COMPLETE', token: mount.token }); e.$('main-next').click(); };
+  e.allowUpload = () => { uploadFails = false; };
+  return e;
+}
+test('class quiz uses its immutable assignment and automatically opens separate leaderboard only after a whole receipt', async () => {
+  const e = await classroomApp(); assert.equal(e.snapshot().entries[0].text, '二一');
+  e.complete(); await waitFor(() => e.mounts.length === 2); assert.equal(e.calls.length, 1); assert.equal(e.navigation.length, 0);
+  e.complete(); await waitFor(() => e.navigation.length === 1);
+  assert.deepEqual(e.navigation, ['leaderboard.html']); assert.equal(e.calls.filter(call => call.method === 'PUT').length, 1);
+  const handoff = JSON.parse(e.store.get('bishun:board-handoff')); assert.equal(handoff.memberId, 'member-1'); assert.equal(handoff.runId, e.snapshot().id);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); assert.equal(e.navigation.length, 1, 'summary rerenders do not navigate or resubmit');
+});
+test('offline completion keeps exact pending evidence and navigates once after explicit retry succeeds', async () => {
+  const e = await classroomApp({ uploadFails: true }); e.complete(); await waitFor(() => e.mounts.length === 2); e.complete();
+  await waitFor(() => e.$('class-result-status').textContent.includes('尚未交'));
+  assert.equal(e.navigation.length, 0); assert.equal(e.$('class-retry').hidden, false); const original = e.calls.at(-1).body;
+  e.allowUpload(); e.$('class-retry').click(); await waitFor(() => e.navigation.length === 1);
+  assert.equal(e.calls.at(-1).body, original); assert.equal(e.navigation[0], 'leaderboard.html');
+});
+test('a late committed upload does not pull a learner out of a newly started local practice', async () => {
+  const e = await classroomApp({ holdUpload: true }); e.complete(); await waitFor(() => e.mounts.length === 2); e.complete();
+  await waitFor(() => typeof e.releaseUpload === 'function');
+  e.$('new-session').click(); e.$('start-practice').click(); e.releaseUpload();
+  await waitFor(() => JSON.parse(e.store.get('bishun:classroom:v1')).receipt);
+  assert.equal(e.navigation.length, 0); assert.equal(e.snapshot().mode, 'practice');
+});
+test('automatic board handoff waits until teacher tools close and the summary is visible', async () => {
+  const e = await classroomApp({ holdUpload: true }); e.complete(); await waitFor(() => e.mounts.length === 2); e.complete();
+  await waitFor(() => typeof e.releaseUpload === 'function');
+  e.$('teacher-open').click(); e.document.hidden = true; e.document.emit('visibilitychange'); e.releaseUpload();
+  await waitFor(() => JSON.parse(e.store.get('bishun:classroom:v1')).receipt);
+  assert.equal(e.navigation.length, 0); e.$('teacher-close').click(); assert.equal(e.navigation.length, 0);
+  e.document.hidden = false; e.document.emit('visibilitychange'); assert.deepEqual(e.navigation, ['leaderboard.html']);
+});
+
+test('dedicated board consumes immediate handoff once, polls only visibly and requires confirmation on cold visits', async () => {
+  for (const immediate of [true, false]) {
+    const e = environment(source('leaderboard.html')), timers = new Map(); let nextTimer = 0, reads = 0;
+    e.context.setTimeout = callback => { timers.set(++nextTimer, callback); return nextTimer; }; e.context.clearTimeout = id => timers.delete(id);
+    e.context.crypto = require('node:crypto').webcrypto;
+    const member = { code: 'ABCDEFGH', memberId: 'me', alias: '小星', token: 'a'.repeat(64), expiresAt: Date.now() + 600000, assignment: { version: 1, entries: [{ text: '一', selectedIndexes: [0] }] } };
+    e.store.set('bishun:classroom:v1', JSON.stringify({ member, receipt: { runId: 'done', ranked: true } }));
+    if (immediate) e.store.set('bishun:board-handoff', JSON.stringify({ memberId: 'me', runId: 'done', at: Date.now() }));
+    e.context.sessionStorage.removeItem = key => e.store.delete(key);
+    e.context.fetch = async () => { reads++; return { ok: true, json: async () => ({ rows: [{ memberId: 'me', alias: '小星', rank: 1, mistakes: 0, elapsedMs: 1000, isMe: true }], personalBest: { mistakes: 0, elapsedMs: 1000 } }) }; };
+    for (const file of ['quiz-results.js', 'classroom.js', 'leaderboard.js']) vm.runInContext(source(file), e.context);
+    if (!immediate) { assert.equal(reads, 0); assert.equal(e.$('board-continue').hidden, false); e.$('board-continue').click(); }
+    await waitFor(() => e.$('board-results').textContent.includes('小星'));
+    assert.equal(reads, 1); assert.equal(e.store.has('bishun:board-handoff'), false); assert.equal(timers.size, 1);
+    e.document.hidden = true; e.document.emit('visibilitychange'); assert.equal(timers.size, 0);
+    e.document.hidden = false; e.document.emit('visibilitychange'); await waitFor(() => reads === 2 && timers.size === 1);
+    e.emitWindow('pagehide'); assert.equal(timers.size, 0);
+  }
 });
 test('mount failures are recoverable and stale same-token callbacks cannot ready a later mount', async () => {
   const e = await quizApp({ failMount: true }); await e.enter(); assert.equal(e.snapshot().active.phase, 'unavailable'); assert.equal(e.snapshot().attempts[0].elapsedMs, null);

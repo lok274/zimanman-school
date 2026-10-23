@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.wrangler/
+src/quiz-results.js
+src/teacher-page.js
+shared/
+*.log

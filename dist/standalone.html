@@ -43,10 +43,12 @@
 @media(min-width:900px) and (orientation:landscape){.quiz-mode.simplified-practice .grid-shell{width:min(100%,360px,max(300px,calc(100svh - 320px)))}}
 .quiz-mode .semantic-cue svg{display:block}
 @media(max-width:570px){.mode-cards{grid-template-columns:1fr;gap:16px}.mode-card{min-height:200px;padding:20px}.mode-card span{font-size:17px}.home-view{margin:14px auto}.quiz-mode .practice-actions{flex-basis:100%;margin:0}.quiz-mode.simplified-practice .grid-shell{width:min(100%,360px)}}
+.quiz-clock{margin:10px 0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);text-align:right;width:fit-content;max-width:100%;font-variant-numeric:tabular-nums;line-height:1.4}.quiz-clock span{display:block;font-size:12px}.quiz-clock strong{font-size:22px}.quiz-mode .practice-side{display:flex;flex-direction:column;align-self:stretch}.quiz-mode .quiz-clock{margin-top:auto}.quiz-mode .next-row{margin-bottom:10px}.class-entry{margin-top:22px}#class-join-fields input{display:block;width:100%;padding:10px;border:1px solid #acb8a2;border-radius:8px;margin:8px 0 16px;background:#fffefb}#class-code{text-transform:uppercase;letter-spacing:3px}#class-dialog .button{margin:4px 4px 4px 0;white-space:normal}.quiz-results{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.class-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.podium-place{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:14px 8px;border-radius:10px;background:var(--soft);overflow-wrap:anywhere}.podium-place strong{color:var(--green)}.podium-place small{font-size:12px}.quiz-results table,#class-dialog table{width:100%;border-collapse:collapse;font-size:14px}.quiz-results th,.quiz-results td,#class-dialog th,#class-dialog td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.quiz-results caption,#class-dialog caption{font-size:12px;text-align:left}.is-me{background:var(--soft)}#class-again{margin-top:20px}@media(max-width:570px){.class-podium{grid-template-columns:1fr}.quiz-results{padding:12px}.quiz-clock strong{font-size:20px}}
+.leaderboard-page{max-width:980px}.leaderboard-page table{width:100%;border-collapse:collapse;font-size:17px}.leaderboard-page td,.leaderboard-page th{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.leaderboard-page caption{text-align:left;font-size:14px}#board-best{margin:22px 0;font-weight:700}.leaderboard-page .podium-place{padding:24px 12px;font-size:22px}.leaderboard-page .podium-place small{font-size:15px}.leaderboard-page .podium-place strong{font-size:28px}.standalone-class-note{display:none}body[data-standalone] #class-open,body[data-standalone] #teacher-class{display:none}body[data-standalone] .standalone-class-note{display:block}
 
 </style>
 </head>
-<body>
+<body data-standalone>
   <header class="app-header">
     <a class="brand" href="#" aria-label="字慢慢首頁"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M9 29l3-10L27 4l9 9-15 15-12 1zm3-10l9 9M23 8l9 9M8 35h24"/></svg><span>字慢慢</span></a>
     <div class="header-actions"><button id="teacher-open" class="button quiet">老師工具 <span aria-hidden="true">⚙</span></button></div>
@@ -56,6 +58,8 @@
     <section id="home-view" class="home-view" aria-labelledby="home-title">
       <h1 id="home-title">今日想點寫？</h1>
       <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>睇筆順，跟住寫，再自己試</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>睇題目，自己寫</span></button></div>
+      <button id="class-open" class="button secondary class-entry">加入班級測驗</button>
+      <p class="standalone-class-note small">單檔版保留本機測驗。跨平板班級測驗請開 <a href="https://lok274.github.io/zimanman-school/">網上學生頁面</a>。</p>
     </section>
     <section id="choose-view" class="choose-view" hidden aria-labelledby="choose-title">
       <h1 id="choose-title">你想先寫邊個字？</h1>
@@ -81,6 +85,7 @@
             <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
             <details id="practice-tools"><summary id="practice-tools-label">更多工具</summary><div id="extra-demo-controls" class="demo-controls"><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div><div id="extra-writing-controls" class="writing-controls" hidden><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div><div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button></details>
             <div id="next-row" class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
+            <div id="quiz-clock" class="quiz-clock" hidden><span>本次測驗書寫時間</span><strong id="quiz-clock-value">未開始</strong></div>
           </div>
         </div>
       </div>
@@ -88,6 +93,7 @@
     <section id="summary-view" class="summary-view" hidden aria-labelledby="summary-title">
       <p class="eyebrow">今節嘅腳印</p><h1 id="summary-title">每一步，都記低咗。</h1><p class="intro-copy">呢度記錄今次點樣練，唔代表已經識默寫。</p>
       <div id="summary-stats" class="summary-stats"></div><div id="summary-rows" class="summary-rows"></div>
+      <section id="quiz-results" class="quiz-results" hidden aria-labelledby="quiz-results-title"><h2 id="quiz-results-title">全份測驗成績</h2><p id="quiz-result-score"></p><p id="personal-best"></p><p id="class-result-status" role="status"></p><button id="class-retry" class="button secondary" hidden>重試交卷</button><a id="class-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><button id="class-again" class="button primary" hidden>再做同一份測驗</button></section>
       <div class="paper-reminder"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 5h23l7 7v31H10zM32 5v9h8M18 22h14M18 30h14M18 37h9"/></svg><div><h2>帶返去紙上試一試</h2><p>放低平板，揀今次練過嘅一個字寫喺紙上。老師可以一齊睇。</p></div></div>
       <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">返回首頁 <span aria-hidden="true">→</span></button></div>
     </section>
@@ -95,13 +101,14 @@
   <footer class="app-footer"><button id="previous-step" class="button secondary" hidden>← 返回選字</button></footer>
   <dialog id="teacher-dialog" aria-labelledby="teacher-title">
     <div class="dialog-heading"><div><p class="eyebrow">成人設定</p><h2 id="teacher-title">老師工具</h2></div><button id="teacher-close" class="icon-button" aria-label="關閉老師工具">×</button></div>
-    <p>不用帳戶，不記學生姓名。練習紀錄只留喺呢個瀏覽器；共用平板嘅其他使用者可能睇到。清除瀏覽器資料會移除紀錄。</p>
+    <p>本機練習不用帳戶，紀錄只留喺呢個瀏覽器；共用平板嘅其他使用者可能睇到。班級測驗會將暱稱和結果存到班級服務，請勿用真名。學生不用登入；老師開班要用 ChatGPT 登入。</p>
     <label class="field-label" for="teacher-words">課堂詞語 <span>每行一項，最多 12 項，每項 1 至 8 字。</span></label>
     <textarea id="teacher-words" rows="6" spellcheck="false"></textarea>
     <p id="teacher-error" class="field-error" role="alert"></p>
     <button id="validate-words" class="button secondary">更新可選詞語</button>
     <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><p class="small muted">逐字選擇，預設先練第一項嘅一個字。建議每次 1 至 2 個字，可選最多 6 項詞語、48 個字。同一字喺不同位置會分開練。</p><div id="teacher-word-options"></div><p id="teacher-selection-total" role="status" aria-live="polite"></p></fieldset>
     <button id="apply-words" class="button primary">套用並返回首頁</button>
+    <button id="teacher-class" class="button secondary">用以上範圍開班級測驗 ↗</button>
     <div id="teacher-active" class="teacher-active" hidden><h3>今節練習</h3><button id="teacher-skip" class="button secondary">老師協助，略過呢個字</button><button id="teacher-end" class="button quiet">結束今節並睇紀錄</button></div>
     <details><summary>筆順、語音及紀錄說明</summary><p>初始字庫附本機筆順資料。香港筆順調整範圍以附帶資料說明為準；其他字即使筆畫數相同，亦不代表所有字形細節符合學校教法。請配合課堂核對。</p><p>新增字詞可能要上網載入未經香港逐畫核對嘅字庫。載入失敗唔係學生寫錯。可以再試、改練另一詞，或由老師略過。</p><p id="teacher-voice-note"></p><p>筆畫配對容許較大偏差，只供練習回饋，唔係書寫字形評分。「自己完成」只代表今次無開提示完成平板配對，唔代表已掌握字形、紙筆書寫或默寫。程式唔錄音，唔評估朗讀。</p><a href="https://www.edbchinese.hk/lexlist_ch/" target="_blank" rel="noopener noreferrer">教育局《香港小學學習字詞表》參考</a></details>
     <details id="license-details"><summary>字庫授權及修改說明</summary><p>Copyright 1999 Arphic Technology Co., Ltd. Copyright 2016 Shaunak Kishore. 字庫按 Arphic Public License 提供，並無擔保。你可以按授權條款修改及再分發。</p><p>本版將「草」改為十畫，交換「密」第七、八畫，並調整「來」嘅筆順。初始十一字嘅筆順已對照教育局圖示；字形仍有字庫風格差異，請配合學校教法核對。</p><p><details><summary>Arphic Public License 全文</summary><pre class="license-text">ARPHIC PUBLIC LICENSE
@@ -198,6 +205,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 </pre></details></p></details>
     <details id="history-details"><summary>呢部裝置嘅練習紀錄</summary><div id="local-history"></div></details>
   </dialog>
+  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級測驗</h2><button id="class-close" class="icon-button" aria-label="關閉班級測驗">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（唔好用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級測驗</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次測驗</button><button id="class-leave" class="button secondary" hidden>換下一位同學</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><p id="class-switch-note" class="small" hidden>換人會清除參加身份和未交紀錄。請先交卷。</p><p class="small">完成全份測驗後，自動睇排行榜。</p></dialog>
   <dialog id="rest-dialog" aria-labelledby="rest-title"><div class="rest-illustration" aria-hidden="true"><svg viewBox="0 0 120 100"><path d="M58 88V37M58 58C24 60 18 26 28 23C52 21 58 58 58 58ZM58 45C92 45 105 9 92 10C66 10 58 45 58 45ZM35 88H82"/></svg></div><h2 id="rest-title">休息一下</h2><p>伸一伸手指，望一望遠處。</p><button id="resume" class="button primary large">我準備好喇</button></dialog>
   <script>
 /**
@@ -411,6 +419,160 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   <script>
 (function (root) {
   'use strict';
+  function assignment(entries) {
+    if (!Array.isArray(entries) || !entries.length || entries.length > 6) throw new Error('請選 1 至 6 項詞語。');
+    const seen = new Set();
+    return { version: 1, entries: entries.map(entry => {
+      if (!entry || typeof entry.text !== 'string' || !/^\p{Script=Han}{1,8}$/u.test(entry.text) || seen.has(entry.text)) throw new Error('詞語設定無效。');
+      seen.add(entry.text);
+      const indexes = entry.selectedIndexes;
+      if (!Array.isArray(indexes) || !indexes.length || new Set(indexes).size !== indexes.length || indexes.some(index => !Number.isInteger(index) || index < 0 || index >= Array.from(entry.text).length)) throw new Error('選字設定無效。');
+      return { text: entry.text, selectedIndexes: [...indexes].sort((a, b) => a - b) };
+    }) };
+  }
+  function evaluate(entries, evidence) {
+    const assigned = assignment(entries);
+    if (!evidence || typeof evidence.runId !== 'string' || !/^[\w-]{1,100}$/.test(evidence.runId) || !Array.isArray(evidence.attempts) || evidence.attempts.length > 2000) throw new Error('測驗紀錄無效。');
+    const occurrences = assigned.entries.flatMap((word, i) => word.selectedIndexes.map(index => 'w' + i + ':' + index));
+    const ids = new Set(), covered = new Set();
+    let mistakes = 0, elapsedMs = 0, reason = '';
+    const attempts = evidence.attempts.map(item => {
+      if (!item || typeof item.id !== 'string' || !/^[\w-]{1,100}$/.test(item.id) || ids.has(item.id) || !occurrences.includes(item.occurrenceId) || !['quiz', 'teacher'].includes(item.phase) || !['complete', 'abandoned', 'skipped'].includes(item.outcome) || !Number.isInteger(item.mistakes) || item.mistakes < 0 || item.mistakes >= 100000 || !Array.isArray(item.help) || item.help.length || (item.elapsedMs !== null && (!Number.isFinite(item.elapsedMs) || item.elapsedMs < 0 || item.elapsedMs > Number.MAX_SAFE_INTEGER)) || (item.phase === 'teacher' && (item.outcome !== 'skipped' || item.elapsedMs !== null))) throw new Error('測驗嘗試無效。');
+      ids.add(item.id);
+      if (item.outcome === 'complete' || item.outcome === 'skipped') covered.add(item.occurrenceId);
+      if (item.outcome === 'skipped') reason = 'skipped';
+      if (item.elapsedMs === null && !reason) reason = 'unknown-time';
+      mistakes += item.mistakes; elapsedMs += item.elapsedMs || 0;
+      return { id: item.id, occurrenceId: item.occurrenceId, phase: item.phase, outcome: item.outcome, mistakes: item.mistakes, elapsedMs: item.elapsedMs, help: [] };
+    });
+    elapsedMs = Math.round(elapsedMs / 100) * 100;
+    if (!Number.isSafeInteger(mistakes) || !Number.isSafeInteger(elapsedMs)) throw new Error('測驗合計超出範圍。');
+    const terminal = occurrences.every(id => covered.has(id));
+    if (!terminal) reason = 'incomplete';
+    return { terminal, ranked: terminal && !reason, reason: reason || null, score: terminal && !reason ? { mistakes, elapsedMs } : null, evidence: { runId: evidence.runId, attempts } };
+  }
+  function entriesFromSession(session) {
+    return session.entries.map(word => ({ text: word.text, selectedIndexes: session.occurrences.filter(item => item.wordId === word.id).map(item => item.index) }));
+  }
+  function fromSession(session, entries = entriesFromSession(session)) {
+    if (session.mode !== 'quiz' || session.active.phase !== 'summary' || JSON.stringify(assignment(entriesFromSession(session))) !== JSON.stringify(assignment(entries))) return null;
+    return evaluate(entries, { runId: session.id, attempts: session.attempts });
+  }
+  function compare(a, b) { return a.mistakes - b.mistakes || a.elapsedMs - b.elapsedMs; }
+  function ranks(rows) {
+    const sorted = [...rows].sort((a, b) => compare(a, b) || a.memberId.localeCompare(b.memberId));
+    let rank = 0;
+    return sorted.map((row, i) => { if (!i || compare(row, sorted[i - 1])) rank = i + 1; return { ...row, rank }; });
+  }
+  const api = { assignment, evaluate, entriesFromSession, fromSession, compare, ranks };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.BishunQuizResults = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+  <script>
+(function (root) {
+  'use strict';
+  const storageKey = 'bishun:classroom:v1';
+  function create({ origin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} }) {
+    let saved = {}, accepted = false, generation = 0, controller = null, busy = false, message = '', board = null, storageOkay = true;
+    try {
+      const raw = storage.getItem(storageKey);
+      if (raw && raw.length < 300000) {
+        const value = JSON.parse(raw);
+        if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Invalid saved classroom');
+        if (value.member && (!/^[A-Z2-9]{8}$/.test(value.member.code) || !/^[a-f0-9]{64}$/.test(value.member.token) || typeof value.member.memberId !== 'string' || typeof value.member.alias !== 'string' || !Number.isFinite(value.member.expiresAt))) throw new Error('Invalid saved membership');
+        if (value.member) root.BishunQuizResults.assignment(value.member.assignment.entries);
+        if (value.join && (!/^[A-Z2-9]{8}$/.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
+        if (value.pending && (!value.member || value.pending.runId !== value.boundRunId || !root.BishunQuizResults.evaluate(value.member.assignment.entries, value.pending).terminal)) throw new Error('Invalid pending result');
+        if (value.receipt && (!value.member || typeof value.receipt.runId !== 'string' || typeof value.receipt.ranked !== 'boolean')) throw new Error('Invalid saved receipt');
+        saved = value;
+      }
+    } catch { storageOkay = false; }
+    function persist() { try { storage.setItem(storageKey, JSON.stringify(saved)); storageOkay = true; } catch { storageOkay = false; } return storageOkay; }
+    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message, pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
+    function notify() { changed(view()); }
+    function invalidate() { generation++; controller?.abort(); controller = null; busy = false; }
+    async function request(path, method = 'GET', value, token) {
+      const ownGeneration = generation;
+      if (busy) throw new Error('請等目前連線完成。');
+      busy = true; controller = new AbortController(); notify();
+      try {
+        const response = await fetch(origin + '/api/v1/classes' + path, { method, signal: controller.signal, credentials: 'omit', headers: { ...(value ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(value ? { body: JSON.stringify(value) } : {}) });
+        const data = await response.json();
+        if (ownGeneration !== generation) throw Object.assign(new Error('身份已切換。'), { stale: true });
+        if (!response.ok) throw new Error(data.error?.message || '班級服務未能連線，請稍後重試。');
+        return data;
+      } catch (error) {
+        if (ownGeneration !== generation) throw Object.assign(new Error('身份已切換。'), { stale: true });
+        throw error;
+      } finally { if (ownGeneration === generation) { busy = false; controller = null; } }
+    }
+    async function join(code, alias) {
+      if (busy) return;
+      code = code.trim().toUpperCase(); alias = alias.normalize('NFC').trim();
+      if (!/^[A-Z2-9]{8}$/.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 8 位班級碼和 1 至 20 字暱稱。'; notify(); return; }
+      if (!saved.join || saved.join.code !== code || saved.join.body.alias !== alias) {
+        const token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join('');
+        saved = { join: { code, body: { requestId: crypto.randomUUID(), alias, memberToken: token } } };
+      }
+      if (!persist()) { message = '此瀏覽器未能保存參加身份，暫時不能加入班級。可以返回首頁做本機測驗。'; notify(); return; }
+      const pending = saved.join; message = '加入中…';
+      try {
+        const member = await request('/' + pending.code + '/members', 'POST', pending.body);
+        if (!member || member.code !== pending.code || typeof member.memberId !== 'string' || typeof member.alias !== 'string' || !Number.isFinite(member.expiresAt)) throw new Error('班級回應無效，請重試。');
+        root.BishunQuizResults.assignment(member.assignment.entries);
+        saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始測驗。'; persist();
+      } catch (error) { if (error.stale) return; message = error.message || '班級服務未能連線。'; }
+      notify();
+    }
+    function continueMember() { if (saved.member) { accepted = true; message = saved.pending ? '上次測驗尚未交到班級榜，請重試交卷。' : '已確認參加身份。'; notify(); } }
+    function leave() { invalidate(); saved = {}; accepted = false; board = null; message = ''; persist(); notify(); }
+    function bindRun(runId) {
+      if (!accepted || !saved.member || saved.pending || busy) throw new Error('請先確認身份，並交回上次測驗。');
+      saved.boundRunId = runId; saved.receipt = null; board = null; message = '';
+      if (!persist()) throw new Error('此頁未能保存參加身份，請恢復瀏覽器儲存後再試，或返回首頁做本機測驗。');
+      notify();
+    }
+    async function retry() {
+      if (!accepted || !saved.member || !saved.pending || busy) return;
+      const member = saved.member, evidence = saved.pending;
+      if (!persist()) { message = '測驗已完成，但待交紀錄未能保存。請保持頁面開啟，恢復瀏覽器儲存後再重試。'; notify(); return; }
+      message = '交緊測驗紀錄…';
+      try {
+        const receipt = await request('/' + member.code + '/runs/' + evidence.runId, 'PUT', evidence, member.token);
+        if (receipt.runId !== evidence.runId || typeof receipt.ranked !== 'boolean') throw new Error('交卷回應無效，請重試。');
+        saved.receipt = receipt; delete saved.pending;
+        if (!persist()) { saved.pending = evidence; delete saved.receipt; message = '班級已收卷，但本頁未能保存回條。請保持頁面開啟，再撳重試。'; notify(); return; }
+        message = receipt.ranked ? '已交卷。' : '已交卷；今次有跳過或未有計時資料，不列入排名。'; notify();
+      } catch (error) { if (error.stale) return; message = '已完成，尚未交到班級榜。' + (error.message || '請重試。'); notify(); }
+    }
+    function finish(result) {
+      if (!accepted || !saved.member || !result?.terminal || saved.boundRunId !== result.evidence.runId || saved.receipt || saved.pending) return;
+      saved.pending = result.evidence; persist(); retry();
+    }
+    async function refresh() {
+      if (!accepted || !saved.member || !saved.receipt || busy) return;
+      try {
+        const data = await request('/' + saved.member.code + '/board', 'GET', undefined, saved.member.token);
+        if (!Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => !row || typeof row.memberId !== 'string' || typeof row.alias !== 'string' || !Number.isInteger(row.rank) || row.rank < 1 || !Number.isSafeInteger(row.mistakes) || row.mistakes < 0 || !Number.isSafeInteger(row.elapsedMs) || row.elapsedMs < 0)) throw new Error('排行榜回應無效。');
+        board = { ...data, personalBest: data.rows.find(row => row.memberId === saved.member.memberId) || null };
+        message = saved.receipt.ranked ? '班級榜已更新。' : '今次不排名，仍可睇班級榜。';
+      }
+      catch (error) { if (error.stale) return; message = '已交卷，班級榜暫未能更新。' + (error.message || '請重試。'); }
+      notify();
+    }
+    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate };
+  }
+  const api = { create, storageKey };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.BishunClassroom = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+  <script>
+(function (root) {
+  'use strict';
   function validateCharacter(character, raw) {
     const data = raw && raw.data ? raw.data : raw;
     if (!/^\p{Script=Han}$/u.test(character) || !data || (data.character && data.character !== character) || !Array.isArray(data.strokes) || !data.strokes.length || data.strokes.length > 64 || !Array.isArray(data.medians) || data.medians.length !== data.strokes.length) throw new Error('字形資料不完整。');
@@ -577,6 +739,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
   let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
   let readyMount = null, mountGeneration = 0, segment = null, leaving = false;
+  let clockTick = null;
+  let boardNavigationRun = null;
+  const Q = globalThis.BishunQuizResults;
+  const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
+  const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
   const dataCache = new Map();
   function available() { return state && !state.resting && !document.hidden && !$('teacher-dialog').open && !leaving; }
   function checkpoint() {
@@ -591,6 +758,23 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const attempt = state.attempts.find(item => item.id === state.active.attemptId);
     if (!attempt || attempt.outcome !== 'active' || !Number.isFinite(attempt.elapsedMs)) return;
     segment = { attemptId: attempt.id, token: state.active.token, baseMs: attempt.elapsedMs, openedMono: performance.now() };
+    renderClock();
+  }
+  function renderClock() {
+    if (clockTick !== null) clearTimeout(clockTick); clockTick = null;
+    const visible = state?.mode === 'quiz' && !['choose-word', 'summary'].includes(state.active.phase);
+    $('quiz-clock').hidden = !visible;
+    if (!visible) return;
+    const measured = state.attempts.filter(item => Number.isFinite(item.elapsedMs));
+    let elapsed = measured.reduce((total, item) => total + item.elapsedMs, 0);
+    if (segment && segment.token === state.active.token && segment.attemptId === state.active.attemptId) elapsed = Math.min(Number.MAX_SAFE_INTEGER, elapsed + Math.max(0, performance.now() - segment.openedMono));
+    const unknown = state.attempts.some(item => item.elapsedMs === null && item.outcome !== 'active');
+    const label = measured.length ? (elapsed / 1000).toFixed(1) + ' 秒' + (unknown ? '（部分時間未記錄）' : '') : unknown ? '未有計時資料' : '未開始';
+    if ($('quiz-clock-value').textContent !== label) $('quiz-clock-value').textContent = label;
+    if (segment && available()) {
+      const sessionId = state.id, token = state.active.token, attemptId = state.active.attemptId;
+      clockTick = setTimeout(() => { clockTick = null; if (state?.id === sessionId && state.active.token === token && state.active.attemptId === attemptId) renderClock(); }, 100);
+    }
   }
   function availabilityChanged() {
     checkpoint();
@@ -641,6 +825,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function startSession(candidate = sessionCandidate()) {
     stopEffects();
+    boardNavigationRun = null;
     feedback = null;
     state = candidate;
     try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
@@ -650,7 +835,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function goHome() {
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
     else save();
-    stopEffects(); state = null; feedback = null;
+    stopEffects(); state = null; feedback = null; boardNavigationRun = null;
     try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {}
     render();
   }
@@ -771,6 +956,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     restoreRecallText();
     renderSound();
     renderWordVoiceLabel();
+    renderClock();
     $('home-view').hidden = !!state;
     document.body.classList.toggle('quiz-mode', !!state && state.mode === 'quiz');
     if (!state) {
@@ -784,7 +970,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
-    if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else renderSummary(state); return; }
+    if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
     $('word-title').textContent = recall ? '詞語收埋咗' : currentOccurrence().character; $('word-title').classList.toggle('concealed', recall);
@@ -815,6 +1001,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       title = quiz && a.completedPhase === 'quiz' ? '測驗完成' : label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
+      if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
     }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
     instructionText = instruction;
@@ -908,6 +1095,85 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     });
     $('saved-message').textContent = storageOkay ? '紀錄只儲存喺呢個瀏覽器。無需帳戶。' : '紀錄未能儲存。離開前可請老師記低結果。';
   }
+  function scoreLabel(score) { return '錯誤 ' + score.mistakes + ' 次 · ' + (score.elapsedMs / 1000).toFixed(1) + ' 秒'; }
+  function renderClassroom() {
+    if (!classroom) return;
+    const view = classroom.view(), member = view.member;
+    $('class-join-fields').hidden = !!member;
+    $('class-join').disabled = view.busy;
+    $('class-identity').textContent = member ? '班級 ' + member.code + ' · ' + member.alias : '';
+    $('class-status').textContent = view.message;
+    $('class-storage').hidden = view.storageOkay;
+    $('class-continue').hidden = !view.needsContinue;
+    $('class-start').hidden = !view.accepted || view.pending;
+    $('class-start').disabled = view.busy;
+    $('class-pending-retry').hidden = !view.accepted || !view.pending;
+    $('class-pending-retry').disabled = view.busy;
+    $('class-leave').hidden = !member;
+    $('class-leave').textContent = view.pending ? '換下一位（未交紀錄會清除）' : '換下一位同學';
+    $('class-switch-note').hidden = !member;
+    $('class-dialog-board-link').hidden = !view.accepted || !view.receipt;
+    const classSummary = state?.active.phase === 'summary' && view.boundRunId === state.id;
+    $('class-result-status').textContent = classSummary ? view.message + (!view.storageOkay ? ' 此頁未能保存待交紀錄，請勿關閉。' : '') : '';
+    $('class-retry').hidden = !classSummary || !view.pending;
+    $('class-retry').disabled = view.busy;
+    $('class-board-link').hidden = !classSummary || !view.receipt;
+    $('class-again').hidden = !classSummary || !view.accepted || view.pending;
+    $('class-again').disabled = view.busy;
+    if (classSummary) { $('personal-best').textContent = member.alias + ' · 個人最佳及全班排名會喺排行榜頁顯示。'; $('saved-message').textContent = '本機紀錄留喺此瀏覽器；班級交卷成功後，暱稱和結果亦會儲存喺班級服務。'; }
+    if (classSummary && available() && !$('class-dialog').open && view.accepted && view.receipt?.runId === state.id && boardNavigationRun === view.receipt.runId) {
+      boardNavigationRun = null;
+      try {
+        if (!view.storageOkay) throw new Error('身份未能保存。');
+        sessionStorage.setItem('bishun:board-handoff', JSON.stringify({ memberId: member.memberId, runId: view.receipt.runId, at: Date.now() }));
+        window.location.assign('leaderboard.html');
+      } catch { $('class-result-status').textContent = '已交卷，但此頁未能保存參加身份，暫時無法轉去排行榜。'; }
+    }
+  }
+  function renderQuizResults() {
+    $('quiz-results').hidden = state.mode !== 'quiz';
+    if (state.mode !== 'quiz' || !Q) return;
+    const result = Q.fromSession(state);
+    $('quiz-result-score').textContent = result?.ranked ? scoreLabel(result.score) : result?.terminal ? '今次有跳過或未有計時資料，不列入排名。' : '今次未完成全部題目，不列入排名。';
+    const view = classroom?.view();
+    if (view?.accepted && view.boundRunId === state.id) {
+      if (!view.receipt) boardNavigationRun = state.id;
+      classroom.finish(result); renderClassroom(); return;
+    }
+    const assigned = JSON.stringify(Q.assignment(Q.entriesFromSession(state)));
+    const scores = history().flatMap(snapshot => {
+      try {
+        if (snapshot.mode !== 'quiz' || snapshot.active.phase !== 'summary' || JSON.stringify(Q.assignment(Q.entriesFromSession(snapshot))) !== assigned) return [];
+        const result = Q.fromSession(snapshot); return result?.ranked ? [result.score] : [];
+      } catch { return []; }
+    }).sort(Q.compare);
+    $('personal-best').textContent = scores.length ? '此瀏覽器最佳（最近 40 筆、相同題目）：' + scoreLabel(scores[0]) + '。共用平板未能分辨同學。' : '此瀏覽器未有相同題目嘅完整最佳紀錄。';
+    renderClassroom();
+  }
+  function startClassQuiz() {
+    try {
+      const member = classroom.view().member;
+      const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
+      classroom.bindRun(candidate.id); $('class-dialog').close(); startSession(candidate);
+    } catch (error) { $('class-status').textContent = error.message; }
+  }
+  $('class-open').addEventListener('click', () => { renderClassroom(); $('class-dialog').showModal(); });
+  $('class-close').addEventListener('click', () => $('class-dialog').close());
+  $('class-dialog').addEventListener('close', renderClassroom);
+  $('class-join').addEventListener('click', () => classroom?.join($('class-code').value || '', $('class-alias').value || ''));
+  $('class-continue').addEventListener('click', () => classroom?.continueMember());
+  $('class-leave').addEventListener('click', () => { boardNavigationRun = null; classroom?.leave(); $('class-alias').value = ''; $('class-code').value = ''; });
+  $('class-start').addEventListener('click', startClassQuiz); $('class-again').addEventListener('click', startClassQuiz);
+  function retryClassResult() { boardNavigationRun = classroom?.view().boundRunId; classroom?.retry(); }
+  $('class-retry').addEventListener('click', retryClassResult); $('class-pending-retry').addEventListener('click', retryClassResult);
+  $('teacher-class').addEventListener('click', () => {
+    try {
+      const parsed = S.parseEntries($('teacher-words').value);
+      if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
+      const candidate = sessionCandidate('quiz', draftEntries, draftSelected);
+      window.open(classOrigin + '/teacher#' + encodeURIComponent(JSON.stringify(Q.assignment(Q.entriesFromSession(candidate)))), '_blank', 'noopener,noreferrer');
+    } catch (error) { $('teacher-error').textContent = error.message; }
+  });
   function selectedOptions() {
     const div = $('teacher-word-options'); div.replaceChildren();
     draftEntries.forEach(entry => {

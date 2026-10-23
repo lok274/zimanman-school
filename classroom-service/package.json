@@ -1,0 +1,7 @@
+{
+  "name": "zimanman-classroom-service",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs", "db:generate": "drizzle-kit generate", "dev": "wrangler dev" },
+  "devDependencies": { "drizzle-kit": "0.31.10", "drizzle-orm": "0.45.2", "wrangler": "4.92.0" }
+}
