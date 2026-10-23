@@ -3,7 +3,8 @@
   const S = globalThis.BishunSession, W = globalThis.BishunWriting, C = globalThis.BishunContent;
   const $ = id => document.getElementById(id);
   const prefix = 'bishun-school:v1:';
-  let entries = S.parseEntries(C.words.join('\n')), selected = new Set(['w0:0']);
+  function allCharacterPositions(sourceEntries) { return new Set(sourceEntries.flatMap(entry => entry.characters.map((_, index) => entry.id + ':' + index))); }
+  let entries = S.parseEntries(C.words.join('\n')), selected = allCharacterPositions(entries);
   let draftEntries = entries, draftSelected = new Set(selected);
   let state = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   let feedback = null, feedbackAnimation = null, tone = null;
@@ -92,7 +93,7 @@
   }
   function sessionCandidate(mode = 'practice', sourceEntries = entries, sourceSelected = selected) {
     const assigned = sourceEntries.map(entry => ({ text: entry.text, selectedIndexes: entry.characters.flatMap((_, index) => sourceSelected.has(entry.id + ':' + index) ? [index] : []) })).filter(entry => entry.selectedIndexes.length);
-    if (!assigned.length || assigned.length > 6) throw new Error('今節請揀 1 至 6 項詞語入面嘅字。建議先練 1 至 2 個字。');
+    if (!assigned.length || assigned.length > 6) throw new Error('今節請揀 1 至 6 項詞語入面嘅字。');
     return S.createSession({ id: id(), entries: assigned, startedAt: Date.now(), mode });
   }
   function startSession(candidate = sessionCandidate()) {
@@ -504,7 +505,6 @@
     restoreRecallText();
     try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
     $('voice-note').textContent = cantoneseVoice ? '' : '暫時冇粵語聲音。可以請老師讀一次。';
-    $('teacher-voice-note').textContent = cantoneseVoice ? '目前使用裝置嘅粵語聲音「' + cantoneseVoice.name + '」。語音由瀏覽器提供。' : '瀏覽器未提供可辨識嘅粵語聲音。程式唔會改用普通話。可由老師朗讀，或喺裝置設定加入粵語語音後重開。';
     renderWordVoiceLabel();
     maskRecallText();
   }
@@ -537,7 +537,7 @@
   });
   $('teacher-close').addEventListener('click', () => $('teacher-dialog').close());
   $('teacher-dialog').addEventListener('close', availabilityChanged);
-  $('validate-words').addEventListener('click', () => { try { draftEntries = S.parseEntries($('teacher-words').value); draftSelected = new Set(['w0:0']); selectedOptions(); $('teacher-error').textContent = '已更新可選詞語。揀好範圍，再撳「套用」。'; } catch (error) { $('teacher-error').textContent = error.message; } });
+  $('validate-words').addEventListener('click', () => { try { draftEntries = S.parseEntries($('teacher-words').value); draftSelected = allCharacterPositions(draftEntries); selectedOptions(); $('teacher-error').textContent = '已更新可選詞語。'; } catch (error) { $('teacher-error').textContent = error.message; } });
   $('apply-words').addEventListener('click', () => {
     try {
       const parsed = S.parseEntries($('teacher-words').value);

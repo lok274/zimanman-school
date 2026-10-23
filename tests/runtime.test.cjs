@@ -88,20 +88,29 @@ function visibleText(document) {
   }).map(node => node.nodeValue).join('');
 }
 
-test('the six word cues use photos with empty alt text and retain SVG fallback', () => {
+test('both modes assign all twelve default positions with six photo cards and SVG fallbacks', () => {
   const words = ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去'];
-  const e = environment(source('index.html'));
-  e.context.BishunSession = { ...S, createSession: options => S.createSession({ ...options, entries: assigned(words.join('\n')) }) };
-  e.context.BishunWriting = {};
-  vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context); e.$('start-practice').click();
-  const photos = walk(e.$('word-cards')).filter(node => node.nodeName === 'img');
-  assert.equal(photos.length, 6);
-  assert.equal(new Set(photos.map(image => image.attributes.src)).size, 6);
-  assert(photos.every(image => image.attributes.alt === ''));
-  photos[0].emit('error');
-  const firstCard = e.$('word-cards').childNodes[0];
-  assert(walk(firstCard).some(node => node.nodeName === 'svg'), 'failed photo falls back to its word cue');
-  assert(!walk(firstCard).some(node => node.nodeName === 'img'));
+  for (const mode of ['practice', 'quiz']) {
+    const e = environment(source('index.html'));
+    e.context.BishunSession = S; e.context.BishunWriting = {};
+    vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context); e.$('start-' + mode).click();
+    const snapshot = JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+    assert.equal(snapshot.mode, mode); assert.deepEqual(snapshot.entries.map(entry => entry.text), words);
+    assert.equal(snapshot.occurrences.length, 12);
+    assert.deepEqual(snapshot.occurrences.filter(item => item.character === '推').map(item => item.id), ['w5:0', 'w5:2']);
+    e.$('teacher-open').click();
+    const inputs = walk(e.$('teacher-word-options')).filter(node => node.nodeName === 'input');
+    assert.equal(inputs.length, 12); assert(inputs.every(input => input.checked)); e.$('teacher-close').click();
+    assert.equal(e.$('word-cards').childNodes.length, 6);
+    const photos = walk(e.$('word-cards')).filter(node => node.nodeName === 'img');
+    assert.equal(photos.length, 6);
+    assert.equal(new Set(photos.map(image => image.attributes.src)).size, 6);
+    assert(photos.every(image => image.attributes.alt === ''));
+    photos[0].emit('error');
+    const firstCard = e.$('word-cards').childNodes[0];
+    assert(walk(firstCard).some(node => node.nodeName === 'svg'), 'failed photo falls back to its word cue');
+    assert(!walk(firstCard).some(node => node.nodeName === 'img'));
+  }
   for (const word of [...words, '朋友']) {
     const practice = environment(source('index.html'));
     let initial = S.createSession({ id: 'photo-practice', entries: assigned(word), startedAt: 1 });
@@ -342,6 +351,16 @@ function chooseCharacters(e, values) {
     input.checked = selection.has(input.value); input.emit('change');
   });
 }
+test('updated vocabulary selects every position and still accepts a smaller teacher assignment', async () => {
+  const e = await quizApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '朋友\n推來推去'; e.$('validate-words').click();
+  const inputs = walk(e.$('teacher-word-options')).filter(node => node.nodeName === 'input');
+  assert.equal(inputs.length, 6); assert(inputs.every(input => input.checked));
+  assert.equal(e.$('teacher-selection-total').textContent, '已揀 6 個字 · 2 項詞語');
+  e.$('apply-words').click(); e.$('start-practice').click();
+  assert.deepEqual(e.snapshot().occurrences.map(item => [item.id, item.character]), [['w0:0', '朋'], ['w0:1', '友'], ['w1:0', '推'], ['w1:1', '來'], ['w1:2', '推'], ['w1:3', '去']]);
+  e.$('teacher-open').click(); chooseCharacters(e, ['w1:2']); e.$('apply-words').click(); e.$('start-quiz').click();
+  assert.equal(e.snapshot().entries[0].text, '推來推去'); assert.equal(e.snapshot().occurrences.length, 1); assert.equal(e.snapshot().occurrences[0].index, 2);
+});
 test('fourth assigned character appears alone while its original word supplies the photo, speech and records', async () => {
   const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃\n鬍鬚\n密\n剪草機\n推來推去'; e.$('validate-words').click();
   const content = {}; vm.runInNewContext(source('content.js'), content); e.context.BishunContent.photos = content.BishunContent.photos;
@@ -561,7 +580,7 @@ test('boot creates no phantom history and both home modes share only the applied
   e.$('teacher-open').click(); assert(e.$('local-history').textContent.includes('測驗')); assert(e.$('local-history').textContent.includes('練習'));
 });
 test('quiz emits immediate X and completion O without hints, ticks, outlines or an automatic next', async () => {
-  const e = await quizApp(); await e.enter();
+  const e = await quizApp(); e.$('teacher-open').click(); chooseCharacters(e, ['w0:0']); e.$('apply-words').click(); await e.enter();
   assert.equal(e.$('practice-instruction').hidden, true); assert(!visibleText(e.document).includes('照住題目，自己寫。'));
   e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, '照住題目，自己寫。');
   assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.$('word-title').textContent, '推'); assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, 'images/push-block.webp');
