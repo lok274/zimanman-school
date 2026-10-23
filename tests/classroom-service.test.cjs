@@ -11,7 +11,8 @@ const root = path.join(__dirname, '../classroom-service');
 execFileSync(process.execPath, [path.join(root, 'build.mjs')]);
 const worker = import(pathToFileURL(path.join(root, 'dist/server/index.js'))).then(module => module.default);
 const entries = [{ text: '推來推去', selectedIndexes: [0, 2] }];
-const teacherHeaders = { origin: 'https://class.test', 'oai-authenticated-user-id': 'teacher-a', 'oai-authenticated-user-email': 'unused@example.test' };
+const teacherCapability = 'a'.repeat(64);
+const teacherHeaders = { origin: 'https://class.test', 'x-teacher-capability': teacherCapability };
 function setup(t) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON;');
   for (const file of fs.readdirSync(path.join(root, 'drizzle')).filter(file => file.endsWith('.sql'))) sqlite.exec(fs.readFileSync(path.join(root, 'drizzle', file), 'utf8'));
@@ -19,7 +20,7 @@ function setup(t) {
   const db = { prepare(sql) { const statement = sqlite.prepare(sql); let args = []; return { bind(...values) { args = values; return this; }, async first() { return statement.get(...args) || null; }, async all() { return { results: statement.all(...args) }; }, async run() { return statement.run(...args); } }; } };
   const call = async (route, method = 'GET', body, headers = {}) => {
     const response = await (await worker).fetch(new Request('https://class.test/api/v1/classes' + route, { method, headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) }), { DB: db });
-    return { status: response.status, headers: response.headers, data: await response.json() };
+    return { status: response.status, headers: response.headers, data: response.status === 204 ? null : await response.json() };
   };
   const create = (requestId = 'class-one', extra = {}) => call('', 'POST', { requestId, entries }, { ...teacherHeaders, ...extra });
   const join = (code, alias, requestId = randomUUID(), token = randomBytes(32).toString('hex')) => call('/' + code + '/members', 'POST', { alias, requestId, memberToken: token }).then(result => ({ ...result, token }));
@@ -32,15 +33,27 @@ test('Worker package contains exactly the canonical scorer', () => {
   assert(fs.readFileSync(path.join(root, 'dist/server/index.js'), 'utf8').includes(source));
   assert.equal(fs.readFileSync(path.join(root, 'src/quiz-results.js'), 'utf8'), source + '\nexport default globalThis.BishunQuizResults;\n');
 });
-test('teacher authentication, same-origin creation and CORS boundaries are enforced', async t => {
+test('browser owner capability, separate teacher board and same-origin creation are enforced', async t => {
   const e = setup(t);
   assert.equal((await e.call('', 'POST', { requestId: 'no', entries }, { origin: 'https://class.test' })).status, 401);
+  assert.equal((await e.create('malformed', { 'x-teacher-capability': 'A'.repeat(64) })).status, 401);
+  assert.equal((await e.call('', 'POST', { requestId: 'old-identity', entries }, { origin: 'https://class.test', 'oai-authenticated-user-id': 'teacher', 'oai-authenticated-user-email': 'teacher@example.invalid' })).status, 401);
   assert.equal((await e.create('bad', { origin: 'https://lok274.github.io' })).status, 403);
   assert.equal((await e.create('bad2', { origin: 'https://evil.test' })).status, 403);
   const room = await e.create(); assert.equal(room.status, 200);
-  const result = await e.call('/' + room.data.code + '/board', 'GET', undefined, { ...teacherHeaders, 'oai-authenticated-user-id': 'other' }); assert.equal(result.status, 403);
-  assert.equal((await e.call('/' + room.data.code + '/board', 'GET', undefined, teacherHeaders)).status, 200);
-  assert.equal((await e.call('/' + room.data.code + '/board', 'GET', undefined, { origin: 'https://lok274.github.io' })).headers.get('access-control-allow-origin'), 'https://lok274.github.io');
+  const path = '/' + room.data.code;
+  assert.equal((await e.call(path + '/teacher-board')).status, 401);
+  assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, { 'x-teacher-capability': 'b'.repeat(64) })).status, 403);
+  assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, teacherHeaders)).status, 200);
+  assert.equal((await e.call(path + '/board', 'GET', undefined, teacherHeaders)).status, 401);
+  const member = await e.join(room.data.code, '小星');
+  assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, { authorization: 'Bearer ' + member.token })).status, 401);
+  const stored = e.sqlite.prepare('SELECT owner_id FROM classes').get().owner_id;
+  assert.equal(stored.length, 64); assert.notEqual(stored, teacherCapability);
+  const cors = await e.call(path + '/teacher-board', 'OPTIONS', undefined, { origin: 'https://lok274.github.io', 'access-control-request-headers': 'X-Teacher-Capability' });
+  assert.equal(cors.headers.get('access-control-allow-origin'), 'https://lok274.github.io');
+  assert.equal(cors.headers.get('access-control-allow-headers'), 'Content-Type, Authorization');
+  assert.equal(cors.headers.get('cache-control'), 'no-store');
 });
 test('two members see shared best results only after terminal receipts; retries, ties and conflicts are immutable', async t => {
   const e = setup(t), room = (await e.create()).data, a = await e.join(room.code, '小星'), b = await e.join(room.code, '小月');
@@ -71,12 +84,33 @@ test('atomic class, member and run quotas hold at their concurrent boundaries', 
   const e = setup(t);
   for (let i = 0; i < 9; i++) assert.equal((await e.create('class-' + i)).status, 200);
   const classes = await Promise.all([e.create('last-a'), e.create('last-b')]); assert.deepEqual(classes.map(x => x.status).sort(), [200, 429]);
+  assert.equal((await e.create('class-0')).status, 200);
+  assert.equal((await e.call('', 'POST', { requestId: 'class-0', entries: [{ text: '一', selectedIndexes: [0] }] }, teacherHeaders)).status, 409);
   const code = classes.find(x => x.status === 200).data.code;
   for (let i = 0; i < 99; i++) await e.join(code, 'user-' + i);
   const members = await Promise.all([e.join(code, 'last-a'), e.join(code, 'last-b')]); assert.deepEqual(members.map(x => x.status).sort(), [200, 429]);
   const token = members.find(x => x.status === 200).token;
   for (let i = 0; i < 19; i++) await e.submit(code, token, e.evidence('run-' + i));
   const runs = await Promise.all([e.submit(code, token, e.evidence('last-a')), e.submit(code, token, e.evidence('last-b'))]); assert.deepEqual(runs.map(x => x.status).sort(), [200, 429]);
+});
+
+test('global creation cap is atomic across owners and retries precede full-capacity rejection', async t => {
+  const e = setup(t);
+  let first;
+  for (let owner = 0; owner < 10; owner++) {
+    for (let i = 0; i < (owner === 9 ? 9 : 10); i++) {
+      const result = await e.create('class-' + owner + '-' + i, { 'x-teacher-capability': owner.toString(16).repeat(64) });
+      assert.equal(result.status, 200); first ||= result.data;
+    }
+  }
+  const results = await Promise.all([e.create('final-a', { 'x-teacher-capability': 'c'.repeat(64) }), e.create('final-b', { 'x-teacher-capability': 'd'.repeat(64) })]);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 429]);
+  assert.equal(results.find(result => result.status === 429).data.error.code, 'SERVICE_LIMIT');
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM classes').get().n, 100);
+  assert.deepEqual((await e.create('class-0-0', { 'x-teacher-capability': '0'.repeat(64) })).data, first);
+  e.sqlite.prepare('UPDATE classes SET expires_at = 0 WHERE code = ?').run(first.code);
+  assert.equal((await e.create('class-0-0', { 'x-teacher-capability': '0'.repeat(64) })).status, 410);
+  assert.equal((await e.create('replacement', { 'x-teacher-capability': 'e'.repeat(64) })).status, 200);
 });
 test('expiry immediately denies reads and writes; later class creation cleans expired data with cascade', async t => {
   const e = setup(t), code = (await e.create()).data.code, member = await e.join(code, '小星');

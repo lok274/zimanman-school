@@ -12,13 +12,18 @@ execFileSync(process.execPath, [path.join(root, 'build.mjs')]);
 const page = fs.readFileSync(path.join(root, 'src/teacher-page.js'), 'utf8');
 const html = JSON.parse(page.slice('export default '.length, -2));
 const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
-function boot({ data = new Map(), hash = '', blocked = false } = {}) {
+function boot({ data = new Map(), owners = new Map(), hash = '', blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
   const nodes = new Map();
-  for (const id of ['status', 'assignment', 'create', 'room', 'code', 'expiry', 'refresh', 'board']) nodes.set(id, { textContent: '', hidden: id === 'room', addEventListener() {} });
-  const storage = { getItem: key => data.get(key) || null, setItem(key, value) { if (blocked) throw new Error('blocked'); data.set(key, value); } };
-  vm.runInNewContext(script, { document: { getElementById: id => nodes.get(id) }, crypto: webcrypto, sessionStorage: storage, location: { hash }, history: { replaceState() {} } });
-  return { nodes, draft: JSON.parse(data.get('zimanman:teacher') || 'null'), data };
+  const node = () => ({ textContent: '', children: [], listeners: {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; }, addEventListener(type, handler) { this.listeners[type] = handler; } });
+  for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board']) nodes.set(id, { ...node(), hidden: ['room', 'new-class'].includes(id) });
+  const controls = { blocked, blockedOwners };
+  const storage = (map, flag) => ({ getItem: key => map.get(key) || null, setItem(key, value) { if (controls[flag]) throw new Error('blocked'); map.set(key, value); } });
+  const calls = [], navigation = [];
+  vm.runInNewContext(script, { document: { getElementById: id => nodes.get(id), createElement: node }, crypto: webcrypto, Uint8Array, localStorage: storage(owners, 'blockedOwners'), sessionStorage: storage(data, 'blocked'), location: { hash }, history: { replaceState(...args) { navigation.push(args); } }, fetch(url, options) { calls.push({ url, options }); return send(url, options); } });
+  return { nodes, get draft() { return JSON.parse(data.get('zimanman:teacher') || 'null'); }, data, owners, controls, calls, navigation, click: id => nodes.get(id).listeners.click() };
 }
+const room = { code: 'ABCDEFGH', expiresAt: Date.now() + 86400000, assignment: { version: 1, entries: [{ text: '一', selectedIndexes: [0] }] } };
+const response = (data, ok = true) => ({ ok, json: async () => data });
 
 test('ordinary teacher page gets canonical six-word scope and retains its request after reload', () => {
   const e = boot();
@@ -26,7 +31,11 @@ test('ordinary teacher page gets canonical six-word scope and retains its reques
   assert.deepEqual(e.draft.entries.map(entry => entry.text), Array.from(content.BishunContent.words));
   for (const entry of e.draft.entries) assert.deepEqual(entry.selectedIndexes, Array.from(entry.text, (_, i) => i));
   assert.equal(e.nodes.get('create').disabled, false);
-  assert.equal(boot({ data: e.data }).draft.requestId, e.draft.requestId);
+  const reload = boot({ data: e.data, owners: e.owners });
+  assert.equal(reload.draft.requestId, e.draft.requestId); assert.equal(reload.draft.ownerCapability, e.draft.ownerCapability);
+  assert.match(e.draft.ownerCapability, /^[a-f0-9]{64}$/);
+  assert.equal(e.owners.get('zimanman:teacher-owner'), e.draft.ownerCapability);
+  assert(!/signin-with-chatgpt|ChatGPT|type="password"/.test(html));
 });
 
 test('selected scope remains optional and storage failure disables creation before writing', () => {
@@ -36,6 +45,74 @@ test('selected scope remains optional and storage failure disables creation befo
   const denied = boot({ blocked: true });
   assert.equal(denied.draft, null); assert.equal(denied.nodes.get('create').disabled, true);
   assert.match(denied.nodes.get('status').textContent, /儲存/);
+  const ownerDenied = boot({ blockedOwners: true });
+  assert.equal(ownerDenied.draft, null); assert.equal(ownerDenied.nodes.get('create').disabled, true);
+});
+
+test('teacher retries retain owner and request, reload restores room and an explicit new class gets a fresh request', async () => {
+  let attempts = 0;
+  const e = boot({ fetch: async () => { if (!attempts++) throw new Error('Failed to fetch'); return response(room); } });
+  const requestId = e.draft.requestId, owner = e.draft.ownerCapability;
+  await e.click('create');
+  assert.match(e.nodes.get('status').textContent, /未能連線/); assert.equal(e.nodes.get('create').disabled, false);
+  await e.click('create');
+  assert.equal(e.calls[0].options.body, e.calls[1].options.body); assert.equal(e.calls[1].options.headers['X-Teacher-Capability'], owner);
+  assert.deepEqual(JSON.parse(e.calls[1].options.body), { requestId, entries: e.draft.entries });
+  assert.equal(e.draft.room.code, room.code); assert.equal(e.nodes.get('create').disabled, true);
+  const reload = boot({ data: e.data, owners: e.owners, fetch: async () => response({ rows: [] }) });
+  assert.equal(reload.nodes.get('room').hidden, false); assert.equal(reload.nodes.get('code').textContent, room.code);
+  await reload.click('refresh');
+  assert.equal(reload.calls[0].url, '/api/v1/classes/' + room.code + '/teacher-board');
+  assert.equal(reload.calls[0].options.headers['X-Teacher-Capability'], owner);
+  reload.click('new-class');
+  assert.notEqual(reload.draft.requestId, requestId); assert.equal(reload.draft.ownerCapability, owner);
+  assert.equal(reload.nodes.get('room').hidden, true); assert.equal(reload.nodes.get('create').disabled, false);
+});
+
+test('creation persists intent before sending and retains retry identity if saving its response fails', async () => {
+  let e;
+  e = boot({ fetch: async (_url, options) => {
+    assert.equal(JSON.parse(options.body).requestId, e.draft.requestId);
+    e.controls.blocked = true;
+    return response(room);
+  } });
+  const requestId = e.draft.requestId;
+  await e.click('create');
+  assert.equal(e.nodes.get('code').textContent, room.code); assert.match(e.nodes.get('status').textContent, /未能保存/);
+  assert.equal(e.draft.room, undefined); assert.equal(e.draft.requestId, requestId);
+  const reload = boot({ data: e.data, owners: e.owners, fetch: async () => response(room) });
+  await reload.click('create');
+  assert.equal(JSON.parse(reload.calls[0].options.body).requestId, requestId); assert.equal(reload.draft.room.code, room.code);
+  const denied = boot(); denied.controls.blocked = true;
+  await denied.click('create'); assert.equal(denied.calls.length, 0);
+  reload.controls.blocked = true; reload.click('new-class');
+  assert.equal(reload.draft.requestId, requestId); assert.equal(reload.nodes.get('room').hidden, false);
+});
+
+test('an expired unsaved request can be replaced and another tab cannot change the current draft owner', async () => {
+  const e = boot({ fetch: async () => response({ error: { code: 'EXPIRED', message: '班級已到期。' } }, false) });
+  const previous = e.draft;
+  await e.click('create'); assert.equal(e.nodes.get('new-class').hidden, false);
+  e.click('new-class'); assert.notEqual(e.draft.requestId, previous.requestId);
+  e.owners.clear();
+  const other = boot({ owners: e.owners });
+  assert.notEqual(other.draft.ownerCapability, previous.ownerCapability);
+  const reload = boot({ data: e.data, owners: e.owners, fetch: async () => response(room) });
+  await reload.click('create');
+  assert.equal(reload.calls[0].options.headers['X-Teacher-Capability'], previous.ownerCapability);
+  const selected = boot({ owners: e.owners, hash: '#' + encodeURIComponent(JSON.stringify({ entries: [{ text: '一', selectedIndexes: [0] }], ownerCapability: previous.ownerCapability })) });
+  assert.equal(selected.draft.ownerCapability, other.draft.ownerCapability); assert.equal(selected.navigation[0][2], '/teacher');
+});
+
+test('a late teacher board response does not populate a newly selected class', async () => {
+  let finish;
+  const e = boot({ fetch: async url => url.endsWith('/teacher-board') ? new Promise(resolve => { finish = resolve; }) : response(room) });
+  await e.click('create');
+  const waiting = e.click('refresh');
+  e.click('new-class');
+  finish(response({ rows: [{ rank: 1, alias: '舊班', mistakes: 0, elapsedMs: 1000 }] }));
+  await waiting;
+  assert.equal(e.nodes.get('board').children.length, 0); assert.equal(e.nodes.get('room').hidden, true);
 });
 
 test('standalone service export builds with exact shared content and scorer copies', () => {

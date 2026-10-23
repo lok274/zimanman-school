@@ -5,10 +5,10 @@ const allowedOrigins = new Set(['https://lok274.github.io', 'http://127.0.0.1:41
 const keyPattern = /^[\w-]{1,100}$/;
 function fail(status, code, message) { throw Object.assign(new Error(message), { status, code }); }
 async function hash(value) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(n => n.toString(16).padStart(2, '0')).join(''); }
-function teacher(request) {
-  const id = request.headers.get('oai-authenticated-user-id');
-  if (!id || !request.headers.get('oai-authenticated-user-email')) fail(401, 'SIGN_IN', '請先用 ChatGPT 登入老師頁面。');
-  return id;
+async function teacher(request) {
+  const capability = request.headers.get('x-teacher-capability');
+  if (!/^[a-f0-9]{64}$/.test(capability || '')) fail(401, 'TEACHER_REQUIRED', '開班身份無效，請重新開啟老師頁面。');
+  return hash(capability);
 }
 function sameOrigin(request) {
   if (request.headers.get('origin') !== new URL(request.url).origin) fail(403, 'ORIGIN', '請在老師頁面建立班級。');
@@ -54,7 +54,7 @@ async function api(request, env, url) {
   if (!db) fail(503, 'UNAVAILABLE', '班級服務暫未準備好。');
   const route = url.pathname.split('/').filter(Boolean).slice(3);
   if (!route.length && request.method === 'POST') {
-    sameOrigin(request); const owner = teacher(request), data = await body(request);
+    sameOrigin(request); const owner = await teacher(request), data = await body(request);
     const requestId = key(data.requestId), assignment = canonicalAssignment(data.entries), payloadHash = await hash(JSON.stringify(assignment));
     const existing = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
     if (existing) { if (existing.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (existing.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(existing); }
@@ -64,12 +64,15 @@ async function api(request, env, url) {
       const code = [...crypto.getRandomValues(new Uint8Array(8))].map(n => alphabet[n % alphabet.length]).join('');
       const now = Date.now();
       await db.prepare(`INSERT OR IGNORE INTO classes(code, owner_id, assignment_json, expires_at, request_id, payload_hash)
-        SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM classes WHERE owner_id = ? AND expires_at > ?) < 10`)
-        .bind(code, owner, JSON.stringify(assignment), now + 86400000, requestId, payloadHash, owner, now).run();
+        SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM classes WHERE owner_id = ? AND expires_at > ?) < 10
+        AND (SELECT COUNT(*) FROM classes WHERE expires_at > ?) < 100`)
+        .bind(code, owner, JSON.stringify(assignment), now + 86400000, requestId, payloadHash, owner, now, now).run();
       const saved = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
       if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); return roomReply(saved); }
       const count = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE owner_id = ? AND expires_at > ?').bind(owner, now).first();
       if (count.n >= 10) fail(429, 'CLASS_LIMIT', '最多同時開 10 班，請等舊班到期。');
+      const total = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE expires_at > ?').bind(now).first();
+      if (total.n >= 100) fail(429, 'SERVICE_LIMIT', '服務最多同時開 100 班，請等舊班到期。');
     }
     fail(503, 'TRY_AGAIN', '暫未能建立班級，請重試。');
   }
@@ -108,12 +111,13 @@ async function api(request, env, url) {
     return { runId, ranked: saved.reason === null, reason: saved.reason, score: saved.reason === null ? { mistakes: saved.mistakes, elapsedMs: saved.elapsed_ms } : null };
   }
   if (action === 'board' && route.length === 2 && request.method === 'GET') {
-    let memberId = null;
-    if (request.headers.has('authorization')) {
-      const member = await memberFor(request, db, code); memberId = member.id;
-      if (!await db.prepare('SELECT id FROM runs WHERE member_id = ? LIMIT 1').bind(memberId).first()) fail(403, 'FINISH_FIRST', '完成全部題目後先可以睇班級榜。');
-    } else if (teacher(request) !== room.owner_id) fail(403, 'OWNER_REQUIRED', '只限開班老師查看。');
-    return { ...await board(db, code, memberId), expiresAt: room.expires_at };
+    const member = await memberFor(request, db, code);
+    if (!await db.prepare('SELECT id FROM runs WHERE member_id = ? LIMIT 1').bind(member.id).first()) fail(403, 'FINISH_FIRST', '完成全部題目後先可以睇班級榜。');
+    return { ...await board(db, code, member.id), expiresAt: room.expires_at };
+  }
+  if (action === 'teacher-board' && route.length === 2 && request.method === 'GET') {
+    if (await teacher(request) !== room.owner_id) fail(403, 'OWNER_REQUIRED', '只限開班瀏覽器查看。');
+    return { ...await board(db, code, null), expiresAt: room.expires_at };
   }
   fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
 }
