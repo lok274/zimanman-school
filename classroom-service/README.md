@@ -6,9 +6,9 @@ Build with Node 24 using `node build.mjs`. There are no runtime dependencies. Th
 
 ## Scorer and export
 
-`../dist/quiz-results.js` in the GitHub repository is the canonical scorer. The build derives its Worker copy and embeds exactly that source. Tests verify parity. Do not edit generated `src/quiz-results.js` or the output bundle.
+`../dist/quiz-results.js` in the GitHub repository is the canonical scorer. The build derives its Worker copy and embeds exactly that source. `../dist/content.js` supplies the default six-word assignment on an ordinary teacher URL. Optional selected scope from the student teacher tools still takes precedence. Tests verify the default scope, retained request on reload and export parity. Do not edit generated `src/quiz-results.js`, `src/teacher-page.js` or the output bundle.
 
-A standalone Sites source checkout must contain the service files plus an exact derived copy at `shared/quiz-results.js`. When the sibling canonical file is absent, the build uses this copy and fails if it is missing. The exporter must compare its hash with the reviewed GitHub source, remove `shared/` from the exported `.gitignore`, track that derived copy in the Sites source commit, and preserve the managed `.openai/hosting.json`. This makes the service build reproducible from its recorded source commit. The Sites packaging owner supplies its Worker hosting manifest and copies it into `dist/.openai` when the platform requires it. Building this repository does not deploy or change any Site audience.
+A standalone Sites source checkout must contain the service files plus exact derived copies at `shared/quiz-results.js` and `shared/content.js`. When sibling canonical files are absent, the build uses these copies and fails if either is missing. The exporter must compare both hashes with the reviewed GitHub source, remove `shared/` from the exported `.gitignore`, track both derived copies in the Sites source commit, and preserve the managed `.openai/hosting.json`. This makes the service build reproducible from its recorded source commit. The Sites packaging owner supplies its Worker hosting manifest and copies it into `dist/.openai` when the platform requires it. Building this repository does not deploy or change any Site audience.
 
 ## HTTP contract
 

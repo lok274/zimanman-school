@@ -11,6 +11,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const storageKey = 'zimanman:teacher';
+const defaultEntries = __DEFAULT_ENTRIES__;
 let draft = null;
 try {
   draft = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
@@ -19,8 +20,12 @@ try {
     draft = { requestId: crypto.randomUUID(), entries: assignment.entries };
     sessionStorage.setItem(storageKey, JSON.stringify(draft)); history.replaceState(null, '', '/teacher');
   }
-} catch { $('status').textContent = '設定未能保存，請由學生頁面嘅老師工具再開一次。'; }
-$('assignment').textContent = draft?.entries?.map(word => word.selectedIndexes.map(index => Array.from(word.text)[index]).join('、')).join(' / ') || '請先喺學生頁面嘅老師工具揀好範圍，再開班級測驗。';
+  if (!draft) {
+    draft = { requestId: crypto.randomUUID(), entries: defaultEntries };
+    sessionStorage.setItem(storageKey, JSON.stringify(draft));
+  }
+} catch { draft = null; $('status').textContent = '設定未能保存，請允許瀏覽器儲存資料後重新開頁。'; }
+$('assignment').textContent = draft?.entries?.map(word => word.selectedIndexes.map(index => Array.from(word.text)[index]).join('、')).join(' / ') || '未能載入題目。';
 $('create').disabled = !draft?.entries;
 async function request(path, options) {
   const response = await fetch('/api/v1/classes' + path, options), data = await response.json();

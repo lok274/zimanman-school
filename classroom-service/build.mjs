@@ -1,10 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.existsSync(path.join(root, '../dist/quiz-results.js')) ? '../dist/quiz-results.js' : 'shared/quiz-results.js';
 const canonical = fs.readFileSync(path.join(root, source), 'utf8');
-const teacher = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8');
+const contentSource = fs.existsSync(path.join(root, '../dist/content.js')) ? '../dist/content.js' : 'shared/content.js';
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync(path.join(root, contentSource), 'utf8'), context);
+const defaults = context.BishunContent.words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) }));
+const teacher = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8').replace('__DEFAULT_ENTRIES__', JSON.stringify(defaults));
 fs.writeFileSync(path.join(root, 'src/quiz-results.js'), canonical + '\nexport default globalThis.BishunQuizResults;\n');
 fs.writeFileSync(path.join(root, 'src/teacher-page.js'), 'export default ' + JSON.stringify(teacher) + ';\n');
 const worker = fs.readFileSync(path.join(root, 'src/worker.js'), 'utf8')
@@ -12,4 +17,4 @@ const worker = fs.readFileSync(path.join(root, 'src/worker.js'), 'utf8')
   .replace("import teacherHTML from './teacher-page.js';", 'const teacherHTML = ' + JSON.stringify(teacher) + ';');
 fs.mkdirSync(path.join(root, 'dist/server'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist/server/index.js'), worker);
-console.log('Built dist/server/index.js from canonical quiz scorer and Worker source.');
+console.log('Built dist/server/index.js from canonical content, quiz scorer and Worker source.');
