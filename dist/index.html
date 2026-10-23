@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#214b3b">
   <title>字慢慢 · 一筆一筆，慢慢學</title>
-  <link rel="stylesheet" href="styles.css?v=27cea9ad1a94">
+  <link rel="stylesheet" href="styles.css?v=e40a268d79ae">
 </head>
 <body>
   <header class="app-header">
@@ -31,11 +31,11 @@
         <h1 id="word-title"></h1>
         <button id="speak" class="button secondary speech-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8q5 4 0 8M20 5q8 7 0 14"/></svg><span id="speak-label">聽詞語</span></button>
         <p id="voice-note" class="small muted"></p>
-        <div class="practice-actions"><button id="hear-instruction" class="button secondary" aria-describedby="practice-instruction">聽指令</button><span id="instruction-voice-note" class="small muted" role="status" aria-live="polite"></span><button id="rest" class="button secondary rest-button">休息一下</button></div>
+        <div class="practice-actions"><button id="hear-instruction" class="button secondary rest-button" aria-describedby="practice-instruction">聽指令</button><span id="instruction-voice-note" class="small muted" role="status" aria-live="polite"></span><button id="rest" class="button secondary rest-button">休息一下</button></div>
       </aside>
       <div class="work-panel">
         <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 睇筆順</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己試</li></ol>
-        <div class="practice-heading"><h2 id="practice-title">睇筆順</h2><p id="practice-instruction">撳播放，睇筆順。</p></div>
+        <div class="practice-heading"><h2 id="practice-title">睇筆順</h2><p id="practice-instruction" hidden>撳播放，睇筆順。</p></div>
         <div class="practice-body"><div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><svg id="quiz-mark" class="quiz-mark" viewBox="0 0 100 100" aria-hidden="true" hidden><path class="quiz-cross" d="M78 10L94 26M94 10L78 26"/><circle class="quiz-circle" cx="50" cy="50" r="46"/></svg><div id="board-message" class="board-message" hidden></div></div></div>
           <div class="practice-side">
             <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
@@ -82,6 +82,6 @@
   <script src="quiz-results.js?v=6f36d387a7d2"></script>
   <script src="classroom.js?v=f252cb4b7a03"></script>
   <script src="writing.js?v=c68d756c7bb6"></script>
-  <script src="app.js?v=e51d649eb5d0"></script>
+  <script src="app.js?v=71a0635d7d26"></script>
 </body>
 </html>

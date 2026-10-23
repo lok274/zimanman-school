@@ -446,8 +446,9 @@ test('one native tools disclosure preserves writing state and keeps phase-specif
   e.$('retry-writing').click();
   assert.equal(e.snapshot().active.phase, 'recall');
 });
-test('instruction speech speaks exactly the displayed sentence on a click and never records help', async () => {
+test('instruction speech keeps the current sentence when watch copy is hidden and never records help', async () => {
   const e = await feedbackApp(); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }, { lang: 'zh-CN', name: 'Mandarin' }]; e.voices.changed();
+  assert.equal(e.$('practice-instruction').hidden, false);
   assert.equal(e.$('voice-note').textContent, '');
   assert.equal(e.voices.spoken.length, 0); const snapshot = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
   const utterance = e.voices.spoken.at(-1); assert.equal(utterance.text, e.$('practice-instruction').textContent); assert.equal(utterance.lang, 'yue-HK'); assert.equal(JSON.stringify(e.snapshot()), snapshot);
@@ -456,6 +457,11 @@ test('instruction speech speaks exactly the displayed sentence on a click and ne
   utterance.onerror(); assert(!e.$('instruction-voice-note').textContent.includes('未能朗讀'), 'stale error cannot replace a new request');
   e.voices.spoken.at(-1).onerror(); assert(e.$('instruction-voice-note').textContent.includes('未能朗讀'));
   assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
+  e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'watch');
+  assert.equal(e.$('practice-instruction').hidden, true); assert(!visibleText(e.document).includes('撳播放，睇筆順。'));
+  e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, '撳播放，睇筆順。');
+  e.$('main-next').click(); assert.equal(e.$('practice-instruction').hidden, false);
+  e.complete(); e.$('main-next').click(); assert.equal(e.$('practice-instruction').hidden, false);
 });
 test('instruction speech cancels on navigation, rest, teacher, hidden page and page exit with stale callbacks ignored', async () => {
   const e = await feedbackApp(); e.voices.current = [{ lang: 'zh-HK', name: 'Cantonese' }];
@@ -556,6 +562,8 @@ test('boot creates no phantom history and both home modes share only the applied
 });
 test('quiz emits immediate X and completion O without hints, ticks, outlines or an automatic next', async () => {
   const e = await quizApp(); await e.enter();
+  assert.equal(e.$('practice-instruction').hidden, true); assert(!visibleText(e.document).includes('照住題目，自己寫。'));
+  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, '照住題目，自己寫。');
   assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.$('word-title').textContent, '推'); assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, 'images/push-block.webp');
   assert(e.document.querySelector('.step-rail').hidden); assert(e.$('demo-controls').hidden); assert(e.$('hint-outline').hidden); assert(e.$('hint-stroke').hidden); assert(e.$('main-next').hidden);
   for (let i = 0; i < 3; i++) e.send('STROKE_MISSED', { strokeIndex: 0 });
@@ -565,6 +573,7 @@ test('quiz emits immediate X and completion O without hints, ticks, outlines or 
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.$('stroke-progress').textContent, '');
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete'); assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.snapshot().active.phase, 'character-complete');
+  assert.equal(e.$('practice-instruction').hidden, false);
   assert.equal(e.$('quiz-clock-value').textContent, '0.0 秒'); const attempts = e.snapshot().attempts.length;
   e.$('retry-writing').click(); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.$('teacher-open').click(); e.$('teacher-skip').click(); assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.snapshot().active.completedPhase, 'skipped');
@@ -695,6 +704,7 @@ test('dedicated board consumes immediate handoff once, polls only visibly and re
 });
 test('mount failures are recoverable and stale same-token callbacks cannot ready a later mount', async () => {
   const e = await quizApp({ failMount: true }); await e.enter(); assert.equal(e.snapshot().active.phase, 'unavailable'); assert.equal(e.snapshot().attempts[0].elapsedMs, null);
+  assert.equal(e.$('practice-instruction').hidden, false);
   const failed = e.mounts[0]; e.context.BishunWriting.mount = (_el, _char, _data, options) => { e.mounts.push(options); queueMicrotask(options.onReady); return { dispose() {}, pause() {} }; };
   e.$('retry-data').click(); await waitFor(() => e.snapshot().active.phase === 'quiz'); await new Promise(resolve => setImmediate(resolve));
   failed.onReady(); failed.onError(); assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.snapshot().attempts.at(-1).elapsedMs, 0);
@@ -759,6 +769,7 @@ test('same-token loading restart ignores old failure and only accepts the new re
   const e = await quizApp(); const requests = [];
   e.context.BishunWriting.loadCharacter = () => new Promise((resolve, reject) => requests.push({ resolve, reject }));
   e.$('start-quiz').click(); e.$('word-cards').childNodes[0].click(); await waitFor(() => requests.length === 1);
+  assert.equal(e.$('practice-instruction').hidden, false);
   e.$('rest').click(); e.$('resume').click(); await waitFor(() => requests.length === 2);
   requests[0].reject(new Error('old abort')); await new Promise(resolve => setImmediate(resolve)); assert.equal(e.snapshot().active.phase, 'loading');
   requests[1].resolve({ strokes: ['M1 1L2 2'] }); await waitFor(() => e.snapshot().active.phase === 'quiz'); assert.equal(e.snapshot().attempts.length, 1);

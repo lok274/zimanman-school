@@ -276,6 +276,7 @@
       if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
     }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
+    $('practice-instruction').hidden = ['watch', 'quiz'].includes(a.phase);
     instructionText = instruction;
     const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction].join(':');
     if (nextSpeechKey !== speechKey) { stopSpeech(); speechKey = nextSpeechKey; }
