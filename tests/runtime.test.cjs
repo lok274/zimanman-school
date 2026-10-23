@@ -602,8 +602,9 @@ test('visible timer ticks read the sole controller clock without storage writes 
   assert.equal(e.$('quiz-clock-value').textContent, '1.7 秒'); const doneWrites = writes; e.clock = 20000; tick(); assert.equal(writes, doneWrites); assert.equal(timers.size, 0);
 });
 
-async function classroomApp({ uploadFails = false, holdUpload = false } = {}) {
+async function classroomApp({ uploadFails = false, holdUpload = false, restoredStore } = {}) {
   const e = environment(source('index.html')); e.mounts = []; e.calls = []; e.navigation = []; e.clock = 10;
+  if (restoredStore) for (const [key, value] of restoredStore) e.store.set(key, value);
   e.context.crypto = require('node:crypto').webcrypto; e.context.performance = { now: () => e.clock };
   e.context.HanziWriter = {};
   e.context.location.assign = url => e.navigation.push(url);
@@ -619,6 +620,7 @@ async function classroomApp({ uploadFails = false, holdUpload = false } = {}) {
     return holdUpload ? new Promise(resolve => { e.releaseUpload = () => resolve(response); }) : response;
   };
   for (const file of ['content.js', 'quiz-results.js', 'classroom.js', 'app.js']) vm.runInContext(source(file), e.context);
+  if (restoredStore) return e;
   e.$('class-open').click(); e.$('class-code').value = 'ABCDEFGH'; e.$('class-alias').value = '小星'; e.$('class-join').click();
   await waitFor(() => e.$('class-identity').textContent.includes('小星'));
   e.$('class-start').click(); e.$('word-cards').childNodes[0].click(); await waitFor(() => e.mounts.length === 1);
@@ -641,6 +643,20 @@ test('offline completion keeps exact pending evidence and navigates once after e
   assert.equal(e.navigation.length, 0); assert.equal(e.$('class-retry').hidden, false); const original = e.calls.at(-1).body;
   e.allowUpload(); e.$('class-retry').click(); await waitFor(() => e.navigation.length === 1);
   assert.equal(e.calls.at(-1).body, original); assert.equal(e.navigation[0], 'leaderboard.html');
+});
+test('cold restored pending run navigates once after explicit continue and retry', async () => {
+  const first = await classroomApp({ uploadFails: true }); first.complete(); await waitFor(() => first.mounts.length === 2); first.complete();
+  await waitFor(() => first.$('class-result-status').textContent.includes('尚未交'));
+  const original = first.calls.at(-1).body;
+  const e = await classroomApp({ restoredStore: first.store });
+  assert.equal(e.navigation.length, 0);
+  e.$('class-open').click(); assert.equal(e.$('class-continue').hidden, false);
+  e.$('class-continue').click(); assert.equal(e.$('class-pending-retry').hidden, false);
+  e.$('class-pending-retry').click(); await waitFor(() => e.store.get('bishun:classroom:v1').includes('"receipt"'));
+  assert.equal(e.calls.at(-1).body, original);
+  assert.deepEqual(e.navigation, ['leaderboard.html']);
+  assert.equal(e.$('class-dialog').open, false);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); assert.equal(e.navigation.length, 1);
 });
 test('a late committed upload does not pull a learner out of a newly started local practice', async () => {
   const e = await classroomApp({ holdUpload: true }); e.complete(); await waitFor(() => e.mounts.length === 2); e.complete();
