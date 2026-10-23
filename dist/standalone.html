@@ -28,9 +28,15 @@
 .simplified-practice .word-panel .practice-actions{margin:0 0 0 auto;gap:8px}
 .simplified-practice .grid-shell{width:min(100%,max(300px,calc(100svh - 490px)))}
 .simplified-practice .demo-controls,.simplified-practice .writing-controls{margin-top:6px}
+.simplified-practice #demo-controls{gap:8px}
+.simplified-practice #play,.simplified-practice #pause,.simplified-practice #hint-stroke{min-height:64px;font-size:22px}
+.simplified-practice #play,.simplified-practice #pause{flex:1}
+.simplified-practice #hint-stroke{width:100%}
 .simplified-practice .feedback-line{margin-top:6px;min-height:0}
 .simplified-practice #practice-tools{margin-top:4px;padding-top:0}
+.simplified-practice #practice-tools summary{min-height:56px;font-size:20px;line-height:56px}
 .simplified-practice .next-row{padding-top:6px}
+.simplified-practice #main-next{width:100%;min-height:72px;font-size:22px}
 .simplified-practice .app-footer{padding-block:3px 4px}
 @media(max-width:800px){.practice-heading h2{font-size:calc(21px + 10pt)}}
 @media(max-width:570px){.practice-heading h2{font-size:calc(22px + 10pt)}.simplified-practice .word-panel{min-height:0}}
@@ -49,6 +55,12 @@
 @media(max-width:570px){.mode-cards{grid-template-columns:1fr;gap:16px}.mode-card{min-height:200px;padding:20px}.mode-card span{font-size:17px}.home-view{margin:14px auto}.quiz-mode .practice-actions{flex-basis:100%;margin:0}.quiz-mode.simplified-practice .grid-shell{width:min(100%,360px)}}
 .quiz-clock{margin:10px 0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);text-align:right;width:fit-content;max-width:100%;font-variant-numeric:tabular-nums;line-height:1.4}.quiz-clock span{display:block;font-size:12px}.quiz-clock strong{font-size:22px}.quiz-mode .practice-side{display:flex;flex-direction:column;align-self:stretch}.quiz-mode .quiz-clock{margin-top:auto}.quiz-mode .next-row{margin-bottom:10px}.class-entry{margin-top:22px}#class-join-fields input{display:block;width:100%;padding:10px;border:1px solid #acb8a2;border-radius:8px;margin:8px 0 16px;background:#fffefb}#class-code{text-transform:uppercase;letter-spacing:3px}#class-dialog .button{margin:4px 4px 4px 0;white-space:normal}.quiz-results{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.class-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.podium-place{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:14px 8px;border-radius:10px;background:var(--soft);overflow-wrap:anywhere}.podium-place strong{color:var(--green)}.podium-place small{font-size:12px}.quiz-results table,#class-dialog table{width:100%;border-collapse:collapse;font-size:14px}.quiz-results th,.quiz-results td,#class-dialog th,#class-dialog td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.quiz-results caption,#class-dialog caption{font-size:12px;text-align:left}.is-me{background:var(--soft)}#class-again{margin-top:20px}@media(max-width:570px){.class-podium{grid-template-columns:1fr}.quiz-results{padding:12px}.quiz-clock strong{font-size:20px}}
 .leaderboard-page{max-width:980px}.leaderboard-page table{width:100%;border-collapse:collapse;font-size:17px}.leaderboard-page td,.leaderboard-page th{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.leaderboard-page caption{text-align:left;font-size:14px}#board-best{margin:22px 0;font-weight:700}.leaderboard-page .podium-place{padding:24px 12px;font-size:22px}.leaderboard-page .podium-place small{font-size:15px}.leaderboard-page .podium-place strong{font-size:28px}.standalone-class-note{display:none}body[data-standalone] #class-open,body[data-standalone] #teacher-class{display:none}body[data-standalone] .standalone-class-note{display:block}
+@media(orientation:portrait),(max-width:759px){
+  .quiz-mode.simplified-practice .practice-side{display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .quiz-mode.simplified-practice .practice-side>*{grid-column:1/-1}
+  .quiz-mode.simplified-practice .next-row{grid-column:1;margin-bottom:0}
+  .quiz-mode.simplified-practice .quiz-clock{grid-column:2;margin:6px 0 0 8px;align-self:end}
+}
 
 </style>
 </head>
