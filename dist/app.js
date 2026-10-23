@@ -55,6 +55,7 @@
       if (handle && state && state.active.phase !== 'character-complete') { handle.dispose(); handle = null; mountedKey = ''; readyMount = null; mountGeneration++; }
     }
     save(); render(); openSegment();
+    if (!state) renderClassroom();
   }
   const concealedText = new Map();
   function restoreRecallText() { concealedText.forEach((text, node) => { node.nodeValue = text; }); concealedText.clear(); }
@@ -392,13 +393,15 @@
     $('class-again').hidden = !classSummary || !view.accepted || view.pending;
     $('class-again').disabled = view.busy;
     if (classSummary) { $('personal-best').textContent = member.alias + ' · 個人最佳及全班排名會喺排行榜頁顯示。'; $('saved-message').textContent = '本機紀錄留喺此瀏覽器；班級交卷成功後，暱稱和結果亦會儲存喺班級服務。'; }
-    if (classSummary && available() && !$('class-dialog').open && view.accepted && view.receipt?.runId === state.id && boardNavigationRun === view.receipt.runId) {
+    const homeRetry = !state && boardNavigationRun !== null && boardNavigationRun === view.boundRunId;
+    if ((classSummary ? available() && !$('class-dialog').open : homeRetry && !document.hidden && !$('teacher-dialog').open && !leaving) && view.accepted && view.receipt?.runId === view.boundRunId && boardNavigationRun === view.receipt.runId) {
       boardNavigationRun = null;
       try {
         if (!view.storageOkay) throw new Error('身份未能保存。');
         sessionStorage.setItem('bishun:board-handoff', JSON.stringify({ memberId: member.memberId, runId: view.receipt.runId, at: Date.now() }));
         window.location.assign('leaderboard.html');
-      } catch { $('class-result-status').textContent = '已交卷，但此頁未能保存參加身份，暫時無法轉去排行榜。'; }
+        if (homeRetry && $('class-dialog').open) $('class-dialog').close();
+      } catch { $(homeRetry ? 'class-status' : 'class-result-status').textContent = '已交卷，但此頁未能保存參加身份，暫時無法轉去排行榜。'; }
     }
   }
   function renderQuizResults() {

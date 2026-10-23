@@ -652,7 +652,7 @@ test('cold restored pending run navigates once after explicit continue and retry
   assert.equal(e.navigation.length, 0);
   e.$('class-open').click(); assert.equal(e.$('class-continue').hidden, false);
   e.$('class-continue').click(); assert.equal(e.$('class-pending-retry').hidden, false);
-  e.$('class-pending-retry').click(); await waitFor(() => e.store.get('bishun:classroom:v1').includes('"receipt"'));
+  e.$('class-pending-retry').click(); await waitFor(() => e.navigation.length === 1);
   assert.equal(e.calls.at(-1).body, original);
   assert.deepEqual(e.navigation, ['leaderboard.html']);
   assert.equal(e.$('class-dialog').open, false);

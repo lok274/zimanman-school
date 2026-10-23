@@ -25,9 +25,13 @@
       if (busy) throw new Error('請等目前連線完成。');
       busy = true; controller = new AbortController(); notify();
       try {
-        const response = await fetch(origin + '/api/v1/classes' + path, { method, signal: controller.signal, credentials: 'omit', headers: { ...(value ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(value ? { body: JSON.stringify(value) } : {}) });
-        const data = await response.json();
+        let response, data;
+        try { response = await fetch(origin + '/api/v1/classes' + path, { method, signal: controller.signal, credentials: 'omit', headers: { ...(value ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(value ? { body: JSON.stringify(value) } : {}) }); }
+        catch { throw new Error('班級服務未能連線，請稍後重試。'); }
+        try { data = await response.json(); }
+        catch { throw new Error('班級服務回應無效，請稍後重試。'); }
         if (ownGeneration !== generation) throw Object.assign(new Error('身份已切換。'), { stale: true });
+        if (!data || typeof data !== 'object') throw new Error('班級服務回應無效，請稍後重試。');
         if (!response.ok) throw new Error(data.error?.message || '班級服務未能連線，請稍後重試。');
         return data;
       } catch (error) {
