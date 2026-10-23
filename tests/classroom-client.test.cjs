@@ -21,6 +21,21 @@ test('lost join responses retry the exact request ID and pre-generated capabilit
   await e.client.join('abcdefgh', ' 小星 '); fail = false; await e.client.join('ABCDEFGH', '小星');
   assert.equal(e.calls[0].body, e.calls[1].body); assert.match(JSON.parse(e.calls[0].body).memberToken, /^[a-f0-9]{64}$/); assert.equal(e.client.view().accepted, true);
 });
+test('network and invalid JSON errors use Chinese copy while server messages survive', async () => {
+  const offline = setup(() => { throw new TypeError('Failed to fetch'); });
+  await offline.client.join('ABCDEFGH', '小星');
+  assert.match(offline.client.view().message, /班級服務未能連線/);
+  assert.doesNotMatch(offline.client.view().message, /Failed to fetch/);
+
+  const broken = setup(url => url.endsWith('/members') ? response(member) : { ok: true, json: async () => { throw new SyntaxError('Unexpected token'); } });
+  await broken.client.join('ABCDEFGH', '小星'); broken.client.bindRun('run-a'); broken.client.finish(Q.evaluate(assignment.entries, evidence)); await settled(broken.client);
+  assert.match(broken.client.view().message, /班級服務回應無效/);
+  assert.doesNotMatch(broken.client.view().message, /Unexpected token/);
+
+  const rejected = setup(() => response({ error: { message: '班級已結束。' } }, 410));
+  await rejected.client.join('ABCDEFGH', '小星');
+  assert.match(rejected.client.view().message, /班級已結束。/);
+});
 test('pending result survives reload and is retried identically only after explicit membership continuation', async () => {
   let fail = true;
   const e = setup(url => {
