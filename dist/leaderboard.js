@@ -39,6 +39,6 @@
     sessionStorage.removeItem('bishun:board-handoff');
     const view = client.view();
     if (handoff && handoff.memberId === view.member?.memberId && handoff.runId === view.receipt?.runId && Date.now() - handoff.at >= 0 && Date.now() - handoff.at < 60000) { client.continueMember(); client.refresh(); }
-  } catch { /* An unconfirmed visit still requires the visible identity choice. */ }
+  } catch {}
   render();
 })();
