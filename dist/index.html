@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#214b3b">
   <title>字慢慢 · 一筆一筆，慢慢學</title>
-  <link rel="stylesheet" href="styles.css?v=c28488c54df5">
+  <link rel="stylesheet" href="styles.css?v=e84898870942">
 </head>
 <body>
   <header class="app-header">
@@ -14,7 +14,11 @@
   </header>
   <div id="storage-notice" class="notice storage-notice" role="status" hidden></div>
   <main>
-    <section id="choose-view" class="choose-view" aria-labelledby="choose-title">
+    <section id="home-view" class="home-view" aria-labelledby="home-title">
+      <h1 id="home-title">今日想點寫？</h1>
+      <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>睇筆順，跟住寫，再自己試</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>睇題目，自己寫</span></button></div>
+    </section>
+    <section id="choose-view" class="choose-view" hidden aria-labelledby="choose-title">
       <h1 id="choose-title">你想先寫邊個字？</h1>
       <div id="word-cards" class="word-cards"></div>
       <div class="choice-footer"><button id="choice-summary" class="button secondary">睇今節紀錄</button></div>
@@ -30,7 +34,7 @@
       <div class="work-panel">
         <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 睇筆順</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己試</li></ol>
         <div class="practice-heading"><h2 id="practice-title">睇筆順</h2><p id="practice-instruction">撳播放，睇筆順。</p></div>
-        <div class="practice-body"><div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><div id="board-message" class="board-message" hidden></div></div></div>
+        <div class="practice-body"><div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><svg id="quiz-mark" class="quiz-mark" viewBox="0 0 100 100" aria-hidden="true" hidden><path class="quiz-cross" d="M78 10L94 26M94 10L78 26"/><circle class="quiz-circle" cx="50" cy="50" r="46"/></svg><div id="board-message" class="board-message" hidden></div></div></div>
           <div class="practice-side">
             <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
             <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
@@ -46,7 +50,7 @@
       <p class="eyebrow">今節嘅腳印</p><h1 id="summary-title">每一步，都記低咗。</h1><p class="intro-copy">呢度記錄今次點樣練，唔代表已經識默寫。</p>
       <div id="summary-stats" class="summary-stats"></div><div id="summary-rows" class="summary-rows"></div>
       <div class="paper-reminder"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 5h23l7 7v31H10zM32 5v9h8M18 22h14M18 30h14M18 37h9"/></svg><div><h2>帶返去紙上試一試</h2><p>放低平板，揀今次練過嘅一個字寫喺紙上。老師可以一齊睇。</p></div></div>
-      <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">開始新一節 <span aria-hidden="true">→</span></button></div>
+      <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">返回首頁 <span aria-hidden="true">→</span></button></div>
     </section>
   </main>
   <footer class="app-footer"><button id="previous-step" class="button secondary" hidden>← 返回選字</button></footer>
@@ -58,7 +62,7 @@
     <p id="teacher-error" class="field-error" role="alert"></p>
     <button id="validate-words" class="button secondary">更新可選詞語</button>
     <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><p class="small muted">逐字選擇，預設先練第一項嘅一個字。建議每次 1 至 2 個字，可選最多 6 項詞語、48 個字。同一字喺不同位置會分開練。</p><div id="teacher-word-options"></div><p id="teacher-selection-total" role="status" aria-live="polite"></p></fieldset>
-    <button id="apply-words" class="button primary">套用並開始新一節</button>
+    <button id="apply-words" class="button primary">套用並返回首頁</button>
     <div id="teacher-active" class="teacher-active" hidden><h3>今節練習</h3><button id="teacher-skip" class="button secondary">老師協助，略過呢個字</button><button id="teacher-end" class="button quiet">結束今節並睇紀錄</button></div>
     <details><summary>筆順、語音及紀錄說明</summary><p>初始字庫附本機筆順資料。香港筆順調整範圍以附帶資料說明為準；其他字即使筆畫數相同，亦不代表所有字形細節符合學校教法。請配合課堂核對。</p><p>新增字詞可能要上網載入未經香港逐畫核對嘅字庫。載入失敗唔係學生寫錯。可以再試、改練另一詞，或由老師略過。</p><p id="teacher-voice-note"></p><p>筆畫配對容許較大偏差，只供練習回饋，唔係書寫字形評分。「自己完成」只代表今次無開提示完成平板配對，唔代表已掌握字形、紙筆書寫或默寫。程式唔錄音，唔評估朗讀。</p><a href="https://www.edbchinese.hk/lexlist_ch/" target="_blank" rel="noopener noreferrer">教育局《香港小學學習字詞表》參考</a></details>
     <details id="license-details"><summary>字庫授權及修改說明</summary><p>Copyright 1999 Arphic Technology Co., Ltd. Copyright 2016 Shaunak Kishore. 字庫按 Arphic Public License 提供，並無擔保。你可以按授權條款修改及再分發。</p><p>本版將「草」改為十畫，交換「密」第七、八畫，並調整「來」嘅筆順。初始十一字嘅筆順已對照教育局圖示；字形仍有字庫風格差異，請配合學校教法核對。</p><p><a href="data/ARPHICPL.TXT" target="_blank" rel="noopener">Arphic Public License 全文</a> · <a href="data/NOTICE.txt" target="_blank" rel="noopener">字庫來源及修改紀錄</a> · <a href="LICENSES/hanzi-writer-MIT.txt" target="_blank" rel="noopener">Hanzi Writer 3.5.0 MIT 授權</a></p></details>
@@ -68,8 +72,8 @@
   <script src="vendor/hanzi-writer.min.js"></script>
   <script src="data/characters.js"></script>
   <script src="content.js"></script>
-  <script src="session.js"></script>
-  <script src="writing.js"></script>
-  <script src="app.js?v=ad2cebd07605"></script>
+  <script src="session.js?v=abd65a745627"></script>
+  <script src="writing.js?v=c68d756c7bb6"></script>
+  <script src="app.js?v=701541b13d66"></script>
 </body>
 </html>

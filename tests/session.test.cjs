@@ -136,7 +136,7 @@ test('new sessions require explicit valid character positions and canonicalize t
   for (const text of ['', '粗 粗', '粗\n粗', '粗A', '粗'.repeat(9)]) assert.throws(() => S.createSession({ ...options, entries: [{ text, selectedIndexes: [0] }] }));
   for (const selectedIndexes of [undefined, null, [], [0, 0], [-1], [4], [0.5], ['0']]) assert.throws(() => S.createSession({ ...options, entries: [{ text: '推來推去', selectedIndexes }] }));
   const state = S.createSession({ ...options, entries: [{ text: '推來推去', selectedIndexes: [2, 0] }] });
-  assert.equal(state.version, 2); assert.equal(state.entries[0].text, '推來推去');
+  assert.equal(state.version, 3); assert.equal(state.entries[0].text, '推來推去');
   assert.deepEqual(state.occurrences.map(o => [o.id, o.index, o.character]), [['w0:0', 0, '推'], ['w0:2', 2, '推']]);
   assert.equal(S.validateSnapshot(state), true);
 });
@@ -157,6 +157,7 @@ test('repeated assigned positions advance separately, preserve skips and support
 });
 test('version two stored scope rejects noncanonical membership and invalid active references', () => {
   const s = S.createSession({ id: 'scope', entries: [{ text: '推來推去', selectedIndexes: [0, 2] }], startedAt: 1 });
+  s.version = 2; delete s.mode; assert.equal(S.validateSnapshot(s), true);
   for (const mutate of [v => v.occurrences.push(v.occurrences[0]), v => v.occurrences.reverse(), v => v.occurrences[0].wordId = 'w5', v => v.occurrences[0].character = '來', v => v.finished = ['w0:0', 'w0:0'], v => v.finished = ['w0:1'], v => v.active = { phase: 'watch', occurrenceId: 'w0:1', token: 'bad' }, v => v.active = { phase: 'character-complete', occurrenceId: 'w0:0', token: 'bad', attemptId: 'missing' }]) {
     const broken = structuredClone(s); mutate(broken); assert.equal(S.validateSnapshot(broken), false);
   }
@@ -169,4 +170,44 @@ test('original version one fixture retains its full task and interrupted assista
   assert.equal(closed.version, 1); assert.equal(S.validateSnapshot(closed), true); assert.equal(closed.attempts.at(-1).outcome, 'abandoned'); assert.equal(closed.attempts.at(-1).mistakes, 1); assert.equal(closed.attempts.at(-1).help.length, 1);
   const rows = S.summarize(closed); assert.equal(rows.filter(row => row.assisted).length, 1); assert.equal(rows.filter(row => row.unfinished).length, 4);
   assert.equal(JSON.stringify(legacy), before, 'reading and closing a copy do not migrate the original');
+});
+function quizState() {
+  let state = S.createSession({ id: 'quiz', mode: 'quiz', entries: [{ text: '推來推去', selectedIndexes: [0, 2] }], startedAt: 1 });
+  state = send(state, 'CHOOSE_WORD', { wordId: 'w0' });
+  return send(state, 'DATA_READY', { strokeCount: 2 });
+}
+test('quiz enters directly without help and preserves completed results across retry, back and skip', () => {
+  let state = quizState(); assert.equal(state.active.phase, 'quiz'); assert.equal(state.attempts[0].elapsedMs, null);
+  for (const type of ['START_GUIDED', 'START_RECALL', 'REQUEST_HELP']) assert.equal(send(state, type, { kind: 'outline' }), state);
+  for (let i = 0; i < 4; i++) state = send(state, 'STROKE_MISSED', { strokeIndex: 0 });
+  assert.equal(state.attempts[0].help.length, 0); assert.equal(state.attempts[0].mistakes, 4);
+  state = send(state, 'DURATION_SNAPSHOT', { elapsedMs: 1200.5 }); state = finish(state);
+  assert.equal(state.active.phase, 'character-complete'); assert.equal(state.active.completedPhase, 'quiz'); assert.equal(state.finished.length, 1);
+  state = send(state, 'RETRY'); assert.equal(state.active.phase, 'quiz'); assert.equal(state.finished.length, 1); assert.equal(state.attempts.at(-1).elapsedMs, null);
+  state = send(state, 'DURATION_SNAPSHOT', { elapsedMs: 500 }); state = send(state, 'PREVIOUS_STEP');
+  assert.equal(state.active.phase, 'choose-word'); assert.equal(state.attempts.at(-1).outcome, 'abandoned');
+  assert.equal(S.summarize(state)[0].elapsedMs, 1700.5); assert.equal(S.summarize(state)[0].independent, true);
+  state = send(state, 'CHOOSE_WORD', { wordId: 'w0' }); assert.equal(state.active.occurrenceId, 'w0:2'); state = send(state, 'TEACHER_SKIP');
+  assert.equal(state.attempts.at(-1).elapsedMs, null); assert.equal(state.active.completedPhase, 'skipped');
+  state = send(state, 'NEXT'); assert.equal(state.active.phase, 'summary'); assert.equal(S.validateSnapshot(state), true);
+  assert.equal(S.summarize(state)[1].elapsedMs, null); assert.equal(S.summarize(state)[1].timingComplete, false);
+});
+test('duration snapshots are absolute, bounded, monotonic, mode gated and cannot modify a closed attempt', () => {
+  let state = quizState(); state = send(state, 'DURATION_SNAPSHOT', { elapsedMs: 0 });
+  assert.equal(state.attempts[0].elapsedMs, 0); assert.equal(S.validateSnapshot(state), true);
+  state = send(state, 'DURATION_SNAPSHOT', { elapsedMs: 1234.75 });
+  for (const elapsedMs of [1234.75, 0, -1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '2000']) assert.equal(send(state, 'DURATION_SNAPSHOT', { elapsedMs }), state);
+  assert.equal(send(state, 'DURATION_SNAPSHOT', { elapsedMs: 2000, token: 'stale' }), state);
+  const practice = guided(); assert.equal(send(practice, 'DURATION_SNAPSHOT', { elapsedMs: 100 }), practice);
+  state = finish(state); assert.equal(send(state, 'DURATION_SNAPSHOT', { elapsedMs: 2000 }), state);
+  assert.equal(state.attempts[0].elapsedMs, 1234.75);
+});
+test('v3 rejects unknown modes, invalid timing and stored ink while v2 keeps selected positions without timing', () => {
+  const state = quizState(); assert.equal(S.validateSnapshot(state), true);
+  for (const mutate of [v => delete v.mode, v => v.mode = 'exam', v => v.mode = 'practice', v => v.attempts[0].elapsedMs = -1, v => v.attempts[0].elapsedMs = Infinity, v => delete v.attempts[0].elapsedMs, v => v.attempts[0].elapsedMs = '1', v => v.attempts[0].help.push({ kind: 'outline', strokeIndex: 0, at: 1 }), v => v.ink = [], v => v.attempts[0].drawnPath = {}, v => v.active.phase = 'guided']) {
+    const broken = structuredClone(state); mutate(broken); assert.equal(S.validateSnapshot(broken), false);
+  }
+  const practice = guided(); const broken = structuredClone(practice); broken.attempts[0].elapsedMs = 0; assert.equal(S.validateSnapshot(broken), false);
+  const legacy = S.createSession({ id: 'v2', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [2] }] }); legacy.version = 2; delete legacy.mode;
+  const raw = JSON.stringify(legacy); assert.equal(S.validateSnapshot(legacy), true); assert.equal(S.summarize(legacy)[0].index, 2); assert.equal(S.summarize(legacy)[0].elapsedMs, null); assert.equal(JSON.stringify(legacy), raw);
 });

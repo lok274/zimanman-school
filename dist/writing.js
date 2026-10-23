@@ -35,6 +35,7 @@
   // Hanzi Writer keeps document listeners, so each stable target owns one engine.
   const engines = new WeakMap();
   function mount(element, character, data, options) {
+    const quiz = options.phase === 'quiz';
     let alive = true, suspended = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
     const size = Math.round(element.getBoundingClientRect().width) || 360;
     let engine = engines.get(element);
@@ -50,12 +51,32 @@
       engines.set(element, engine);
     }
     const writer = engine.writer;
+    if (!quiz || engine.inkToken !== options.token) { engine.inkToken = quiz ? options.token : null; engine.ink = []; }
+    const ink = engine.ink;
+    function fail(error) {
+      if (!alive || suspended) return;
+      suspended = true; writer.cancelQuiz(); element.style.visibility = 'hidden';
+      if (options.onError) options.onError(error);
+    }
     element.style.visibility = 'hidden';
     const ns = 'http://www.w3.org/2000/svg';
     const overlay = document.createElementNS(ns, 'svg'); overlay.setAttribute('class', 'start-overlay'); overlay.setAttribute('aria-hidden', 'true');
     const group = document.createElementNS(ns, 'g'); overlay.append(group);
     const dot = document.createElementNS(ns, 'circle'); dot.setAttribute('r', '16'); dot.setAttribute('fill', '#bf6c36'); dot.setAttribute('stroke', '#fffaf0'); dot.setAttribute('stroke-width', '7'); group.append(dot); element.append(overlay);
-    let startVisible = options.phase === 'guided';
+    const inkGroup = document.createElementNS(ns, 'g'); group.append(inkGroup);
+    function drawInk() {
+      inkGroup.replaceChildren();
+      ink.forEach(points => {
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', points.map((point, index) => (index ? 'L' : 'M') + point.x + ' ' + point.y).join(' '));
+        path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#214b3b'); path.setAttribute('stroke-width', '8');
+        path.setAttribute('vector-effect', 'non-scaling-stroke'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
+        inkGroup.append(path);
+      });
+    }
+    drawInk();
+    const help = quiz ? [] : options.help || [];
+    let startVisible = options.phase === 'guided' || help.length > 0;
     function placeStart() {
       const n = Math.round(element.getBoundingClientRect().width) || size;
       overlay.setAttribute('viewBox', '0 0 ' + n + ' ' + n);
@@ -67,22 +88,31 @@
     placeStart();
     engine.ready = engine.ready.then(async () => {
       if (!alive) return;
+      if (quiz && ink.length !== currentStroke) throw new Error('原有筆跡未能還原，請重新試一次。');
       engine.data = data;
       await writer.setCharacter(character);
       if (!alive) return;
+      await Promise.all(Object.entries({ strokeColor: '#214b3b', radicalColor: '#214b3b', outlineColor: '#d7ddd4', highlightColor: '#ba642d' }).map(([key, color]) => writer.updateColor(key, quiz ? 'rgba(33,75,59,0)' : color, { duration: 0 })));
+      if (!alive) return;
       await Promise.all([writer.hideCharacter({ duration: 0 }), writer.hideOutline({ duration: 0 })]);
       if (!alive) return;
-      if (options.phase === 'guided') await writer.showOutline({ duration: 0 });
+      if (options.phase === 'guided' || help.some(item => item.kind === 'outline')) await writer.showOutline({ duration: 0 });
       if (!alive) return;
       writer.updateDimensions({ width: size, height: size, padding: 24 }); placeStart();
-      if (!suspended && ['guided', 'recall'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke,
-        onCorrectStroke: event => { if (!alive) return; currentStroke = event.strokeNum + 1; placeStart(); options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
-        onMistake: event => { if (alive) options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); },
-        onComplete: () => { if (alive) options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() }); }
+      if (!suspended && ['guided', 'recall', 'quiz'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke,
+        onCorrectStroke: event => { if (!alive || suspended) return;
+          if (quiz) {
+            const points = event.drawnPath && event.drawnPath.points;
+            if (event.strokeNum !== currentStroke || !Array.isArray(points) || points.length < 2 || points.length > 16384 || points.some(point => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 8192 || Math.abs(point.y) > 8192)) { fail(new Error('筆跡資料無效，請重新試一次。')); return; }
+            ink.push(points.map(point => ({ x: point.x, y: point.y }))); drawInk();
+          }
+          currentStroke = event.strokeNum + 1; placeStart(); options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
+        onMistake: event => { if (alive && !suspended) options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); },
+        onComplete: () => { if (alive && !suspended) options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() }); }
       });
-      if (alive) element.style.visibility = '';
-    });
-    function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }); }
+      if (alive && !suspended) { element.style.visibility = ''; if (options.onReady) options.onReady(); }
+    }).catch(fail);
+    function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }).catch(fail); }
     const observer = new ResizeObserver(() => {
       if (!alive) return;
       const n = Math.round(element.getBoundingClientRect().width);
@@ -106,7 +136,7 @@
         options.onDemoState && options.onDemoState('playing');
       },
       showHelp(kind) {
-        if (!alive) return;
+        if (quiz || !alive) return;
         ready(() => {
           if (kind === 'outline') writer.showOutline({ duration: 0 });
           startVisible = true; placeStart();

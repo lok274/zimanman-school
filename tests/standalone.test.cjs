@@ -10,7 +10,7 @@ const { createHash } = require('node:crypto');
 
 test('page asset URLs change when the application or stylesheet changes', () => {
   const dist = path.join(__dirname, '..', 'dist'), html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
-  for (const file of ['app.js', 'styles.css']) {
+  for (const file of ['app.js', 'session.js', 'writing.js', 'styles.css']) {
     const version = createHash('sha256').update(fs.readFileSync(path.join(dist, file), 'utf8').replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
     assert(html.includes(file + '?v=' + version), file + ' URL must be ' + file + '?v=' + version);
   }

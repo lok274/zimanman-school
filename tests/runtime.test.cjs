@@ -35,7 +35,7 @@ class Node {
   emit(name, event = {}) { (this.listeners[name] || []).forEach(fn => fn({ preventDefault() {}, ...event })); }
   click() { if (!this.disabled) this.emit('click'); }
   showModal() { this.open = true; }
-  close() { this.open = false; }
+  close() { this.open = false; this.emit('close'); }
   animate(keyframes, options) { const animation = { keyframes, options, cancelled: false, cancel() { this.cancelled = true; } }; this.animations.push(animation); return animation; }
   getBoundingClientRect() { return { width: 360, height: 360, left: 0, top: 0 }; }
 }
@@ -62,12 +62,12 @@ function environment(html = '<html><body><div id="writer"></div></body></html>')
   document.querySelector = selector => document.querySelectorAll(selector)[0];
   document.createTreeWalker = node => { const nodes = walk(node).filter(item => item.nodeType === 3); let index = 0; return { nextNode: () => nodes[index++] || null }; };
   const store = new Map(), voices = { current: [], changed: null, spoken: [], cancels: 0 };
-  const storage = { get length() { return store.size; }, key: i => [...store.keys()][i], getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value) };
+  const storage = { get length() { return store.size; }, key: i => [...store.keys()][i], getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) };
   const observers = new Set(), windowListeners = {}, motion = { reduced: false }; let nextId = 0;
   document.hidden = false;
   const context = vm.createContext({ document, console, setTimeout, clearTimeout, performance, AbortController, NodeFilter: { SHOW_TEXT: 4 },
     localStorage: storage, sessionStorage: storage, crypto: { randomUUID: () => 'runtime-test-' + ++nextId },
-    ResizeObserver: class { observe() { observers.add(this); } disconnect() { observers.delete(this); } },
+    ResizeObserver: class { constructor(callback) { this.callback = callback; } observe() { observers.add(this); } disconnect() { observers.delete(this); } },
     speechSynthesis: { getVoices: () => voices.current, cancel() { voices.cancels++; }, speak(utterance) { if (voices.fail) throw new Error("speech blocked"); voices.spoken.push(utterance); }, addEventListener(_name, fn) { voices.changed = fn; } },
     SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } }, matchMedia: () => ({ matches: motion.reduced }), addEventListener(name, fn) { (windowListeners[name] ||= []).push(fn); }
   });
@@ -92,7 +92,7 @@ test('the six word cues use photos with empty alt text and retain SVG fallback',
   const e = environment(source('index.html'));
   e.context.BishunSession = { ...S, createSession: options => S.createSession({ ...options, entries: assigned(words.join('\n')) }) };
   e.context.BishunWriting = {};
-  vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context);
+  vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context); e.$('start-practice').click();
   const photos = walk(e.$('word-cards')).filter(node => node.nodeName === 'img');
   assert.equal(photos.length, 6);
   assert.equal(new Set(photos.map(image => image.attributes.src)).size, 6);
@@ -106,19 +106,16 @@ test('the six word cues use photos with empty alt text and retain SVG fallback',
     let initial = S.createSession({ id: 'photo-practice', entries: assigned(word), startedAt: 1 });
     for (const event of [{ type: 'CHOOSE_WORD', wordId: 'w0' }, { type: 'DATA_READY', strokeCount: 1 }]) initial = S.transition(initial, { at: 2, token: initial.active.token, newToken: 'watch', ...event });
     practice.context.BishunSession = { ...S, createSession: () => structuredClone(initial) }; practice.context.BishunWriting = {};
-    vm.runInContext(source('content.js'), practice.context); vm.runInContext(source('app.js'), practice.context);
+    vm.runInContext(source('content.js'), practice.context); vm.runInContext(source('app.js'), practice.context); practice.$('start-practice').click();
     const cue = practice.$('semantic-cue').childNodes[0];
     assert.equal(cue.nodeName, words.includes(word) ? 'img' : 'svg');
     if (cue.nodeName === 'img') { assert.equal(cue.attributes.alt, ''); cue.emit('error'); assert.equal(practice.$('semantic-cue').childNodes[0].nodeName, 'svg'); }
   }
 });
-test('recall conceals generic targets in live labels and late voice messages, then restores labels', () => {
+test('recall conceals generic targets in live labels and late voice messages, then restores labels', async () => {
   for (const character of ['一', '字', '我', '機']) {
-    const e = environment(source('index.html')), initial = recallSnapshot(character);
-    e.context.BishunSession = { ...S, createSession: () => structuredClone(initial) };
-    e.context.BishunWriting = {};
-    e.context.BishunContent = { words: [character], cue: () => ['例子', 'M1 1L2 2'] };
-    vm.runInContext(source('app.js'), e.context);
+    const e = await feedbackApp(character, 1); e.complete(); e.$('main-next').click();
+    const initial = e.snapshot();
     assert(!visibleText(e.document).includes(character), character + ' concealed at recall render');
     e.$('speak').click();
     assert(!visibleText(e.document).includes(character), character + ' concealed after missing-voice fallback');
@@ -138,7 +135,7 @@ test('skipped word card shows pending practice instead of a completion stamp', (
   e.context.BishunSession = { ...S, createSession: () => structuredClone(initial) };
   e.context.BishunWriting = {};
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
-  vm.runInContext(source('app.js'), e.context);
+  vm.runInContext(source('app.js'), e.context); e.$('start-practice').click();
   assert(e.$('word-cards').textContent.includes('有字待練'));
   assert(!e.$('word-cards').textContent.includes('完成今次練習'));
 });
@@ -149,7 +146,7 @@ test('history counts each character once while retaining assisted and independen
   e.store.set('bishun-school:v1:' + snapshot.id, JSON.stringify(snapshot));
   e.context.BishunSession = S; e.context.BishunWriting = {};
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
-  vm.runInContext(source('app.js'), e.context);
+  vm.runInContext(source('app.js'), e.context); e.$('start-practice').click();
   e.$('teacher-open').click();
   const history = e.$('local-history').textContent;
   assert(history.includes('自己完成 1 · 有提示完成 0 · 跳過 0 · 待練 0'));
@@ -163,7 +160,7 @@ test('recent history remains discoverable after more than 500 existing storage k
   e.store.set('bishun-school:v1:' + latest.id, JSON.stringify(latest));
   e.context.BishunSession = S; e.context.BishunWriting = {};
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
-  vm.runInContext(source('app.js'), e.context);
+  vm.runInContext(source('app.js'), e.context); e.$('start-practice').click();
   e.$('teacher-open').click();
   assert(e.$('local-history').textContent.includes('機'));
 });
@@ -177,7 +174,7 @@ async function feedbackApp(character = '粗', strokeCount = 2) {
     loadCharacter: () => Promise.resolve({ strokes: Array(strokeCount).fill('M1 1L2 2') }),
     mount(_element, _character, _data, options) { e.mounts.push(options); return { dispose() {}, pause() {}, suspend() {}, showHelp() {} }; }
   };
-  vm.runInContext(source('app.js'), e.context);
+  vm.runInContext(source('app.js'), e.context); e.$('start-practice').click();
   e.snapshot = () => [...e.store.values()].map(value => { try { return JSON.parse(value); } catch { return null; } }).find(value => value && value.active);
   e.send = (type, extra = {}, mount = e.mounts.at(-1)) => mount.onEvent({ type, token: mount.token, ...extra });
   e.complete = () => { for (let index = e.snapshot().active.currentStroke; index < strokeCount; index++) e.send('STROKE_ACCEPTED', { strokeIndex: index }); e.send('WRITING_COMPLETE'); };
@@ -289,9 +286,9 @@ test('returning during loading aborts the request and ignores its late result', 
   const e = environment(source('index.html')); let resolveData, loadSignal;
   e.context.BishunSession = S; e.context.BishunContent = { words: ['粗'], cue: () => ['例子', 'M1 1L2 2'] };
   e.context.BishunWriting = { loadCharacter(_character, signal) { loadSignal = signal; return new Promise(resolve => { resolveData = resolve; }); } };
-  vm.runInContext(source('app.js'), e.context);
+  vm.runInContext(source('app.js'), e.context); e.$('start-practice').click();
   assert.equal(e.$('previous-step').hidden, true); e.$('word-cards').childNodes[0].click();
-  assert.equal(e.$('previous-step').hidden, false); e.$('previous-step').click(); assert(loadSignal.aborted); assert.equal(e.$('previous-step').hidden, true);
+  assert.equal(e.$('previous-step').hidden, false); await waitFor(() => loadSignal); e.$('previous-step').click(); assert(loadSignal.aborted); assert.equal(e.$('previous-step').hidden, true);
   resolveData({ strokes: ['M1 1L2 2'] }); await new Promise(resolve => setImmediate(resolve));
   const snapshot = [...e.store.values()].map(value => { try { return JSON.parse(value); } catch { return null; } }).find(value => value && value.active);
   assert.equal(snapshot.active.phase, 'choose-word'); assert.equal(snapshot.attempts.length, 0); assert.equal(e.$('feedback-icon').animations.length, 0);
@@ -347,7 +344,7 @@ function chooseCharacters(e, values) {
 test('fourth assigned character appears alone while its original word supplies the photo, speech and records', async () => {
   const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃\n鬍鬚\n密\n剪草機\n推來推去'; e.$('validate-words').click();
   const content = {}; vm.runInNewContext(source('content.js'), content); e.context.BishunContent.photos = content.BishunContent.photos;
-  chooseCharacters(e, ['w5:3']); assert.equal(e.$('teacher-selection-total').textContent, '已揀 1 個字 · 1 項詞語'); e.$('apply-words').click();
+  chooseCharacters(e, ['w5:3']); assert.equal(e.$('teacher-selection-total').textContent, '已揀 1 個字 · 1 項詞語'); e.$('apply-words').click(); e.$('start-practice').click();
   const sessionId = e.store.get('bishun-school:v1:current'), snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + sessionId));
   assert.equal(snapshot().entries[0].text, '推來推去'); assert.equal(snapshot().occurrences.length, 1); assert.equal(snapshot().occurrences[0].id, 'w0:3');
   assert.equal(e.$('word-cards').textContent, '去');
@@ -374,7 +371,7 @@ test('fourth assigned character appears alone while its original word supplies t
 });
 test('nonconsecutive repeated positions keep their next character on return and their final character when done', async () => {
   const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '推來推去\n粗'; e.$('validate-words').click();
-  chooseCharacters(e, ['w0:0', 'w0:2', 'w0:3', 'w1:0']); e.$('apply-words').click();
+  chooseCharacters(e, ['w0:0', 'w0:2', 'w0:3', 'w1:0']); e.$('apply-words').click(); e.$('start-practice').click();
   const sessionId = e.store.get('bishun-school:v1:current'), snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + sessionId));
   assert.deepEqual(snapshot().occurrences.map(item => item.id), ['w0:0', 'w0:2', 'w0:3', 'w1:0']);
   const targetName = () => e.$('word-cards').childNodes[0].childNodes[0].textContent;
@@ -496,7 +493,7 @@ test('legacy history remains full scope and interrupted v1 work is closed withou
   const e = environment(source('index.html')), legacy = require('./fixtures/session-v1.json');
   e.store.set('bishun-school:v1:' + legacy.id, JSON.stringify(legacy)); e.store.set('bishun-school:v1:current', legacy.id);
   e.context.BishunSession = S; e.context.BishunWriting = {}; e.context.BishunContent = { words: ['粗'], cue: () => ['例子', 'M1 1L2 2'] };
-  vm.runInContext(source('app.js'), e.context); e.$('teacher-open').click();
+  vm.runInContext(source('app.js'), e.context); e.$('start-practice').click(); e.$('teacher-open').click();
   const closed = JSON.parse(e.store.get('bishun-school:v1:' + legacy.id)); assert.equal(closed.version, 1); assert.equal(closed.occurrences.length, 5); assert.equal(closed.attempts.at(-1).outcome, 'abandoned');
   assert(e.$('local-history').textContent.includes('自己完成 0 · 有提示完成 1 · 跳過 0 · 待練 4')); assert(e.$('local-history').textContent.includes('推來推去 第 3 字「推」待練'));
 });
@@ -525,4 +522,172 @@ test('pinned vendor keeps one pointer-end listener pair across repeated mounts a
   assert.equal(e.observers.size, 0);
   assert.equal(element.style.visibility, 'hidden');
   assert.equal(e.document.listeners.mouseup.length + e.document.listeners.touchend.length, 2);
+});
+async function quizApp({ autoReady = true, failMount = false } = {}) {
+  const e = environment(source('index.html')); e.mounts = []; e.clock = 100;
+  e.context.performance = { now: () => e.clock };
+  e.context.BishunSession = S; e.context.HanziWriter = {};
+  e.context.BishunContent = { words: ['推來推去'], photos: { '推來推去': 'images/push-block.webp' }, cue: () => ['例子', 'M1 1L2 2'] };
+  e.context.BishunWriting = {
+    loadCharacter: () => Promise.resolve({ strokes: ['M1 1L2 2', 'M1 3L2 3'] }),
+    mount(_element, _character, _data, options) {
+      e.mounts.push(options);
+      if (failMount) throw new Error('tool unavailable');
+      if (autoReady) queueMicrotask(options.onReady);
+      return { dispose() {}, pause() {}, suspend() {}, showHelp() { assert.fail('quiz cannot request hints'); } };
+    }
+  };
+  vm.runInContext(source('app.js'), e.context);
+  e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  e.send = (type, extra = {}, mount = e.mounts.at(-1)) => mount.onEvent({ type, token: mount.token, ...extra });
+  e.enter = async () => { e.$('start-quiz').click(); e.$('word-cards').childNodes[0].click(); await waitFor(() => e.mounts.length > 0); };
+  return e;
+}
+test('boot creates no phantom history and both home modes share only the applied teacher selection', async () => {
+  const e = await quizApp(); assert.equal(e.store.size, 0); assert.equal(e.$('home-view').hidden, false);
+  e.$('teacher-open').click(); chooseCharacters(e, ['w0:2']); e.$('teacher-close').click();
+  await e.enter(); assert.equal(e.snapshot().occurrences[0].index, 0, 'cancel discards draft');
+  assert.equal(e.snapshot().mode, 'quiz'); e.document.querySelector('.brand').click(); assert.equal(e.$('home-view').hidden, false);
+  e.$('teacher-open').click(); chooseCharacters(e, ['w0:2']); e.$('apply-words').click(); assert.equal(e.$('home-view').hidden, false);
+  e.$('start-practice').click(); const practice = e.snapshot(); assert.equal(practice.mode, 'practice'); assert.equal(practice.occurrences[0].index, 2);
+  e.$('choice-summary').click(); e.$('start-quiz').click(); const quiz = e.snapshot(); assert.equal(quiz.mode, 'quiz'); assert.notEqual(quiz.id, practice.id); assert.deepEqual(quiz.occurrences, practice.occurrences);
+  e.$('teacher-open').click(); assert(e.$('local-history').textContent.includes('測驗')); assert(e.$('local-history').textContent.includes('練習'));
+});
+test('quiz emits immediate X and completion O without hints, ticks, outlines or an automatic next', async () => {
+  const e = await quizApp(); await e.enter();
+  assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.$('word-title').textContent, '推'); assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, 'images/push-block.webp');
+  assert(e.document.querySelector('.step-rail').hidden); assert(e.$('demo-controls').hidden); assert(e.$('hint-outline').hidden); assert(e.$('hint-stroke').hidden); assert(e.$('main-next').hidden);
+  for (let i = 0; i < 3; i++) e.send('STROKE_MISSED', { strokeIndex: 0 });
+  assert.equal(e.$('quiz-mark').hidden, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'miss'); assert.equal(e.snapshot().attempts[0].help.length, 0);
+  e.$('hint-outline').click(); e.$('hint-stroke').click(); assert.equal(e.snapshot().attempts[0].help.length, 0);
+  e.$('writer').emit('pointerdown'); assert(e.$('quiz-mark').hidden);
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.$('stroke-progress').textContent, '');
+  e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
+  assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete'); assert.equal(e.$('quiz-mark').hidden, false); assert.equal(e.snapshot().active.phase, 'character-complete');
+  assert(!visibleText(e.document).includes('秒')); const attempts = e.snapshot().attempts.length;
+  e.$('retry-writing').click(); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert(e.$('quiz-mark').hidden);
+  e.$('teacher-open').click(); e.$('teacher-skip').click(); assert(e.$('quiz-mark').hidden); assert.equal(e.snapshot().active.completedPhase, 'skipped');
+  e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(!e.$('summary-view').textContent.includes('秒'));
+});
+test('quiz clock counts only ready foreground writing and checkpoints exact milliseconds across overlapping pauses', async () => {
+  const e = await quizApp({ autoReady: false }); await e.enter();
+  assert.equal(e.snapshot().attempts[0].elapsedMs, null); e.clock = 5000; e.mounts.at(-1).onReady(); assert.equal(e.snapshot().attempts[0].elapsedMs, 0);
+  e.clock = 5123.5; e.$('rest').click(); assert.equal(e.snapshot().attempts[0].elapsedMs, 123.5);
+  const stale = e.mounts[0]; e.clock = 6000; stale.onReady(); e.send('STROKE_ACCEPTED', { strokeIndex: 0 }, stale); assert.equal(e.snapshot().active.currentStroke, 0);
+  e.document.hidden = true; e.document.emit('visibilitychange'); e.$('resume').click(); assert.equal(e.mounts.length, 1);
+  e.clock = 10000; e.document.hidden = false; e.document.emit('visibilitychange'); assert.equal(e.mounts.length, 2);
+  stale.onReady(); e.clock = 15000; e.mounts[1].onReady(); e.clock = 15200; e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].elapsedMs, 323.5);
+  e.clock = 19000; e.document.hidden = true; e.document.emit('visibilitychange'); e.$('teacher-close').click(); assert.equal(e.mounts.length, 2);
+  e.clock = 20000; e.document.hidden = false; e.document.emit('visibilitychange'); e.mounts[2].onReady();
+  e.clock = 20300; e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.snapshot().attempts[0].elapsedMs, 623.5);
+  e.clock = 20400; e.emitWindow('pagehide'); assert.equal(e.snapshot().attempts[0].elapsedMs, 723.5);
+  e.clock = 30000; e.emitWindow('pagehide'); assert.equal(e.snapshot().attempts[0].elapsedMs, 723.5);
+  e.emitWindow('pageshow'); e.mounts[3].onReady(); e.clock = 30500; e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE'); assert.equal(e.snapshot().attempts[0].elapsedMs, 1223.5);
+  e.clock = 40000; e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].elapsedMs, 1223.5); assert(e.$('local-history').textContent.includes('1.2 秒'));
+  e.$('teacher-close').click(); assert(!visibleText(e.document).includes('秒')); e.document.querySelector('.brand').click();
+  const closed = [...e.store.values()].map(value => { try { return JSON.parse(value); } catch { return null; } }).find(value => value && value.mode === 'quiz'); assert.equal(closed.attempts[0].elapsedMs, 1223.5); assert.equal(closed.active.phase, 'summary');
+});
+test('mount failures are recoverable and stale same-token callbacks cannot ready a later mount', async () => {
+  const e = await quizApp({ failMount: true }); await e.enter(); assert.equal(e.snapshot().active.phase, 'unavailable'); assert.equal(e.snapshot().attempts[0].elapsedMs, null);
+  const failed = e.mounts[0]; e.context.BishunWriting.mount = (_el, _char, _data, options) => { e.mounts.push(options); queueMicrotask(options.onReady); return { dispose() {}, pause() {} }; };
+  e.$('retry-data').click(); await waitFor(() => e.snapshot().active.phase === 'quiz'); await new Promise(resolve => setImmediate(resolve));
+  failed.onReady(); failed.onError(); assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.snapshot().attempts.at(-1).elapsedMs, 0);
+  assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(S.validateSnapshot(e.snapshot()), true);
+  e.context.localStorage.setItem = () => { throw new Error('quota'); }; e.send('STROKE_MISSED', { strokeIndex: 0 }); assert.equal(e.$('storage-notice').hidden, false); assert.equal(e.$('quiz-mark').hidden, false);
+});
+test('pinned vendor retains original accepted ink through remount and resize while keeping canonical quiz strokes transparent', async () => {
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const W = e.context.BishunWriting, element = e.$('writer'), events = [];
+  const data = { strokes: ['M100 500L900 500Z', 'M100 300L900 300Z'], medians: [[[100, 500], [900, 500]], [[100, 300], [900, 300]]], radStrokes: [1] };
+  let ready = 0, size = 360; element.getBoundingClientRect = () => ({ width: size, height: size, left: 0, top: 0 });
+  const mount = (token, currentStroke, phase = 'quiz') => W.mount(element, '二', data, { token, currentStroke, phase, onEvent: event => events.push(event), onReady: () => ready++ });
+  const paths = () => walk(element).filter(node => node.nodeName === 'path');
+  const ink = () => paths().filter(node => node.attributes['vector-effect'] === 'non-scaling-stroke');
+  const draw = y => {
+    const svg = element.childNodes.find(node => node.nodeName === 'svg'), t = e.context.HanziWriter.getScalingTransform(size, size, 24);
+    const point = x => ({ clientX: t.x + x * t.scale, clientY: size - t.y - y * t.scale });
+    svg.emit('mousedown', point(110)); for (let x = 210; x <= 910; x += 100) svg.emit('mousemove', point(x)); e.document.emit('mouseup');
+  };
+  let handle = mount('quiz-ink', 0); await waitFor(() => ready === 1); draw(510); await waitFor(() => events.length === 1);
+  assert.equal(events[0].type, 'STROKE_ACCEPTED'); assert.equal(ink().length, 1); const original = ink()[0].attributes.d;
+  assert(original.includes('510')); assert.notEqual(original, data.strokes[0]); assert.equal(ink()[0].attributes['stroke-width'], '8');
+  for (const path of paths().filter(node => node.attributes['clip-path'])) assert.equal(path.attributes.stroke, 'rgba(33,75,59,0)');
+  size = 400; [...e.observers][0].callback(); assert.equal(ink()[0].attributes.d, original);
+  assert(walk(element).some(node => node.attributes.transform === e.context.HanziWriter.getScalingTransform(400, 400, 24).transform));
+  handle.showHelp('outline'); handle.showHelp('stroke'); handle.play(true); handle.nextStroke(); handle.dispose();
+  size = 420; handle = mount('quiz-ink', 1); await waitFor(() => ready === 2); assert.equal(ink()[0].attributes.d, original); assert.equal(ink().length, 1);
+  assert(walk(element).some(node => node.attributes.transform === e.context.HanziWriter.getScalingTransform(420, 420, 24).transform));
+  draw(310); await waitFor(() => events.some(event => event.type === 'WRITING_COMPLETE')); assert.equal(ink().length, 2);
+  for (const path of paths().filter(node => node.attributes['clip-path'])) assert.equal(path.attributes.stroke, 'rgba(33,75,59,0)');
+  handle.dispose(); handle = mount('retry-ink', 0); await waitFor(() => ready === 3); assert.equal(ink().length, 0);
+  handle.dispose(); handle = mount('practice', 0, 'guided'); await waitFor(() => ready === 4);
+  const restored = paths().filter(node => node.attributes['clip-path']).map(node => node.attributes.stroke);
+  assert(restored.includes('rgba(33,75,59,1)')); assert(restored.includes('rgba(215,221,212,1)')); assert(restored.includes('rgba(186,100,45,1)')); assert(!restored.includes('rgba(33,75,59,0)'));
+  assert.equal(e.document.listeners.mouseup.length, 1); assert.equal(e.document.listeners.touchend.length, 1); handle.dispose();
+});
+test('completed quiz keeps the same board and circle across rest, teacher and background without restarting time', async () => {
+  const e = await quizApp(); await e.enter(); e.clock = 350;
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
+  const count = e.mounts.length, elapsed = e.snapshot().attempts[0].elapsedMs;
+  e.$('rest').click(); e.clock = 1000; e.$('resume').click(); e.$('teacher-open').click(); e.clock = 2000; e.$('teacher-close').click();
+  e.document.hidden = true; e.document.emit('visibilitychange'); e.clock = 3000; e.document.hidden = false; e.document.emit('visibilitychange');
+  assert.equal(e.mounts.length, count); assert.equal(e.snapshot().attempts[0].elapsedMs, elapsed); assert.equal(e.snapshot().active.phase, 'character-complete');
+  assert.equal(e.$('quiz-mark').hidden, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete');
+});
+test('retry, previous and home retain exact abandoned time and cold reload never extrapolates it', async () => {
+  const e = await quizApp(); await e.enter(); const id = e.snapshot().id;
+  e.clock = 250; e.$('retry-writing').click(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(e.snapshot().attempts[0].elapsedMs, 150); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned');
+  e.clock = 450; e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word'); assert.equal(e.snapshot().attempts[1].elapsedMs, 200);
+  e.$('word-cards').childNodes[0].click(); await waitFor(() => e.snapshot().active.phase === 'quiz'); e.clock = 550;
+  e.document.querySelector('.brand').click(); const closed = JSON.parse(e.store.get('bishun-school:v1:' + id));
+  assert.equal(closed.attempts[2].elapsedMs, 100); assert.equal(S.summarize(closed)[0].elapsedMs, 450);
+  const reload = environment(source('index.html')); const interrupted = structuredClone(closed); interrupted.active = { ...closed.active, phase: 'quiz', token: interrupted.attempts[2].id, attemptId: interrupted.attempts[2].id, occurrenceId: 'w0:0' }; delete interrupted.endedAt;
+  interrupted.attempts[2].outcome = 'active'; delete interrupted.attempts[2].endedAt;
+  reload.store.set('bishun-school:v1:' + id, JSON.stringify(interrupted)); reload.store.set('bishun-school:v1:current', id);
+  reload.context.BishunSession = S; reload.context.BishunWriting = {}; reload.context.BishunContent = e.context.BishunContent;
+  vm.runInContext(source('app.js'), reload.context); const saved = JSON.parse(reload.store.get('bishun-school:v1:' + id));
+  assert.equal(saved.active.phase, 'summary'); assert.equal(saved.attempts[2].elapsedMs, 100); assert.equal(saved.version, 3); assert.equal(reload.$('home-view').hidden, false);
+});
+test('same-token loading restart ignores old failure and only accepts the new request', async () => {
+  const e = await quizApp(); const requests = [];
+  e.context.BishunWriting.loadCharacter = () => new Promise((resolve, reject) => requests.push({ resolve, reject }));
+  e.$('start-quiz').click(); e.$('word-cards').childNodes[0].click(); await waitFor(() => requests.length === 1);
+  e.$('rest').click(); e.$('resume').click(); await waitFor(() => requests.length === 2);
+  requests[0].reject(new Error('old abort')); await new Promise(resolve => setImmediate(resolve)); assert.equal(e.snapshot().active.phase, 'loading');
+  requests[1].resolve({ strokes: ['M1 1L2 2'] }); await waitFor(() => e.snapshot().active.phase === 'quiz'); assert.equal(e.snapshot().attempts.length, 1);
+});
+test('pinned vendor mount queue recovers after setup rejection and only latest mount announces readiness', async () => {
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const prototype = e.context.HanziWriter.prototype, original = prototype.setCharacter;
+  let first = true;
+  prototype.setCharacter = function(character) { if (first) { first = false; return Promise.reject(new Error('setup failed')); } return original.call(this, character); };
+  const data = { strokes: ['M100 500L900 500Z'], medians: [[[100, 500], [900, 500]]] }, ready = [], errors = [];
+  const options = token => ({ phase: 'quiz', token, onEvent() {}, onReady: () => ready.push(token), onError: error => errors.push(error.message) });
+  const W = e.context.BishunWriting, element = e.$('writer');
+  let handle = W.mount(element, '一', data, options('failed')); await waitFor(() => errors.length === 1); assert.deepEqual(ready, []); handle.dispose();
+  handle = W.mount(element, '一', data, options('stale')); handle.dispose();
+  handle = W.mount(element, '一', data, options('current')); await waitFor(() => ready.length === 1); assert.deepEqual(ready, ['current']); handle.dispose();
+});
+test('practice recall keeps its recorded outline assistance after teacher and rest remounts', async () => {
+  const e = await feedbackApp(); e.complete(); e.$('main-next').click();
+  e.$('teacher-open').click(); e.$('teacher-close').click();
+  assert(e.mounts.at(-1).help.some(item => item.kind === 'outline')); const count = e.snapshot().attempts.at(-1).help.length;
+  e.$('rest').click(); e.$('resume').click(); assert(e.mounts.at(-1).help.some(item => item.kind === 'outline')); assert.equal(e.snapshot().attempts.at(-1).help.length, count);
+});
+test('writer rejects malformed accepted ink and missing remount ink as recoverable tool failures', async () => {
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const prototype = e.context.HanziWriter.prototype, originalQuiz = prototype.quiz; let callbacks;
+  prototype.quiz = function(options) { callbacks = options; return originalQuiz.call(this, options); };
+  const W = e.context.BishunWriting, data = { strokes: ['M100 500L900 500Z'], medians: [[[100, 500], [900, 500]]] }, errors = [], events = [];
+  let ready = 0, handle;
+  for (const points of [null, [{ x: NaN, y: 2 }, { x: 4, y: 5 }], [{ x: 9000, y: 2 }, { x: 4, y: 5 }], Array(16385).fill({ x: 1, y: 2 })]) {
+    const count = ready, errorCount = errors.length;
+    handle = W.mount(e.$('writer'), '一', data, { phase: 'quiz', token: 'bad-' + count, onReady: () => ready++, onError: error => errors.push(error), onEvent: event => events.push(event) });
+    await waitFor(() => ready > count); callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points } });
+    assert.equal(errors.length, errorCount + 1); assert.equal(events.length, 0); assert.equal(e.$('writer').style.visibility, 'hidden'); handle.dispose();
+  }
+  const errorCount = errors.length;
+  handle = W.mount(e.$('writer'), '一', data, { phase: 'quiz', token: 'missing', currentStroke: 1, onReady: () => assert.fail('missing ink cannot become ready'), onError: error => errors.push(error), onEvent: event => events.push(event) });
+  await waitFor(() => errors.length > errorCount); handle.dispose();
 });
