@@ -104,6 +104,36 @@ test('an expired unsaved request can be replaced and another tab cannot change t
   assert.equal(selected.draft.ownerCapability, other.draft.ownerCapability); assert.equal(selected.navigation[0][2], '/teacher');
 });
 
+test('pending creation locks the draft until a delayed expiry or success has settled', async () => {
+  let finish, attempts = 0;
+  const expired = () => response({ error: { code: 'EXPIRED', message: '班級已到期。' } }, false);
+  const e = boot({ fetch: async () => !attempts++ ? expired() : new Promise(resolve => { finish = resolve; }) });
+  await e.click('create');
+  const requestId = e.draft.requestId;
+  const retry = e.click('create');
+  e.click('new-class');
+  e.click('create');
+  assert.equal(e.draft.requestId, requestId, 'a pending retry must retain its draft');
+  assert.equal(e.calls.length, 2);
+  assert.equal(e.nodes.get('create').disabled, true); assert.equal(e.nodes.get('new-class').disabled, true);
+  finish(expired()); await retry;
+  assert.equal(e.nodes.get('create').disabled, false); assert.equal(e.nodes.get('new-class').disabled, false);
+  e.click('new-class');
+  const nextId = e.draft.requestId;
+  assert.notEqual(nextId, requestId);
+  const creating = e.click('create');
+  e.click('new-class');
+  e.click('create');
+  assert.equal(e.draft.requestId, nextId); assert.equal(e.calls.length, 3);
+  assert.equal(e.nodes.get('new-class').disabled, true);
+  finish(response(room)); await creating;
+  assert.equal(e.draft.requestId, nextId); assert.equal(e.draft.room.code, room.code);
+  assert.equal(JSON.parse(e.calls[2].options.body).requestId, nextId);
+  assert.equal(e.nodes.get('create').disabled, true); assert.equal(e.nodes.get('new-class').disabled, false);
+  e.click('new-class');
+  assert.notEqual(e.draft.requestId, nextId); assert.equal(e.draft.room, undefined);
+});
+
 test('a late teacher board response does not populate a newly selected class', async () => {
   let finish;
   const e = boot({ fetch: async url => url.endsWith('/teacher-board') ? new Promise(resolve => { finish = resolve; }) : response(room) });

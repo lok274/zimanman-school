@@ -46,13 +46,15 @@ async function request(path, options = {}) {
 function showRoom(room) { $('room').hidden = false; $('code').textContent = room.code; $('expiry').textContent = '到期時間：' + new Date(room.expiresAt).toLocaleString('zh-HK'); $('new-class').hidden = false; }
 if (draft?.room) showRoom(draft.room);
 $('new-class').addEventListener('click', () => {
+  if ($('new-class').disabled) return;
   const next = { requestId: crypto.randomUUID(), entries: draft.entries, ownerCapability: draft.ownerCapability };
   try { sessionStorage.setItem(storageKey, JSON.stringify(next)); }
   catch { $('status').textContent = '設定未能保存，請允許瀏覽器儲存資料後再試。'; return; }
   draft = next; $('room').hidden = true; $('new-class').hidden = true; $('board').replaceChildren(); $('create').disabled = false; $('status').textContent = '';
 });
 $('create').addEventListener('click', async () => {
-  $('create').disabled = true; $('status').textContent = '建立中…';
+  if ($('create').disabled) return;
+  $('create').disabled = true; $('new-class').disabled = true; $('status').textContent = '建立中…';
   try {
     try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); }
     catch { throw new Error('設定未能保存，請允許瀏覽器儲存資料後再試。'); }
@@ -61,7 +63,7 @@ $('create').addEventListener('click', async () => {
     try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { $('status').textContent = '已開班，請記低班級碼；此頁未能保存。'; return; }
     $('status').textContent = '班級已建立。將班級碼交畀同學。';
   } catch (error) { $('status').textContent = error.message; if (error.code === 'EXPIRED') $('new-class').hidden = false; }
-  finally { $('create').disabled = !!draft.room; }
+  finally { $('create').disabled = !!draft.room; $('new-class').disabled = false; }
 });
 $('refresh').addEventListener('click', async () => {
   $('refresh').disabled = true;
