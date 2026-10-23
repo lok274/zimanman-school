@@ -558,15 +558,15 @@ test('quiz emits immediate X and completion O without hints, ticks, outlines or 
   assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.$('word-title').textContent, '推'); assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, 'images/push-block.webp');
   assert(e.document.querySelector('.step-rail').hidden); assert(e.$('demo-controls').hidden); assert(e.$('hint-outline').hidden); assert(e.$('hint-stroke').hidden); assert(e.$('main-next').hidden);
   for (let i = 0; i < 3; i++) e.send('STROKE_MISSED', { strokeIndex: 0 });
-  assert.equal(e.$('quiz-mark').hidden, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'miss'); assert.equal(e.snapshot().attempts[0].help.length, 0);
+  assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'miss'); assert.equal(e.snapshot().attempts[0].help.length, 0);
   e.$('hint-outline').click(); e.$('hint-stroke').click(); assert.equal(e.snapshot().attempts[0].help.length, 0);
-  e.$('writer').emit('pointerdown'); assert(e.$('quiz-mark').hidden);
+  e.$('writer').emit('pointerdown'); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.$('stroke-progress').textContent, '');
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
-  assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete'); assert.equal(e.$('quiz-mark').hidden, false); assert.equal(e.snapshot().active.phase, 'character-complete');
+  assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete'); assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.snapshot().active.phase, 'character-complete');
   assert(!visibleText(e.document).includes('秒')); const attempts = e.snapshot().attempts.length;
-  e.$('retry-writing').click(); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert(e.$('quiz-mark').hidden);
-  e.$('teacher-open').click(); e.$('teacher-skip').click(); assert(e.$('quiz-mark').hidden); assert.equal(e.snapshot().active.completedPhase, 'skipped');
+  e.$('retry-writing').click(); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
+  e.$('teacher-open').click(); e.$('teacher-skip').click(); assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.snapshot().active.completedPhase, 'skipped');
   e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(!e.$('summary-view').textContent.includes('秒'));
 });
 test('quiz clock counts only ready foreground writing and checkpoints exact milliseconds across overlapping pauses', async () => {
@@ -593,7 +593,7 @@ test('mount failures are recoverable and stale same-token callbacks cannot ready
   e.$('retry-data').click(); await waitFor(() => e.snapshot().active.phase === 'quiz'); await new Promise(resolve => setImmediate(resolve));
   failed.onReady(); failed.onError(); assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.snapshot().attempts.at(-1).elapsedMs, 0);
   assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(S.validateSnapshot(e.snapshot()), true);
-  e.context.localStorage.setItem = () => { throw new Error('quota'); }; e.send('STROKE_MISSED', { strokeIndex: 0 }); assert.equal(e.$('storage-notice').hidden, false); assert.equal(e.$('quiz-mark').hidden, false);
+  e.context.localStorage.setItem = () => { throw new Error('quota'); }; e.send('STROKE_MISSED', { strokeIndex: 0 }); assert.equal(e.$('storage-notice').hidden, false); assert.equal('hidden' in e.$('quiz-mark').attributes, false);
 });
 test('pinned vendor retains original accepted ink through remount and resize while keeping canonical quiz strokes transparent', async () => {
   const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
@@ -632,7 +632,7 @@ test('completed quiz keeps the same board and circle across rest, teacher and ba
   e.$('rest').click(); e.clock = 1000; e.$('resume').click(); e.$('teacher-open').click(); e.clock = 2000; e.$('teacher-close').click();
   e.document.hidden = true; e.document.emit('visibilitychange'); e.clock = 3000; e.document.hidden = false; e.document.emit('visibilitychange');
   assert.equal(e.mounts.length, count); assert.equal(e.snapshot().attempts[0].elapsedMs, elapsed); assert.equal(e.snapshot().active.phase, 'character-complete');
-  assert.equal(e.$('quiz-mark').hidden, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete');
+  assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete');
 });
 test('retry, previous and home retain exact abandoned time and cold reload never extrapolates it', async () => {
   const e = await quizApp(); await e.enter(); const id = e.snapshot().id;
