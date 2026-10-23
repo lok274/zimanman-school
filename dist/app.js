@@ -250,6 +250,7 @@
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
     }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
+    $('practice-instruction').hidden = ['watch', 'quiz'].includes(a.phase);
     instructionText = instruction;
     const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction].join(':');
     if (nextSpeechKey !== speechKey) { stopSpeech(); speechKey = nextSpeechKey; }
