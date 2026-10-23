@@ -148,10 +148,12 @@
     const rows = S.summarize(state);
     const completedWords = state.entries.filter(word => state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id))).length;
     state.entries.forEach(word => {
-      const done = state.occurrences.filter(o => o.wordId === word.id).every(o => state.finished.includes(o.id));
+      const assigned = state.occurrences.filter(o => o.wordId === word.id);
+      const target = assigned.find(o => !state.finished.includes(o.id)) || assigned.at(-1);
+      const done = assigned.every(o => state.finished.includes(o.id));
       const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
-      const content = textNode('span', word.text, 'word-name');
+      const content = textNode('span', target.character, 'word-name');
       button.append(content, visualCue(word.text));
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
@@ -165,15 +167,14 @@
     const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary';
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
-    $('previous-step').textContent = safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回詞語']);
+    $('previous-step').textContent = safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回選字']);
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
     if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else renderSummary(state); return; }
     const word = currentWord();
     const recall = a.phase === 'recall', complete = a.phase === 'character-complete';
-    $('word-title').textContent = recall ? '詞語收埋咗' : word.text; $('word-title').classList.toggle('concealed', recall);
-    $('word-example').textContent = recall ? '' : C.cue(word.text)[0];
+    $('word-title').textContent = recall ? '詞語收埋咗' : currentOccurrence().character; $('word-title').classList.toggle('concealed', recall);
     $('semantic-cue').replaceChildren(visualCue(word.text));
     $('writer').setAttribute('aria-label', recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
@@ -198,7 +199,7 @@
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && attempt.help.length ? '有提示完成' : '自己完成';
       title = label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
-      $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個指定字 →' : '揀下一項詞語 →';
+      $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
     }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
     instructionText = instruction;

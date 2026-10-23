@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#214b3b">
   <title>字慢慢 · 一筆一筆，慢慢學</title>
-  <link rel="stylesheet" href="styles.css?v=e3da99352ba3">
+  <link rel="stylesheet" href="styles.css?v=c28488c54df5">
 </head>
 <body>
   <header class="app-header">
@@ -15,7 +15,7 @@
   <div id="storage-notice" class="notice storage-notice" role="status" hidden></div>
   <main>
     <section id="choose-view" class="choose-view" aria-labelledby="choose-title">
-      <h1 id="choose-title">你想先寫邊個詞語？</h1>
+      <h1 id="choose-title">你想先寫邊個字？</h1>
       <div id="word-cards" class="word-cards"></div>
       <div class="choice-footer"><button id="choice-summary" class="button secondary">睇今節紀錄</button></div>
     </section>
@@ -23,7 +23,6 @@
       <aside class="word-panel">
         <div id="semantic-cue" class="semantic-cue" aria-hidden="true"></div>
         <h1 id="word-title"></h1>
-        <p id="word-example" class="word-example"></p>
         <button id="speak" class="button secondary speech-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8q5 4 0 8M20 5q8 7 0 14"/></svg><span id="speak-label">聽詞語</span></button>
         <p id="voice-note" class="small muted"></p>
         <div class="practice-actions"><button id="hear-instruction" class="button secondary" aria-describedby="practice-instruction">聽指令</button><span id="instruction-voice-note" class="small muted" role="status" aria-live="polite"></span><button id="rest" class="button secondary rest-button">休息一下</button></div>
@@ -35,7 +34,7 @@
           <div class="practice-side">
             <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
             <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
-            <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個詞語</button></div>
+            <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個字</button></div>
             <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
             <details id="practice-tools"><summary id="practice-tools-label">更多工具</summary><div id="extra-demo-controls" class="demo-controls"><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div><div id="extra-writing-controls" class="writing-controls" hidden><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div><div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button></details>
             <div id="next-row" class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
@@ -50,7 +49,7 @@
       <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">開始新一節 <span aria-hidden="true">→</span></button></div>
     </section>
   </main>
-  <footer class="app-footer"><button id="previous-step" class="button secondary" hidden>← 返回詞語</button></footer>
+  <footer class="app-footer"><button id="previous-step" class="button secondary" hidden>← 返回選字</button></footer>
   <dialog id="teacher-dialog" aria-labelledby="teacher-title">
     <div class="dialog-heading"><div><p class="eyebrow">成人設定</p><h2 id="teacher-title">老師工具</h2></div><button id="teacher-close" class="icon-button" aria-label="關閉老師工具">×</button></div>
     <p>不用帳戶，不記學生姓名。練習紀錄只留喺呢個瀏覽器；共用平板嘅其他使用者可能睇到。清除瀏覽器資料會移除紀錄。</p>
@@ -71,6 +70,6 @@
   <script src="content.js"></script>
   <script src="session.js"></script>
   <script src="writing.js"></script>
-  <script src="app.js?v=d608bab368c1"></script>
+  <script src="app.js?v=ad2cebd07605"></script>
 </body>
 </html>

@@ -267,7 +267,7 @@ test('previous button returns practice steps, retains results and stops completi
   e.send('STROKE_MISSED', { strokeIndex: 0 }); e.$('hint-stroke').click();
   const oldGuidance = e.mounts.at(-1); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'watch'); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(e.snapshot().attempts[0].help.length, 1);
-  assert.equal(e.$('feedback').attributes['data-kind'], 'instruction'); assert.equal(e.$('previous-step').textContent, '← 返回詞語');
+  assert.equal(e.$('feedback').attributes['data-kind'], 'instruction'); assert.equal(e.$('previous-step').textContent, '← 返回選字');
   const watched = JSON.stringify(e.snapshot()); e.send('WRITING_COMPLETE', {}, oldGuidance); assert.equal(JSON.stringify(e.snapshot()), watched);
   e.$('main-next').click(); e.complete(); e.$('main-next').click();
   assert.equal(e.$('previous-step').textContent, '← 返回跟寫');
@@ -344,20 +344,59 @@ function chooseCharacters(e, values) {
     input.checked = selection.has(input.value); input.emit('change');
   });
 }
-test('teacher selects a later word position without word-id drift and keeps the full word as context', async () => {
+test('fourth assigned character appears alone while its original word supplies the photo, speech and records', async () => {
   const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃\n鬍鬚\n密\n剪草機\n推來推去'; e.$('validate-words').click();
-  chooseCharacters(e, ['w5:2']); assert.equal(e.$('teacher-selection-total').textContent, '已揀 1 個字 · 1 項詞語'); e.$('apply-words').click();
+  const content = {}; vm.runInNewContext(source('content.js'), content); e.context.BishunContent.photos = content.BishunContent.photos;
+  chooseCharacters(e, ['w5:3']); assert.equal(e.$('teacher-selection-total').textContent, '已揀 1 個字 · 1 項詞語'); e.$('apply-words').click();
   const sessionId = e.store.get('bishun-school:v1:current'), snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + sessionId));
-  assert.equal(snapshot().entries[0].text, '推來推去'); assert.equal(snapshot().occurrences.length, 1); assert.equal(snapshot().occurrences[0].id, 'w0:2');
-  assert.equal(e.$('word-cards').textContent, '推來推去');
+  assert.equal(snapshot().entries[0].text, '推來推去'); assert.equal(snapshot().occurrences.length, 1); assert.equal(snapshot().occurrences[0].id, 'w0:3');
+  assert.equal(e.$('word-cards').textContent, '去');
+  assert.equal(walk(e.$('word-cards')).find(node => node.nodeName === 'img').attributes.src, content.BishunContent.photos['推來推去']);
   assert.equal(e.$('session-count'), undefined); assert.equal(e.$('word-position'), undefined);
   e.$('word-cards').childNodes[0].click(); await waitFor(() => snapshot().active.phase === 'watch');
-  assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(snapshot().active.occurrenceId, 'w0:2');
-  assert.equal(snapshot().occurrences[0].index, 2); assert.equal(snapshot().occurrences[0].character, '推');
+  assert.equal(e.$('word-title').textContent, '去'); assert.equal(snapshot().active.occurrenceId, 'w0:3');
+  assert.equal(snapshot().occurrences[0].index, 3); assert.equal(snapshot().occurrences[0].character, '去');
+  assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, content.BishunContent.photos['推來推去']);
+  assert.equal(e.$('word-example'), undefined);
+  e.$('simplify').click(); assert(!visibleText(e.document).includes('推來推去'));
+  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.voices.changed(); e.$('speak').click();
+  assert.equal(e.voices.spoken.at(-1).text, '推來推去。第4個字，去。');
   e.$('main-next').click();
-  for (let round = 0; round < 2; round++) { for (let i = 0; i < 2; i++) e.send('STROKE_ACCEPTED', { strokeIndex: i }); e.send('WRITING_COMPLETE'); if (round === 0) e.$('main-next').click(); }
+  for (let round = 0; round < 2; round++) {
+    for (let i = 0; i < 2; i++) e.send('STROKE_ACCEPTED', { strokeIndex: i }); e.send('WRITING_COMPLETE');
+    if (round === 0) { e.$('main-next').click(); assert(!visibleText(e.document).includes('去')); assert.equal(snapshot().attempts.at(-1).help.length, 0); }
+  }
   assert.equal(snapshot().active.phase, 'character-complete'); assert.equal(e.$('main-next').textContent, '睇今次紀錄 →'); e.$('main-next').click();
   assert.equal(snapshot().active.phase, 'summary'); assert.equal(S.summarize(snapshot()).length, 1); assert(!e.$('summary-rows').textContent.includes('待練'));
+  assert(e.$('summary-rows').textContent.includes('推來推去')); assert(e.$('summary-rows').textContent.includes('第 4 字'));
+  e.$('teacher-open').click(); assert(e.$('teacher-word-options').textContent.includes('第 4 字「去」'));
+  assert(e.$('local-history').textContent.includes('推來推去 第 4 字「去」'));
+});
+test('nonconsecutive repeated positions keep their next character on return and their final character when done', async () => {
+  const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '推來推去\n粗'; e.$('validate-words').click();
+  chooseCharacters(e, ['w0:0', 'w0:2', 'w0:3', 'w1:0']); e.$('apply-words').click();
+  const sessionId = e.store.get('bishun-school:v1:current'), snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + sessionId));
+  assert.deepEqual(snapshot().occurrences.map(item => item.id), ['w0:0', 'w0:2', 'w0:3', 'w1:0']);
+  const targetName = () => e.$('word-cards').childNodes[0].childNodes[0].textContent;
+  for (const [index, character] of [[0, '推'], [2, '推'], [3, '去']]) {
+    assert.equal(targetName(), character);
+    e.$('word-cards').childNodes[0].click(); await waitFor(() => snapshot().active.phase === 'watch');
+    assert.equal(snapshot().active.occurrenceId, 'w0:' + index); assert.equal(e.$('word-title').textContent, character);
+    e.$('previous-step').click(); assert.equal(snapshot().active.phase, 'choose-word'); assert.equal(targetName(), character);
+    e.$('word-cards').childNodes[0].click(); await waitFor(() => snapshot().active.phase === 'watch'); e.$('main-next').click();
+    for (let round = 0; round < 2; round++) {
+      for (let strokeIndex = 0; strokeIndex < 2; strokeIndex++) e.send('STROKE_ACCEPTED', { strokeIndex });
+      e.send('WRITING_COMPLETE'); if (round === 0) e.$('main-next').click();
+    }
+    assert.equal(e.$('word-title').textContent, character); e.$('main-next').click();
+    if (index !== 3) { await waitFor(() => snapshot().active.phase === 'watch'); e.$('previous-step').click(); }
+  }
+  assert.equal(snapshot().active.phase, 'choose-word'); assert.equal(targetName(), '去');
+  const completed = e.$('word-cards').childNodes[0]; assert(completed.disabled); assert(completed.textContent.includes('完成今次練習'));
+  assert(!completed.textContent.includes('推來推去')); assert.equal(e.$('word-cards').childNodes[1].textContent, '粗');
+  const rows = S.summarize(snapshot()).filter(row => row.wordId === 'w0');
+  assert.equal(rows.length, 3); assert(rows.every(row => row.independent && row.word === '推來推去'));
+  assert.equal(new Set(rows.map(row => row.id)).size, 3);
 });
 test('zero selection or changed words cannot end the current valid lesson', async () => {
   const e = await feedbackApp(); e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.$('teacher-open').click();
