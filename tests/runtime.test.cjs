@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const S = require('../dist/session.js');
+const currentSession = require('../dist/session.js');
+const S = { ...currentSession, createSession(options) { const state = currentSession.createSession(options); if (state.mode === 'practice') { state.version = 3; delete state.wordChoices; } return state; } };
 const assigned = text => S.parseEntries(text).map(entry => ({ ...entry, selectedIndexes: entry.characters.map((_, index) => index) }));
 const source = file => fs.readFileSync(path.join(__dirname, '../dist', file), 'utf8');
 
@@ -1628,4 +1629,134 @@ test('guided completion waits for the current ready mount and hides the circle w
   e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.snapshot().active.phase === 'unavailable');
   assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('writer').style.visibility, 'hidden');
   assert.equal(JSON.stringify(e.snapshot().attempts), attempts); e.document.querySelector('.brand').click();
+});
+
+test('v4 original ink uses accepted vendor geometry and survives guidance token changes and retries', async () => {
+  const e = environment(); for (const file of ['vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  const W = e.context.BishunWriting, data = lessonGlyph('來'), identity = { sessionId: 'original', occurrenceId: 'w0:0', attemptId: 'one' }, events = [];
+  W.resetPractice(identity.sessionId);
+  let ready = 0, callbacks; const original = e.context.HanziWriter.prototype.quiz;
+  e.context.HanziWriter.prototype.quiz = function(options) { callbacks = options; return original.call(this, options); };
+  const mount = (token, currentStroke, phase = 'recall', id = identity) => W.mount(e.$('writer'), '來', data, { identity: id, token, phase, currentStroke, onReady: () => ready++, onError: error => { throw error; }, onEvent: event => events.push(event) });
+  let handle = mount('recall', 0); await waitFor(() => ready === 1);
+  const first = data.medians[0].map(([x,y]) => [x + 4, y + 3]); drawMedian(e, first); await waitFor(() => events.length === 1);
+  const overlayPath = () => walk(e.$('writer')).find(node => node.nodeName === 'path' && node.attributes['vector-effect'] === 'non-scaling-stroke');
+  const path = overlayPath().attributes.d; assert.notEqual(path, data.strokes[0]); assert(path.startsWith('M' + first[0][0] + ' ' + first[0][1]));
+  const old = callbacks; handle.dispose(); handle = mount('guidance', 1, 'guided'); await waitFor(() => ready === 2);
+  assert.equal(overlayPath().attributes.d, path); old.onCorrectStroke({ strokeNum: 1 }); old.onComplete(); assert.equal(events.length, 1);
+  for (let index = 1; index < data.strokes.length; index++) { drawMedian(e, data.medians[index]); await waitFor(() => events.filter(event => event.type === 'STROKE_ACCEPTED').length === index + 1); }
+  await waitFor(() => events.some(event => event.type === 'WRITING_COMPLETE'));
+  const card = e.document.createElement('div'); assert.equal(W.renderOriginal(card, identity), true);
+  assert.equal(walk(card).filter(node => node.nodeName === 'path').length, data.strokes.length); assert.equal(walk(card).find(node => node.nodeName === 'path').attributes.d, path);
+  handle.dispose(); handle = mount('retry', 0, 'recall', { ...identity, attemptId: 'two' }); await waitFor(() => ready === 3);
+  assert.equal(W.renderOriginal(card, identity), true); assert.equal(W.renderOriginal(card, { ...identity, occurrenceId: 'w0:2' }), false);
+  handle.dispose(); W.resetPractice(null); assert.equal(W.renderOriginal(card, identity), false);
+});
+
+test('v4 ink bounds, prefix mismatch and session disposal fail without invented originals', async () => {
+  const e = environment(); for (const file of ['vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  const W = e.context.BishunWriting, data = { strokes: ['M100 500L900 500Z'], medians: [[[100,500],[900,500]]] };
+  let callbacks, ready = 0; const errors = [], events = [];
+  e.context.HanziWriter.prototype.quiz = function(options) { callbacks = options; };
+  W.resetPractice('bounded');
+  const mount = (attemptId, currentStroke = 0) => W.mount(e.$('writer'), '一', data, { phase: 'recall', token: attemptId, identity: { sessionId: 'bounded', occurrenceId: 'w0:0', attemptId }, currentStroke, onReady: () => ready++, onError: error => errors.push(error), onEvent: event => events.push(event) });
+  let handle = mount('many'); await waitFor(() => ready === 1);
+  const points = Array.from({ length: 5000 }, (_, index) => ({ x: 100 + index / 10, y: 500 + Math.sin(index / 100) }));
+  callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points } }); callbacks.onComplete();
+  const card = e.document.createElement('div'); assert(W.renderOriginal(card, { sessionId: 'bounded', occurrenceId: 'w0:0', attemptId: 'many' }));
+  const path = walk(card).find(node => node.nodeName === 'path').attributes.d;
+  assert.equal(path.split(' ').filter(value => /^[ML]/.test(value)).length, 256); assert(path.startsWith('M100 500')); assert(path.endsWith('L' + points.at(-1).x + ' ' + points.at(-1).y));
+  handle.dispose(); handle = mount('missing', 1); await waitFor(() => errors.length === 1); handle.dispose();
+  for (const bad of [null, [{x:NaN,y:0},{x:1,y:1}], [{x:8193,y:0},{x:1,y:1}], Array(16385).fill({x:1,y:1})]) {
+    const count = ready, failures = errors.length; handle = mount('bad-' + count); await waitFor(() => ready > count);
+    callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points: bad } }); assert.equal(errors.length, failures + 1); handle.dispose();
+  }
+  const count = ready; handle = mount('late'); await waitFor(() => ready > count); W.resetPractice(null);
+  const before = events.length; callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points: points.slice(0,2) } }); callbacks.onComplete(); assert.equal(events.length, before); handle.dispose();
+});
+async function purposeApp(text = '來', indexes = Array.from(text, (_, index) => index)) {
+  const e = environment(source('index.html')); e.mounts = []; e.vendorCallbacks = [];
+  e.context.BishunSession = { ...currentSession, createSession: options => currentSession.createSession({ ...options, entries: [{ text, selectedIndexes: indexes }] }) };
+  for (const file of ['content.js', 'data/characters.js', 'vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  const originalMount = e.context.BishunWriting.mount, originalQuiz = e.context.HanziWriter.prototype.quiz;
+  e.context.BishunWriting.mount = (...args) => { e.mounts.push(args[3]); return originalMount(...args); };
+  e.context.HanziWriter.prototype.quiz = function(options) { e.vendorCallbacks.push(options); return originalQuiz.call(this, options); };
+  vm.runInContext(source('app.js'), e.context); startLocal(e);
+  e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  e.$('word-cards').childNodes[0].click();
+  e.enter = async (route = 'independent', purpose = 'label') => {
+    if (e.snapshot().active.phase === 'choose-purpose') e.$('task-options').childNodes[purpose === 'intro' ? 1 : 0].click();
+    e.$('task-options').childNodes[route === 'guided' ? 1 : 0].click();
+    if (route === 'independent') { assert.equal(e.$('semantic-cue').childNodes.length, 0); assert(!e.$('word-title').textContent.includes(text)); }
+    await waitFor(() => e.$('writer').style.visibility === '' && e.mounts.length > 0);
+  };
+  e.finish = async () => {
+    const snapshot = e.snapshot(), occurrence = snapshot.occurrences.find(item => item.id === snapshot.active.occurrenceId), data = lessonGlyph(occurrence.character);
+    for (let index = snapshot.active.currentStroke; index < data.strokes.length; index++) {
+      drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1);
+    }
+    await waitFor(() => e.snapshot().active.phase === 'character-complete');
+  };
+  return e;
+}
+
+test('v4 independent app conceals the task and uses manual question audio before same-attempt guidance', async () => {
+  const e = await purposeApp('粗'); assert.equal(e.snapshot().active.phase, 'choose-purpose');
+  assert.equal(e.$('task-options').childNodes.length, 2); assert.equal(e.$('task-picture').childNodes[0].nodeName, 'img');
+  await e.enter(); assert.deepEqual(e.mounts.map(mount => mount.phase), ['recall']);
+  assert.equal(e.$('semantic-cue').childNodes.length, 0); assert.equal(e.$('word-title').textContent, '寫第 1 個字'); assert(!visibleText(e.document).includes('粗'));
+  assert(!walk(e.$('practice-view')).some(node => Object.values(node.attributes).some(value => value.includes('粗'))));
+  assert.equal(e.$('practice-stars').hidden, true); assert.equal(e.$('hint-stroke').hidden, true); assert.equal(e.$('hint-outline').hidden, true);
+  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click(); e.$('speak').click();
+  assert.deepEqual(e.voices.spoken.map(item => item.text), ['粗。寫第1個字。', '粗。寫第1個字。']); assert.equal(e.snapshot().attempts[0].help.length, 0);
+  const callbacks = e.vendorCallbacks.at(-1); callbacks.onMistake({ strokeNum: 0 }); callbacks.onMistake({ strokeNum: 0 });
+  assert.equal(e.snapshot().active.phase, 'recall'); assert.equal(e.snapshot().attempts[0].help.length, 0); assert(e.$('use-guidance').className.includes('help-emphasis'));
+  assert(walk(e.$('writer')).filter(node => node.nodeName === 'circle').every(node => node.style.display === 'none'));
+  drawMedian(e, lessonGlyph('粗').medians[0]); await waitFor(() => e.snapshot().active.currentStroke === 1);
+  const attempt = e.snapshot().active.attemptId;
+  e.$('use-guidance').click(); await waitFor(() => e.mounts.length === 2 && e.$('writer').style.visibility === '');
+  assert.equal(e.snapshot().active.attemptId, attempt); assert.equal(e.snapshot().active.currentStroke, 1); assert.equal(e.snapshot().attempts[0].mistakes, 2);
+  const paths = () => walk(e.$('writer')).filter(node => node.attributes['vector-effect'] === 'non-scaling-stroke');
+  const prefix = paths()[0].attributes.d;
+  e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.$('writer').style.visibility === ''); assert.equal(paths()[0].attributes.d, prefix);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); assert.equal(paths()[0].attributes.d, prefix);
+  await e.finish(); assert.equal(e.snapshot().attempts.length, 1); assert.equal(currentSession.summarize(e.snapshot())[0].assisted, true); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null);
+  e.$('rest').click(); e.$('resume').click(); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); assert.equal(paths().length, 11);
+  e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert.equal(e.$('task-next').textContent, '睇今次紀錄 →');
+  assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'path').attributes.d, prefix);
+  e.$('task-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(walk(e.$('summary-rows')).some(node => node.className === 'original-ink'));
+});
+
+test('v4 partial repeated word cards mark supplied, skipped and unavailable slots without substitutions', async () => {
+  const e = await purposeApp('推來推去', [0,2]); await e.enter('guided', 'intro'); await e.finish();
+  const originalAttempt = currentSession.summarize(e.snapshot())[0].completedAttemptId;
+  e.$('retry-writing').click(); await waitFor(() => e.$('writer').style.visibility === ''); e.$('teacher-open').click(); e.$('teacher-skip').click();
+  assert.equal(currentSession.summarize(e.snapshot())[0].completedAttemptId, originalAttempt);
+  e.$('main-next').click(); await waitFor(() => e.snapshot().active.phase === 'guided' && e.$('writer').style.visibility === '');
+  assert.equal(e.snapshot().active.occurrenceId, 'w0:2'); assert.equal(e.snapshot().active.currentStroke, 0);
+  e.$('teacher-open').click(); e.$('teacher-skip').click(); e.$('main-next').click();
+  assert.equal(e.snapshot().active.phase, 'word-complete');
+  const labels = walk(e.$('work-card')).filter(node => node.className === 'work-label').map(node => node.textContent);
+  assert.deepEqual(labels, ['我寫嘅', '配字', '已略過', '配字']); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 1);
+  const context = walk(e.$('work-card')).filter(node => node.className === 'sentence-context').map(node => node.textContent); assert.deepEqual(context, ['我將積木', '。']);
+  e.context.BishunWriting.resetPractice(null); e.$('rest').click(); e.$('resume').click();
+  assert(walk(e.$('work-card')).some(node => node.className === 'work-label' && node.textContent === '筆跡未能顯示')); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 0);
+});
+
+test('v4 custom route stays generic and teacher help is recorded before fields appear', async () => {
+  const e = await purposeApp(); assert.equal(e.snapshot().active.phase, 'choose-route'); assert.equal(e.$('task-picture').childNodes.length, 0);
+  await e.enter(); e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].help[0].kind, 'outline'); assert.equal(e.$('teacher-dialog').open, true); assert.equal(e.$('teacher-words').value.length > 0, true);
+  e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); await e.finish();
+  assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert(e.$('work-card').textContent.includes('我嘅詞語作品')); assert.equal(walk(e.$('work-card')).filter(node => node.nodeName === 'img').length, 0);
+});
+
+test('v4 optional demos still browse and automatically advance without starting another attempt', async () => {
+  const e = await purposeApp('推來推去', [0,2]); await e.enter('guided');
+  e.$('previous-step').click(); await waitFor(() => e.snapshot().active.phase === 'watch' && e.$('writer').style.visibility === '');
+  assert.equal(e.$('demo-navigation').hidden, false);
+  const mount = e.mounts.at(-1); mount.onCharacterDemoComplete();
+  await waitFor(() => e.snapshot().active.phase === 'watch' && e.snapshot().active.occurrenceId === 'w0:2' && e.$('writer').style.visibility === '');
+  assert.equal(e.snapshot().attempts.length, 1); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(e.$('pause').disabled, false);
+  e.$('demo-previous').click(); await waitFor(() => e.snapshot().active.phase === 'watch' && e.snapshot().active.occurrenceId === 'w0:0');
+  assert.equal(e.snapshot().attempts.length, 1); e.$('teacher-end').click();
 });

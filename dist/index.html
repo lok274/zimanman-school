@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#214b3b">
   <title>寫字樂 · 一筆一筆，慢慢學</title>
-  <link rel="stylesheet" href="styles.css?v=2c6a8da43b2c">
+  <link rel="stylesheet" href="styles.css?v=8ec8f8f484a1">
 </head>
 <body>
   <header class="app-header">
@@ -15,7 +15,7 @@
   <div id="storage-notice" class="notice storage-notice" role="status" hidden></div>
   <main>
     <section id="home-view" class="home-view" aria-label="首頁">
-      <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>睇筆順，跟住寫，再自己試</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>睇題目，自己寫</span></button></div>
+      <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>揀用途，自己寫或跟住寫</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>睇題目，自己寫</span></button></div>
       <button id="class-open" class="button secondary class-entry">加入班級測驗</button>
       <p class="standalone-class-note small">單檔版保留本機測驗。跨平板班級測驗請開 <a href="https://lok274.github.io/zimanman-school/">網上學生頁面</a>。</p>
     </section>
@@ -28,6 +28,10 @@
       <h1 id="choose-title">你想先寫邊個字？</h1>
       <div id="word-cards" class="word-cards"></div>
       <div class="choice-footer"><button id="choice-summary" class="button secondary">睇今節紀錄</button></div>
+    </section>
+    <section id="task-view" class="task-view" hidden aria-labelledby="task-title">
+      <h1 id="task-title"></h1><div id="task-picture" class="task-picture"></div><div id="task-options" class="task-options"></div>
+      <div id="work-card" class="work-card" hidden></div><button id="task-next" class="button primary large" hidden>下一步 →</button>
     </section>
     <section id="practice-view" class="practice-view" hidden aria-labelledby="practice-title">
       <aside class="word-panel">
@@ -44,7 +48,7 @@
           <div class="practice-side">
             <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
             <div id="demo-navigation" class="demo-navigation" hidden><button id="demo-previous" class="button secondary" hidden></button><button id="demo-next" class="button secondary" hidden></button></div>
-            <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
+            <div id="writing-controls" class="writing-controls" hidden><button id="use-guidance" class="button primary" hidden>跟住寫</button><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
             <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個字</button></div>
             <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="practice-stars" role="img" hidden></span></div>
             <details id="practice-tools"><summary id="practice-tools-label">更多工具</summary><div id="extra-demo-controls" class="demo-controls"><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div><div id="extra-writing-controls" class="writing-controls" hidden><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div><div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button></details>
@@ -82,11 +86,11 @@
   <dialog id="rest-dialog" aria-labelledby="rest-title"><div class="rest-illustration" aria-hidden="true"><svg viewBox="0 0 120 100"><path d="M58 88V37M58 58C24 60 18 26 28 23C52 21 58 58 58 58ZM58 45C92 45 105 9 92 10C66 10 58 45 58 45ZM35 88H82"/></svg></div><h2 id="rest-title">休息一下</h2><p>伸一伸手指，望一望遠處。</p><button id="resume" class="button primary large">我準備好喇</button></dialog>
   <script src="vendor/hanzi-writer.min.js"></script>
   <script src="data/characters.js"></script>
-  <script src="content.js?v=516f25c7547b"></script>
-  <script src="session.js?v=c1a8c1eb4324"></script>
+  <script src="content.js?v=051508558ead"></script>
+  <script src="session.js?v=c2754267b78f"></script>
   <script src="quiz-results.js?v=6f36d387a7d2"></script>
   <script src="classroom.js?v=f252cb4b7a03"></script>
-  <script src="writing.js?v=02c2115f8d7a"></script>
-  <script src="app.js?v=6d67d73cfed3"></script>
+  <script src="writing.js?v=e225700b5fb1"></script>
+  <script src="app.js?v=e823cc189940"></script>
 </body>
 </html>

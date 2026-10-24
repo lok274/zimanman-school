@@ -42,7 +42,7 @@
       return { ...state, wordChoices: { ...state.wordChoices, [a.wordId]: { purpose: event.purpose, route: null } }, active: { ...a, phase: 'choose-route' } };
     }
     if (purposePractice && event.type === 'CHOOSE_ROUTE' && a.phase === 'choose-route' && ['independent', 'guided'].includes(event.route) && typeof event.newToken === 'string' && event.newToken && event.newToken !== a.token) {
-      const occurrence = state.occurrences.find(item => item.wordId === a.wordId && !state.finished.includes(item.id));
+      const occurrence = state.occurrences.find(item => item.wordId === a.wordId && !state.finished.includes(item.id)) || state.occurrences.filter(item => item.wordId === a.wordId).at(-1);
       return { ...state, wordChoices: { ...state.wordChoices, [a.wordId]: { ...state.wordChoices[a.wordId], route: event.route } }, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
     }
     if (event.type === 'BROWSE_DEMO') {
@@ -50,7 +50,7 @@
       const current = state.occurrences.find(item => item.id === a.occurrenceId);
       const assigned = state.occurrences.filter(item => item.wordId === current.wordId);
       const target = assigned[assigned.findIndex(item => item.id === current.id) + event.direction];
-      return target ? { ...state, active: { phase: 'loading', occurrenceId: target.id, token: event.newToken } } : state;
+      return target ? { ...state, active: { phase: 'loading', occurrenceId: target.id, token: event.newToken, ...(purposePractice ? { demo: true } : {}) } } : state;
     }
     const writing = ['guided', 'recall', 'quiz'].includes(a.phase);
     const s = JSON.parse(JSON.stringify(state));
@@ -75,11 +75,17 @@
         s.active = { phase: 'unavailable', occurrenceId: a.occurrenceId, token: a.token }; return s;
       case 'DATA_READY':
         if (a.phase !== 'loading' || !Number.isInteger(event.strokeCount) || event.strokeCount < 1 || event.strokeCount > 64) return state;
-        if (s.mode === 'quiz' || purposePractice) { const choice = purposePractice && s.wordChoices[s.occurrences.find(item => item.id === a.occurrenceId).wordId]; const result = start(s.mode === 'quiz' ? 'quiz' : choice.route === 'independent' ? 'recall' : 'guided'); if (result !== state) result.active.strokeCount = event.strokeCount; return result; }
+        if (purposePractice && a.demo) { delete active.demo; active.phase = 'watch'; active.strokeCount = event.strokeCount; return s; }
+        if (s.mode === 'quiz' || purposePractice) {
+          const choice = purposePractice && s.wordChoices[s.occurrences.find(item => item.id === a.occurrenceId).wordId];
+          const result = start(s.mode === 'quiz' ? 'quiz' : choice.route === 'independent' ? 'recall' : 'guided');
+          if (result !== state) result.active.strokeCount = event.strokeCount;
+          return result;
+        }
         active.phase = 'watch'; active.strokeCount = event.strokeCount; return s;
       case 'DATA_FAILED':
         if (a.phase !== 'loading') return state;
-        active.phase = 'unavailable'; return s;
+        delete active.demo; active.phase = 'unavailable'; return s;
       case 'RETRY_DATA':
         if (a.phase !== 'unavailable' || typeof event.newToken !== 'string' || event.newToken === a.token) return state;
         active.phase = 'loading'; active.token = event.newToken; return s;
@@ -95,7 +101,7 @@
           if (typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token) return state;
           if (attempt && attempt.outcome === 'active') { attempt.outcome = 'abandoned'; attempt.endedAt = event.at; }
           const wordId = a.wordId || s.occurrences.find(item => item.id === a.occurrenceId).wordId;
-          s.active = a.phase === 'choose-purpose' || a.phase === 'word-complete' ? { phase: 'choose-word' } : { phase: a.phase === 'choose-route' && s.wordChoices[wordId].purpose !== null ? 'choose-purpose' : 'choose-route', wordId, token: event.newToken };
+          s.active = a.phase === 'choose-purpose' ? { phase: 'choose-word' } : { phase: a.phase === 'choose-route' && s.wordChoices[wordId].purpose !== null ? 'choose-purpose' : 'choose-route', wordId, token: event.newToken };
           if (a.phase === 'choose-route' && s.wordChoices[wordId].purpose === null) s.active = { phase: 'choose-word' };
           return s;
         }
@@ -175,6 +181,7 @@
       const a = value.active;
       if (quiz ? ['watch', 'guided', 'recall'].includes(a.phase) : a.phase === 'quiz') return false;
       if (value.version === 4) {
+        if (a.demo !== undefined && (a.phase !== 'loading' || a.demo !== true)) return false;
         if (!value.wordChoices || typeof value.wordChoices !== 'object' || Array.isArray(value.wordChoices) || Object.keys(value.wordChoices).length > 6) return false;
         for (const [wordId, choice] of Object.entries(value.wordChoices)) {
           if (!expected.entries.some(word => word.id === wordId) || !choice || Object.keys(choice).some(key => !['purpose', 'route'].includes(key)) || !['label', 'intro', null].includes(choice.purpose) || !['independent', 'guided', null].includes(choice.route)) return false;

@@ -10,6 +10,14 @@
   };
   globalThis.BishunContent = {
     words: ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去'], cues,
+    purposes: {
+      粗: { label: '幫粗繩做標籤', intro: ['條繩好', '。'] },
+      濃: { label: '幫濃茶做標籤', intro: ['呢杯茶好', '。'] },
+      鬍鬚: { label: '幫鬍鬚做標籤', intro: ['伯伯留住', '。'] },
+      密: { label: '幫樹葉做標籤', intro: ['啲樹葉生得好', '。'] },
+      剪草機: { label: '幫剪草機做標籤', intro: ['我用', '剪草。'] },
+      推來推去: { label: '幫積木動作做標籤', intro: ['我將積木', '。'] }
+    },
     photos: { 粗: 'images/rope.webp', 濃: 'images/tea.webp', 鬍鬚: 'images/beard.webp', 密: 'images/leaves.webp', 剪草機: 'images/mower.webp', 推來推去: 'images/push-block.webp' },
     dataUrl: 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/',
     edbUrl: 'https://www.edbchinese.hk/lexlist_ch/',

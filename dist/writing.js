@@ -72,12 +72,50 @@
     } else { text = await response.text(); if (text.length > 2000000) throw new Error('字形資料過大。'); }
     return validateCharacter(character, JSON.parse(text));
   }
+  let practiceSession = null, partial = null;
+  const originals = new Map();
+  function resetPractice(sessionId) { practiceSession = sessionId; partial = null; originals.clear(); }
+  function sameAttempt(left, right) { return left && right && left.sessionId === right.sessionId && left.occurrenceId === right.occurrenceId && left.attemptId === right.attemptId; }
+  function boundedStroke(points) {
+    if (points.length <= 256) return points.map(point => ({ x: point.x, y: point.y }));
+    const distances = [0];
+    for (let index = 1; index < points.length; index++) distances.push(distances[index - 1] + Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y));
+    const result = [{ ...points[0] }], length = distances.at(-1);
+    let index = 1;
+    for (let sample = 1; sample < 255; sample++) {
+      const distance = length * sample / 255;
+      while (index < points.length - 1 && distances[index] < distance) index++;
+      const from = points[index - 1], to = points[index], span = distances[index] - distances[index - 1];
+      const ratio = span ? (distance - distances[index - 1]) / span : 0;
+      result.push({ x: from.x + (to.x - from.x) * ratio, y: from.y + (to.y - from.y) * ratio });
+    }
+    result.push({ ...points.at(-1) }); return result;
+  }
+  function drawOriginal(group, strokes) {
+    group.replaceChildren();
+    strokes.forEach(points => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', points.map((point, index) => (index ? 'L' : 'M') + point.x + ' ' + point.y).join(' '));
+      path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#214b3b'); path.setAttribute('stroke-width', '8');
+      path.setAttribute('vector-effect', 'non-scaling-stroke'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round'); group.append(path);
+    });
+  }
+  function renderOriginal(element, identity) {
+    const original = identity && originals.get(identity.occurrenceId);
+    element.replaceChildren();
+    if (practiceSession !== identity?.sessionId || !sameAttempt(original, identity)) return false;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), group = document.createElementNS(svg.namespaceURI, 'g');
+    svg.setAttribute('viewBox', '0 0 360 360'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'original-ink');
+    group.setAttribute('transform', root.HanziWriter.getScalingTransform(360, 360, 24).transform);
+    drawOriginal(group, original.strokes); svg.append(group); element.append(svg); element.style.visibility = ''; return true;
+  }
   // Hanzi Writer keeps document listeners, so each stable target owns one engine.
   const engines = new WeakMap();
   function mount(element, character, data, options) {
-    const quiz = options.phase === 'quiz';
+    const quiz = options.phase === 'quiz', identity = options.identity;
+    const practice = !!identity && ['guided', 'recall'].includes(options.phase);
     const componentGuided = options.phase === 'guided' && !!activePart(character, data, options.currentStroke || 0);
-    const guidedComplete = options.phase === 'guided' && options.currentStroke === data.strokes.length;
+    const guidedComplete = options.complete || options.phase === 'guided' && options.currentStroke === data.strokes.length;
     let alive = true, suspended = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
     const size = Math.round(element.getBoundingClientRect().width) || 360;
     let engine = engines.get(element);
@@ -92,9 +130,12 @@
       });
       engines.set(element, engine);
     }
-    const writer = engine.writer;
+    const writer = engine.writer, generation = (engine.generation || 0) + 1;
+    engine.generation = generation;
+    const current = () => alive && !suspended && generation === engine.generation && (!options.isCurrent || options.isCurrent()) && (!practice || practiceSession === identity.sessionId && sameAttempt(partial, identity));
+    if (practice && !sameAttempt(partial, identity)) partial = { ...identity, strokes: [] };
     if (!quiz || engine.inkToken !== options.token) { engine.inkToken = quiz ? options.token : null; engine.ink = []; }
-    const ink = engine.ink;
+    const ink = practice ? partial.strokes : engine.ink;
     function fail(error) {
       if (!alive || suspended) return;
       suspended = true; writer.cancelQuiz(); element.style.visibility = 'hidden';
@@ -107,16 +148,7 @@
     const focus = componentGuided ? document.createElementNS(ns, 'g') : null; if (focus) group.append(focus);
     const dot = document.createElementNS(ns, 'circle'); dot.setAttribute('r', '16'); dot.setAttribute('fill', '#bf6c36'); dot.setAttribute('stroke', '#fffaf0'); dot.setAttribute('stroke-width', '7'); group.append(dot); element.append(overlay);
     const inkGroup = document.createElementNS(ns, 'g'); group.append(inkGroup);
-    function drawInk() {
-      inkGroup.replaceChildren();
-      ink.forEach(points => {
-        const path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', points.map((point, index) => (index ? 'L' : 'M') + point.x + ' ' + point.y).join(' '));
-        path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#214b3b'); path.setAttribute('stroke-width', '8');
-        path.setAttribute('vector-effect', 'non-scaling-stroke'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
-        inkGroup.append(path);
-      });
-    }
+    function drawInk() { drawOriginal(inkGroup, ink); }
     drawInk();
     if (componentGuided) element.insertBefore(overlay, element.firstChild);
     const direction = componentGuided ? document.createElementNS(ns, 'path') : null;
@@ -155,28 +187,35 @@
     placeStart();
     engine.ready = engine.ready.then(async () => {
       if (!alive) return;
-      if (quiz && ink.length !== currentStroke) throw new Error('原有筆跡未能還原，請重新試一次。');
+      if ((quiz || practice) && (practice && practiceSession !== identity.sessionId || ink.length !== currentStroke)) throw new Error('原有筆跡未能還原，請重新試一次。');
       engine.data = data;
       await writer.setCharacter(character);
       if (!alive) return;
-      await Promise.all(Object.entries({ strokeColor: '#214b3b', radicalColor: '#214b3b', outlineColor: '#d7ddd4', highlightColor: '#ba642d' }).map(([key, color]) => writer.updateColor(key, quiz ? 'rgba(33,75,59,0)' : color, { duration: 0 })));
+      await Promise.all(Object.entries({ strokeColor: '#214b3b', radicalColor: '#214b3b', outlineColor: '#d7ddd4', highlightColor: '#ba642d' }).map(([key, color]) => writer.updateColor(key, (quiz || practice && ['strokeColor', 'radicalColor'].includes(key)) ? 'rgba(33,75,59,0)' : color, { duration: 0 })));
       if (!alive) return;
       await Promise.all([writer.hideCharacter({ duration: 0 }), writer.hideOutline({ duration: 0 })]);
       if (!alive) return;
       if (!componentGuided && !guidedComplete && (options.phase === 'guided' || help.some(item => item.kind === 'outline'))) await writer.showOutline({ duration: 0 });
-      if (guidedComplete) await writer.showCharacter({ duration: 0 });
+      if (guidedComplete && !practice) await writer.showCharacter({ duration: 0 });
       if (!alive) return;
       writer.updateDimensions({ width: size, height: size, padding: 24 }); placeStart();
       if (!suspended && !guidedComplete && ['guided', 'recall', 'quiz'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke,
-        onCorrectStroke: event => { if (!alive || suspended) return;
-          if (quiz) {
+        onCorrectStroke: event => { if (!current()) return;
+          if (quiz || practice) {
             const points = event.drawnPath && event.drawnPath.points;
             if (event.strokeNum !== currentStroke || !Array.isArray(points) || points.length < 2 || points.length > 16384 || points.some(point => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 8192 || Math.abs(point.y) > 8192)) { fail(new Error('筆跡資料無效，請重新試一次。')); return; }
-            ink.push(points.map(point => ({ x: point.x, y: point.y }))); drawInk();
+            ink.push(practice ? boundedStroke(points) : points.map(point => ({ x: point.x, y: point.y }))); drawInk();
           }
           currentStroke = event.strokeNum + 1; directionVisible = false; drawFocus(); placeStart(); options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
-        onMistake: event => { if (alive && !suspended) { if (componentGuided) { directionVisible = true; placeStart(); } options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); } },
-        onComplete: () => { if (alive && !suspended) options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() }); }
+        onMistake: event => { if (current()) { if (componentGuided) { directionVisible = true; placeStart(); } options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); } },
+        onComplete: () => {
+          if (!current()) return;
+          if (practice) {
+            if (currentStroke !== data.strokes.length || ink.length !== currentStroke) { fail(new Error('原有筆跡未能還原，請重新試一次。')); return; }
+            originals.set(identity.occurrenceId, { ...identity, strokes: ink.slice() });
+          }
+          options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() });
+        }
       });
       if (alive && !suspended) { element.style.visibility = ''; if (options.onReady) options.onReady(); }
     }).catch(fail);
@@ -222,7 +261,7 @@
       dispose() { alive = false; observer.disconnect(); writer.cancelQuiz(); writer.pauseAnimation(); overlay.remove(); element.style.visibility = 'hidden'; }
     };
   }
-  const api = { validateCharacter, loadCharacter, guide, mount };
+  const api = { validateCharacter, loadCharacter, guide, mount, resetPractice, renderOriginal };
   root.BishunWriting = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

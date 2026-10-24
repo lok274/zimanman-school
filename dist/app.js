@@ -69,11 +69,17 @@
     save(); render(); openSegment();
     if (!state) renderClassroom();
   }
+  function independentTask(snapshot = state) {
+    if (!snapshot || snapshot.version !== 4) return false;
+    if (snapshot.active.phase === 'recall') return true;
+    const occurrence = snapshot.occurrences.find(item => item.id === snapshot.active.occurrenceId);
+    return ['loading', 'unavailable'].includes(snapshot.active.phase) && snapshot.wordChoices[occurrence?.wordId]?.route === 'independent';
+  }
   const concealedText = new Map();
   function restoreRecallText() { concealedText.forEach((text, node) => { node.nodeValue = text; }); concealedText.clear(); }
   function maskRecallText() {
-    if (!state || state.active.phase !== 'recall') return;
-    if (state.attempts.find(attempt => attempt.id === state.active.attemptId).help.length) return;
+    if (!state || state.active.phase !== 'recall' && !independentTask()) return;
+    if (state.attempts.find(attempt => attempt.id === state.active.attemptId)?.help.length) return;
     const character = currentOccurrence().character;
     const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
     let node;
@@ -118,6 +124,7 @@
     boardNavigationRun = null;
     feedback = null;
     state = candidate;
+    W.resetPractice?.(state.version === 4 ? state.id : null);
     try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
     save(); render();
   }
@@ -128,6 +135,7 @@
     else save();
     stopEffects();
     if (state) { try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {} }
+    W.resetPractice?.(null);
     state = null; localMode = null; curriculumLevel = 0; feedback = null; boardNavigationRun = null;
     render();
   }
@@ -145,9 +153,9 @@
     return true;
   }
   function concealedCharacter(snapshot) {
-    if (!snapshot || snapshot.active.phase !== 'recall') return '';
+    if (!snapshot || snapshot.active.phase !== 'recall' && !independentTask(snapshot)) return '';
     const attempt = snapshot.attempts.find(item => item.id === snapshot.active.attemptId);
-    return attempt.help.length ? '' : snapshot.occurrences.find(item => item.id === snapshot.active.occurrenceId).character;
+    return attempt?.help.length ? '' : snapshot.occurrences.find(item => item.id === snapshot.active.occurrenceId).character;
   }
   function safeText(variants, snapshot = state) { const target = concealedCharacter(snapshot); return variants.find(text => !target || !text.includes(target)); }
   function feedbackFor(before, next, event) {
@@ -220,7 +228,7 @@
     } catch (_) { soundEnabled = false; audioStatus = 'blocked'; updateSound(); }
   });
   function currentOccurrence() { return state && state.occurrences.find(item => item.id === state.active.occurrenceId); }
-  function currentWord() { const o = currentOccurrence(); return o && state.entries.find(item => item.id === o.wordId); }
+  function currentWord() { const wordId = state?.active.wordId || currentOccurrence()?.wordId; return state?.entries.find(item => item.id === wordId); }
   function event(type, extra) { if (!state) return false; return dispatch({ type, token: state.active.token, newToken: id(), ...extra }); }
   function svgCue(text) { const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 64 64'); svg.setAttribute('aria-hidden', 'true'); const p = document.createElementNS(svg.namespaceURI, 'path'); p.setAttribute('d', C.cue(text)[1]); svg.append(p); return svg; }
   function visualCue(text) {
@@ -275,10 +283,49 @@
     });
     $('choice-summary').textContent = localMode ? '返回揀組別' : '返回首頁';
   }
+  function renderWorkCard(element, word) {
+    element.replaceChildren();
+    const choice = state.wordChoices[word.id], context = C.purposes?.[word.text];
+    element.append(textNode('h2', context ? choice.purpose === 'intro' ? '做介紹' : context.label : '我嘅詞語作品'));
+    const sentence = textNode('div', '', 'work-sentence');
+    if (choice.purpose === 'intro' && context) sentence.append(textNode('span', context.intro[0], 'sentence-context'));
+    const wordInk = textNode('div', '', 'work-word'); wordInk.style.setProperty('--word-length', word.characters.length);
+    const rows = S.summarize(state);
+    word.characters.forEach((character, index) => {
+      const row = rows.find(item => item.wordId === word.id && item.index === index), slot = textNode('div', '', 'work-slot'), ink = textNode('div', '', 'work-glyph');
+      let label;
+      if (!row) { ink.textContent = character; label = '配字'; }
+      else if (row.completedAttemptId && W.renderOriginal(ink, { sessionId: state.id, occurrenceId: row.id, attemptId: row.completedAttemptId })) label = '我寫嘅';
+      else { ink.textContent = '□'; label = row.completedAttemptId ? '筆跡未能顯示' : row.skipped ? '已略過' : '未完成'; }
+      slot.append(ink, textNode('span', label, 'work-label')); wordInk.append(slot);
+    });
+    sentence.append(wordInk);
+    if (choice.purpose === 'intro' && context) sentence.append(textNode('span', context.intro[1], 'sentence-context'));
+    element.append(sentence);
+  }
+  function renderTask() {
+    const a = state.active, word = currentWord(), context = C.purposes?.[word.text];
+    $('task-picture').replaceChildren(); $('task-options').replaceChildren(); $('work-card').replaceChildren();
+    $('work-card').hidden = a.phase !== 'word-complete'; $('task-next').hidden = a.phase !== 'word-complete';
+    if (a.phase === 'word-complete') {
+      $('task-title').textContent = '我嘅作品'; renderWorkCard($('work-card'), word);
+      $('task-next').textContent = state.occurrences.every(item => state.finished.includes(item.id)) ? '睇今次紀錄 →' : '揀下一個詞語 →'; return;
+    }
+    if (a.phase === 'choose-purpose' && !context) { event('CHOOSE_PURPOSE', { purpose: null }); return; }
+    $('task-title').textContent = a.phase === 'choose-purpose' ? '想用嚟做乜？' : '想點樣寫？';
+    if (a.phase === 'choose-purpose') $('task-picture').append(visualCue(word.text));
+    const choices = a.phase === 'choose-purpose' ? [['label', '做標籤', context.label], ['intro', '做介紹', context.intro.join(word.text)]] : [['independent', '自己寫', '聽題目，自己試'], ['guided', '跟住寫', '睇提示，跟住寫']];
+    choices.forEach(([value, title, caption]) => {
+      const button = textNode('button', '', 'task-option'); button.append(textNode('strong', title), textNode('span', caption));
+      button.addEventListener('click', () => event(a.phase === 'choose-purpose' ? 'CHOOSE_PURPOSE' : 'CHOOSE_ROUTE', a.phase === 'choose-purpose' ? { purpose: value } : { route: value }));
+      $('task-options').append(button);
+    });
+  }
   function render() {
     document.body.classList.toggle('has-demo-navigation', false);
     $('demo-navigation').hidden = true;
     $('practice-stars').hidden = true;
+    $('task-view').hidden = true;
     restoreRecallText();
     document.querySelector('.brand').setAttribute('aria-label', safeText(['寫字樂首頁', '返回主頁', '回到開始']));
     renderSound();
@@ -292,26 +339,29 @@
       $('choose-view').hidden = true; $('practice-view').hidden = true; $('summary-view').hidden = true; $('previous-step').hidden = true;
       document.body.classList.toggle('has-recall', false); renderPresentation(); return;
     }
-    const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary';
-    $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary; $('summary-view').hidden = !summary;
+    const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary', task = ['choose-purpose', 'choose-route', 'word-complete'].includes(a.phase);
+    $('task-view').hidden = !task;
+    $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary || task; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
     $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回選字']);
+    if (state.version === 4) $('previous-step').textContent = a.phase === 'guided' ? '← 返回睇筆順' : a.phase === 'character-complete' ? '← 返回跟寫' : ['recall', 'loading', 'unavailable', 'word-complete'].includes(a.phase) ? '← 返回揀寫法' : a.phase === 'choose-route' && state.wordChoices[a.wordId]?.purpose !== null ? '← 返回揀用途' : '← 返回選字';
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
-    if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else { renderSummary(state); renderQuizResults(); } return; }
+    if (choose || summary || task) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else if (task) renderTask(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
-    const stars = state.mode === 'practice' ? S.summarize(state).filter(row => row.guided || row.independent || row.assisted).length : 0;
+    const stars = state.version !== 4 && state.mode === 'practice' ? S.summarize(state).filter(row => row.guided || row.independent || row.assisted).length : 0;
     $('practice-stars').hidden = !stars;
     const starText = '★ ' + stars, starLabel = safeText(['完成星 ' + stars, '練習達成 ' + stars, '★ ' + stars]);
     if ($('practice-stars').textContent !== starText) $('practice-stars').textContent = starText;
     if ($('practice-stars').getAttribute('aria-label') !== starLabel) $('practice-stars').setAttribute('aria-label', starLabel);
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
-    const quizComplete = quiz && complete && a.completedPhase === 'quiz';
-    if (recall) $('word-title').textContent = '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
-    $('word-title').classList.toggle('concealed', recall);
-    $('semantic-cue').replaceChildren(visualCue(word.text));
-    document.querySelector('.step-rail').hidden = quiz;
+    const quizComplete = quiz && complete && a.completedPhase === 'quiz', concealTask = recall || independentTask();
+    if (concealTask) $('word-title').textContent = state.version === 4 ? '寫第 ' + (currentOccurrence().index + 1) + ' 個字' : '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
+    $('word-title').classList.toggle('concealed', concealTask);
+    $('semantic-cue').replaceChildren(...(concealTask && state.version === 4 ? [] : [visualCue(word.text)]));
+    $('semantic-cue').hidden = concealTask && state.version === 4;
+    document.querySelector('.step-rail').hidden = quiz || state.version === 4;
     $('writer').setAttribute('aria-label', quiz ? '測驗書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
@@ -328,9 +378,10 @@
       $(button).textContent = target ? label + target.character : '';
     }
     $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) || a.writingDone;
-    $('extra-writing-controls').hidden = !['guided', 'recall', 'quiz'].includes(a.phase) && !(complete && ['recall', 'quiz'].includes(a.completedPhase));
+    $('extra-writing-controls').hidden = !['guided', 'recall', 'quiz'].includes(a.phase) && !(complete && ['recall', 'quiz', ...(state.version === 4 ? ['guided'] : [])].includes(a.completedPhase));
     $('hint-stroke').textContent = safeText(a.missesOnCurrentStroke ? ['睇一畫再試', '看提示後重做', '求助'] : ['睇呢一畫', '看提示', '求助']);
-    $('hint-stroke').hidden = quiz || a.writingDone || complete; $('hint-outline').hidden = quiz || a.writingDone || complete;
+    $('hint-stroke').hidden = quiz || a.writingDone || complete || state.version === 4 && recall; $('hint-outline').hidden = quiz || a.writingDone || complete || state.version === 4 && recall;
+    $('use-guidance').hidden = !(state.version === 4 && recall); $('use-guidance').classList.toggle('help-emphasis', recall && a.missesOnCurrentStroke >= 2);
     $('data-controls').hidden = a.phase !== 'unavailable';
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall', 'quiz'].includes(a.phase) && !a.writingDone);
     $('next-row').hidden = $('main-next').hidden;
@@ -344,10 +395,11 @@
     if (a.phase === 'quiz') { title = '測驗'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
     if (a.phase === 'recall') { title = safeText(['自己試', '試住記', '憑記憶']); instruction = safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
-      const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && attempt.help.length ? '有提示完成' : '自己完成';
+      const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && (attempt.help.length || state.version === 4 && attempt.phase === 'guided') ? '有提示完成' : '自己完成';
       title = quizComplete ? '測驗完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
+      if (state.version === 4 && !remaining.some(item => item.wordId === word.id)) $('main-next').textContent = '睇作品 →';
       if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
     }
     if (guide) { title += ' · ' + guide.label; instruction = guide.instruction; }
@@ -358,7 +410,7 @@
     $('feedback').hidden = practiceCue && !eventCue;
     $('feedback').classList.toggle('sr-only', quizComplete);
     $('hear-instruction').setAttribute('aria-describedby', quizComplete ? 'main-next' : guide ? 'practice-instruction' : eventCue ? 'feedback-text' : 'practice-instruction');
-    const nextInstruction = quizComplete ? $('main-next').textContent.replace(/ →$/, '') : guide ? guide.instruction : eventCue ? feedback.text : instruction;
+    const nextInstruction = independentTask() ? word.text + '。寫第' + (currentOccurrence().index + 1) + '個字。' : quizComplete ? $('main-next').textContent.replace(/ →$/, '') : guide ? guide.instruction : eventCue ? feedback.text : instruction;
     const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction, guide ? a.currentStroke : ''].join(':');
     if (nextSpeechKey !== speechKey || instructionStatus && instructionText !== nextInstruction) { stopSpeech(); speechKey = nextSpeechKey; }
     instructionText = nextInstruction;
@@ -380,7 +432,7 @@
   function renderCompletionMark() {
     const a = state.active;
     const guidedReady = a.phase === 'guided' && a.writingDone && available() && readyMount?.generation === mountGeneration && readyMount.token === a.token;
-    if (guidedReady || state.mode === 'quiz' && a.completedPhase === 'quiz') $('quiz-mark').removeAttribute('hidden');
+    if (state.version === 4 && a.phase === 'character-complete' && a.completedPhase !== 'skipped' || guidedReady || state.mode === 'quiz' && a.completedPhase === 'quiz') $('quiz-mark').removeAttribute('hidden');
     else $('quiz-mark').setAttribute('hidden', '');
   }
   function syncWriter() {
@@ -401,10 +453,11 @@
       }).catch(() => { if (state && generation === mountGeneration && state.active.token === token && state.active.phase === 'loading') dispatch({ type: 'DATA_FAILED', token }); }).finally(() => clearTimeout(timer));
       return;
     }
-    if (!['watch', 'guided', 'recall', 'quiz'].includes(a.phase) || a.writingDone && a.phase !== 'guided') return;
+    const completedPractice = state.version === 4 && a.phase === 'character-complete' && ['guided', 'recall'].includes(a.completedPhase);
+    if (!completedPractice && (!['watch', 'guided', 'recall', 'quiz'].includes(a.phase) || a.writingDone && a.phase !== 'guided')) return;
     const occurrence = currentOccurrence(), data = dataCache.get(occurrence.character);
     if (!data || !globalThis.HanziWriter) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); return; }
-    try { handle = W.mount($('writer'), occurrence.character, data, { token: a.token, phase: a.phase, currentStroke: a.currentStroke || 0, missesOnCurrentStroke: a.missesOnCurrentStroke, help: (state.attempts.find(item => item.id === a.attemptId) || { help: [] }).help,
+    try { handle = W.mount($('writer'), occurrence.character, data, { token: a.token, phase: completedPractice ? a.completedPhase : a.phase, complete: completedPractice, identity: state.version === 4 && a.attemptId ? { sessionId: state.id, occurrenceId: a.occurrenceId, attemptId: a.attemptId } : null, isCurrent: () => available() && generation === mountGeneration && state.active.token === a.token && state.active.attemptId === a.attemptId, currentStroke: a.currentStroke || 0, missesOnCurrentStroke: a.missesOnCurrentStroke, help: (state.attempts.find(item => item.id === a.attemptId) || { help: [] }).help,
       onReady: () => {
         if (!state || generation !== mountGeneration || state.active.token !== a.token || !available()) return;
         readyMount = { generation, token: a.token };
@@ -430,7 +483,7 @@
       onEvent: incoming => {
         if (!available() || generation !== mountGeneration || !state || state.active.token !== a.token) return;
         if (!dispatch(incoming)) return;
-        if (state.mode !== 'quiz' && incoming.type === 'STROKE_MISSED' && state.active.missesOnCurrentStroke >= 2) {
+        if (state.mode !== 'quiz' && (state.version !== 4 || state.active.phase === 'guided') && incoming.type === 'STROKE_MISSED' && state.active.missesOnCurrentStroke >= 2) {
           const attempt = state.attempts.find(item => item.id === state.active.attemptId);
           if (!attempt.help.some(help => help.kind === 'stroke' && help.strokeIndex === state.active.currentStroke)) requestHelp('stroke');
         }
@@ -461,7 +514,9 @@
           return (index + 1) + '. ' + phase + outcome + (attempt.help.length ? '，提示 ' + attempt.help.length + ' 次' : '');
         }).join('；');
         text.append(textNode('span', attempts || '今節尚未練習', 'attempt-detail')); line.append(textNode('strong', row.character), text); detail.append(line);
-      }); list.append(div);
+      });
+      if (snapshot.version === 4 && snapshot.wordChoices[word.id]) { const card = textNode('div', '', 'work-card summary-work'); renderWorkCard(card, word); div.append(card); }
+      list.append(div);
     });
     $('saved-message').textContent = storageOkay ? '紀錄只儲存喺呢個瀏覽器。無需帳戶。' : '紀錄未能儲存。離開前可請老師記低結果。';
   }
@@ -664,7 +719,7 @@
   let cantoneseVoice = null;
   function renderPresentation() {
     document.body.classList.toggle('simplified-practice', simplified);
-    document.body.classList.toggle('menu-view', !$('group-view').hidden || !$('choose-view').hidden);
+    document.body.classList.toggle('menu-view', !$('group-view').hidden || !$('choose-view').hidden || !$('task-view').hidden);
     document.body.classList.toggle('writing-view', !$('practice-view').hidden);
     $('simplify').textContent = safeText(simplified ? ['精簡畫面：開', '只顯示重點', '少啲內容'] : ['精簡畫面：關', '顯示全部內容', '完整模式']);
     $('simplify').setAttribute('aria-pressed', String(simplified));
@@ -701,7 +756,7 @@
   $('speak').addEventListener('click', () => {
     updateVoices();
     const word = currentWord(), occurrence = currentOccurrence(); if (!word || !occurrence) return;
-    speakText(state.mode === 'quiz' ? occurrence.character : word.text + '。第' + (occurrence.index + 1) + '個字，' + occurrence.character + '。', false);
+    speakText(independentTask() ? word.text + '。寫第' + (occurrence.index + 1) + '個字。' : state.mode === 'quiz' ? occurrence.character : word.text + '。第' + (occurrence.index + 1) + '個字，' + occurrence.character + '。', false);
   });
   if ('speechSynthesis' in window && speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', updateVoices);
   $('teacher-open').addEventListener('click', () => {
@@ -734,6 +789,8 @@
   $('demo-next').addEventListener('click', () => { pendingDemoToken = null; event('BROWSE_DEMO', { direction: 1 }); });
   $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
+  $('task-next').addEventListener('click', () => event('NEXT'));
+  $('use-guidance').addEventListener('click', () => event('USE_GUIDANCE'));
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
   $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
   $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
