@@ -6,8 +6,8 @@
   function allCharacterPositions(sourceEntries) { return new Set(sourceEntries.flatMap(entry => entry.characters.map((_, index) => entry.id + ':' + index))); }
   let entries = S.parseEntries(C.words.join('\n')), selected = allCharacterPositions(entries);
   let draftEntries = entries, draftSelected = new Set(selected);
-  let practiceLevel = 0;
-  const practicePages = [
+  let curriculumLevel = 0;
+  const curriculumPages = [
     { title: '揀年級', label: '二年級', back: '返回首頁' },
     { title: '二年級', label: '2上1', back: '返回年級' },
     { title: '2上1', label: '第一課《爸爸的鬍鬚》', back: '返回課本' },
@@ -128,10 +128,10 @@
     else save();
     stopEffects();
     if (state) { try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {} }
-    state = null; localMode = null; practiceLevel = 0; feedback = null; boardNavigationRun = null;
+    state = null; localMode = null; curriculumLevel = 0; feedback = null; boardNavigationRun = null;
     render();
   }
-  function showGroups(mode, level = 0) { goHome(); localMode = mode; practiceLevel = level; render(); }
+  function showGroups(mode, level = 0) { goHome(); localMode = mode; curriculumLevel = level; render(); }
   function stopEffects() { pendingDemoToken = null; checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
   function dispatch(event) {
     checkpoint();
@@ -241,7 +241,7 @@
   }
   function renderGroups() {
     const label = localMode === 'quiz' ? '測驗' : '練習';
-    const page = localMode === 'practice' ? practicePages[practiceLevel] : null;
+    const page = curriculumPages[curriculumLevel];
     $('group-title').textContent = page ? page.title : label;
     $('group-home').textContent = page ? page.back : '返回首頁';
     $('group-cards').classList.toggle('curriculum-cards', !!page?.label);
@@ -249,7 +249,7 @@
     if (page?.label) {
       const button = document.createElement('button'); button.className = 'mode-card';
       button.append(textNode('strong', page.label));
-      button.addEventListener('click', () => { practiceLevel++; render(); });
+      button.addEventListener('click', () => { curriculumLevel++; render(); });
       container.append(button); return;
     }
     localGroups().forEach((group, index) => {
@@ -728,9 +728,9 @@
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
   $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
   $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
-  $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode, localMode === 'practice' ? practicePages.length - 1 : 0) : goHome());
+  $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode, curriculumPages.length - 1) : goHome());
   $('group-home').addEventListener('click', () => {
-    if (localMode === 'practice' && practiceLevel) { practiceLevel--; render(); } else goHome();
+    if (curriculumLevel) { curriculumLevel--; render(); } else goHome();
   });
   $('new-session').addEventListener('click', goHome);
   for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => showGroups(mode));

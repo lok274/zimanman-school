@@ -89,7 +89,7 @@ function visibleText(document) {
 }
 function openLocalGroups(e, mode = 'practice') {
   e.$('start-' + mode).click();
-  if (mode === 'practice') for (let level = 0; level < 3; level++) e.$('group-cards').childNodes[0].click();
+  for (let level = 0; level < 3; level++) e.$('group-cards').childNodes[0].click();
 }
 function startLocal(e, mode = 'practice', group = 0) { openLocalGroups(e, mode); e.$('group-cards').childNodes[group].click(); }
 function markedPosition(element) { return element.childNodes.findIndex(node => node.getAttribute('aria-current') === 'true'); }
@@ -282,7 +282,7 @@ test('both modes open two groups whose sessions cover all twelve default positio
       assert.equal(JSON.parse(e.store.get('bishun-school:v1:' + snapshot.id)).active.phase, 'summary');
     }
     assert.deepEqual(observedWords, words); assert.equal(positions, 12); assert.equal(new Set(observedPhotos).size, 6);
-    for (let back = 0; back < (mode === 'practice' ? 4 : 1); back++) e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
+    for (let back = 0; back < 4; back++) e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
   }
   for (const word of [...words, '朋友']) {
     const practice = environment(source('index.html'));
@@ -541,7 +541,7 @@ test('local groups balance only eligible applied words and keep their original s
   const e = await quizApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '一\n二\n三\n四\n五\n六\n推來推去'; e.$('validate-words').click();
   chooseCharacters(e, ['w0:0', 'w2:0', 'w4:0', 'w5:0', 'w6:2']); e.$('apply-words').click();
   assert.equal(e.$('home-view').hidden, false); assert.equal(e.store.size, 0);
-  e.$('start-quiz').click();
+  openLocalGroups(e, 'quiz');
   assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), ['測驗1一、三、五', '測驗2六、推來推去']);
   assert.equal(e.store.size, 0);
   e.$('group-cards').childNodes[1].click();
@@ -551,10 +551,13 @@ test('local groups balance only eligible applied words and keep their original s
   assert.deepEqual(e.snapshot().entries.map(word => word.text), ['一', '三', '五']);
   e.$('teacher-open').click(); chooseCharacters(e, ['w6:2']); e.$('apply-words').click();
   assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
-  openLocalGroups(e);
-  assert.deepEqual(e.$('group-cards').childNodes.map(card => [card.textContent, card.disabled]), [['練習1推來推去', false], ['練習2', true]]);
-  const before = e.store.size; e.$('group-cards').childNodes[1].click(); assert.equal(e.store.size, before); assert.equal(e.$('group-view').hidden, false);
-  e.document.querySelector('.brand').click(); assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
+  for (const mode of ['practice', 'quiz']) {
+    openLocalGroups(e, mode);
+    const label = mode === 'quiz' ? '測驗' : '練習';
+    assert.deepEqual(e.$('group-cards').childNodes.map(card => [card.textContent, card.disabled]), [[label + '1推來推去', false], [label + '2', true]]);
+    const before = new Map(e.store); e.$('group-cards').childNodes[1].click(); assert.deepEqual(e.store, before); assert.equal(e.$('group-view').hidden, false);
+    e.document.querySelector('.brand').click(); assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
+  }
 });
 test('completed writing advances to the second character of the same full word and local Back keeps its history', async () => {
   const e = await feedbackApp('鬍鬚'), sessionId = e.snapshot().id;
@@ -797,7 +800,7 @@ test('boot creates no phantom history and both home modes share only the applied
   assert.equal(e.snapshot().mode, 'quiz'); e.document.querySelector('.brand').click(); assert.equal(e.$('home-view').hidden, false);
   e.$('teacher-open').click(); chooseCharacters(e, ['w0:2']); e.$('apply-words').click(); assert.equal(e.$('home-view').hidden, false);
   startLocal(e); const practice = e.snapshot(); assert.equal(practice.mode, 'practice'); assert.equal(practice.occurrences[0].index, 2);
-  e.$('choice-summary').click(); e.$('group-home').click(); startLocal(e, 'quiz'); const quiz = e.snapshot(); assert.equal(quiz.mode, 'quiz'); assert.notEqual(quiz.id, practice.id); assert.deepEqual(quiz.occurrences, practice.occurrences);
+  e.$('choice-summary').click(); for (let back = 0; back < 4; back++) e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false); startLocal(e, 'quiz'); const quiz = e.snapshot(); assert.equal(quiz.mode, 'quiz'); assert.notEqual(quiz.id, practice.id); assert.deepEqual(quiz.occurrences, practice.occurrences);
   e.$('teacher-open').click(); assert(e.$('local-history').textContent.includes('測驗')); assert(e.$('local-history').textContent.includes('練習'));
 });
 test('quiz gives a neutral retry cue and completion circle without hints, ticks, outlines or an automatic next', async () => {
@@ -894,7 +897,7 @@ test('class assignments keep every assigned word and their word-list Back return
   e.$('previous-step').click(); assert.equal(e.$('word-cards').childNodes.length, 4); assert.equal(e.$('choice-summary').textContent, '返回首頁');
   e.$('choice-summary').click(); assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
   const ended = JSON.parse(e.store.get('bishun-school:v1:' + sessionId)); assert.equal(ended.active.phase, 'summary'); assert.equal(ended.attempts[0].outcome, 'abandoned');
-  e.$('start-quiz').click(); assert.equal(e.$('group-view').hidden, false); assert.equal(e.$('group-cards').childNodes[0].textContent, '測驗1粗、濃、鬍鬚');
+  openLocalGroups(e, 'quiz'); assert.equal(e.$('group-view').hidden, false); assert.equal(e.$('group-cards').childNodes[0].textContent, '測驗1粗、濃、鬍鬚');
   assert.equal(e.calls.filter(call => call.method === 'PUT').length, 0);
 });
 test('offline completion keeps exact pending evidence and navigates once after explicit retry succeeds', async () => {
@@ -1337,49 +1340,65 @@ test('a changed stroke cue preserves current word narration but cancels an outda
 });
 
 
-test('practice follows every curriculum card and Back edge without touching storage before choosing a group', async () => {
-  const e = await quizApp(); let writes = 0;
-  for (const name of ['setItem', 'removeItem']) {
-    const original = e.context.localStorage[name];
-    e.context.localStorage[name] = (...args) => { writes++; return original(...args); };
-  }
-  const labels = ['二年級', '2上1', '第一課《爸爸的鬍鬚》'];
-  e.$('start-practice').click();
-  for (const label of labels) {
-    assert.equal(e.$('group-cards').childNodes.length, 1);
-    assert.equal(e.$('group-cards').childNodes[0].textContent, label);
-    assert.equal(e.$('home-view').hidden, true); assert.equal(e.$('group-view').hidden, false);
-    e.$('group-cards').childNodes[0].click();
-  }
-  assert.equal(e.$('group-title').textContent, '第一課《爸爸的鬍鬚》');
-  assert.equal(e.$('group-cards').childNodes.length, 2);
-  assert.equal(e.$('group-home').textContent, '返回課文');
-  for (const label of [...labels].reverse()) {
-    e.$('group-home').click();
-    assert.equal(e.$('group-cards').childNodes[0].textContent, label);
-  }
-  e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false);
-  assert.equal(writes, 0); assert.equal(e.store.size, 0);
-  startLocal(e); assert(writes > 0); assert.equal(e.snapshot().mode, 'practice');
-  e.$('choice-summary').click(); assert.equal(e.$('group-cards').childNodes.length, 2);
-  assert.equal(e.$('group-home').textContent, '返回課文');
-  e.$('group-home').click(); assert.equal(e.$('group-cards').childNodes[0].textContent, labels[2]);
-});
+for (const mode of ['practice', 'quiz']) {
+  test(mode + ' follows every curriculum card and Back edge without touching storage before choosing a group', async () => {
+    const e = await quizApp(); let writes = 0;
+    for (const name of ['setItem', 'removeItem']) {
+      const original = e.context.localStorage[name];
+      e.context.localStorage[name] = (...args) => { writes++; return original(...args); };
+    }
+    const labels = ['二年級', '2上1', '第一課《爸爸的鬍鬚》'];
+    const titles = ['揀年級', '二年級', '2上1'];
+    const backs = ['返回首頁', '返回年級', '返回課本'];
+    e.$('start-' + mode).click();
+    labels.forEach((label, index) => {
+      assert.equal(e.$('group-cards').childNodes.length, 1);
+      assert.equal(e.$('group-cards').childNodes[0].textContent, label);
+      assert.equal(e.$('group-title').textContent, titles[index]);
+      assert.equal(e.$('group-home').textContent, backs[index]);
+      assert.equal(e.$('home-view').hidden, true); assert.equal(e.$('group-view').hidden, false);
+      e.$('group-cards').childNodes[0].click();
+    });
+    assert.equal(e.$('group-title').textContent, labels[2]);
+    const label = mode === 'quiz' ? '測驗' : '練習';
+    assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), [label + '1推來推去', label + '2']);
+    assert.equal(e.$('group-home').textContent, '返回課文');
+    for (let index = labels.length - 1; index >= 0; index--) {
+      e.$('group-home').click();
+      assert.equal(e.$('group-cards').childNodes.length, 1);
+      assert.equal(e.$('group-cards').childNodes[0].textContent, labels[index]);
+      assert.equal(e.$('group-title').textContent, titles[index]);
+      assert.equal(e.$('group-home').textContent, backs[index]);
+    }
+    e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false);
+    assert.equal(writes, 0); assert.equal(e.store.size, 0);
+    startLocal(e, mode); assert(writes > 0); assert.equal(e.snapshot().mode, mode);
+    e.$('choice-summary').click(); assert.equal(e.$('group-cards').childNodes.length, 2);
+    assert.equal(e.$('group-home').textContent, '返回課文');
+    e.$('group-home').click(); assert.equal(e.$('group-cards').childNodes[0].textContent, labels[2]);
+  });
 
-test('brand and teacher apply reset curriculum browsing while keeping applied custom character positions', async () => {
-  const e = await quizApp();
-  e.$('start-practice').click(); e.$('group-cards').childNodes[0].click();
-  e.document.querySelector('.brand').click();
-  assert.equal(e.$('home-view').hidden, false); assert.equal(e.document.querySelector('.brand').getAttribute('aria-label'), '寫字樂首頁');
-  e.$('start-practice').click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
-  e.$('group-cards').childNodes[0].click(); e.$('teacher-open').click();
-  e.$('teacher-words').value = '朋友朋'; e.$('validate-words').click(); chooseCharacters(e, ['w0:2']); e.$('apply-words').click();
-  assert.equal(e.$('home-view').hidden, false); assert.equal(e.store.size, 0);
-  e.$('start-practice').click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
-  e.document.querySelector('.brand').click(); startLocal(e);
-  assert.deepEqual(e.snapshot().entries.map(word => word.text), ['朋友朋']);
-  assert.deepEqual(e.snapshot().occurrences.map(item => item.index), [2]);
-});
+  test(mode + ' brand and teacher apply reset curriculum browsing while keeping applied custom character positions', async () => {
+    const e = await quizApp();
+    e.$('start-' + mode).click(); e.$('group-cards').childNodes[0].click();
+    e.document.querySelector('.brand').click();
+    assert.equal(e.$('home-view').hidden, false); assert.equal(e.document.querySelector('.brand').getAttribute('aria-label'), '寫字樂首頁');
+    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
+    e.$('group-cards').childNodes[0].click(); e.$('teacher-open').click();
+    e.$('teacher-words').value = '朋友朋'; e.$('validate-words').click(); chooseCharacters(e, ['w0:2']); e.$('apply-words').click();
+    assert.equal(e.$('home-view').hidden, false); assert.equal(e.store.size, 0);
+    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
+    e.document.querySelector('.brand').click(); startLocal(e, mode);
+    assert.deepEqual(e.snapshot().entries.map(word => word.text), ['朋友朋']);
+    assert.deepEqual(e.snapshot().occurrences.map(item => item.index), [2]);
+    e.$('new-session').click(); assert.equal(e.$('home-view').hidden, false);
+    const otherMode = mode === 'quiz' ? 'practice' : 'quiz';
+    e.$('start-' + otherMode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
+    e.$('group-cards').childNodes[0].click();
+    e.document.querySelector('.brand').click();
+    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
+  });
+}
 
 test('quiz completion keeps only a short live announcement and reads the real visible next action through rerenders', async () => {
   const e = await quizApp(); await e.enter();
