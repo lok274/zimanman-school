@@ -50,6 +50,8 @@
 .teacher-words-heading,.dictation-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.teacher-words-heading{margin:18px 0 10px}.teacher-words-heading .field-label{margin:0 auto 0 0}.teacher-words-heading .button,.dictation-actions .button{min-height:64px;font-size:22px}#dictation-pending{display:block;width:100%;min-height:64px;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:10px 14px;font-size:22px;margin:8px 0}#dictation-review{margin-bottom:16px}#dictation-status{margin:8px 0}
 .word-card .word-name,.word-card:only-child .word-name{display:flex;flex-wrap:wrap;justify-content:center;min-width:0;font-size:clamp(40px,calc(200px / var(--word-length)),160px);line-height:1.35}
 .word-character{display:inline-block}
+.demo-navigation{display:flex;gap:8px;margin-top:6px}.demo-navigation .button{flex:1;min-height:64px;font-size:22px;padding-inline:6px;white-space:nowrap}
+@media(orientation:portrait){.simplified-practice.has-demo-navigation .grid-shell{width:min(100%,max(300px,calc(100svh - 560px)))}}
 .word-panel h1:not(.concealed),.simplified-practice .word-panel h1:not(.concealed){display:flex;flex-wrap:wrap;max-width:100%;font-size:clamp(32px,calc(256px / var(--word-length)),64px);line-height:1;letter-spacing:0}
 #group-cards .mode-card span{overflow-wrap:anywhere}
 @media(orientation:portrait),(max-width:759px){

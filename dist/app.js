@@ -256,6 +256,8 @@
     $('choice-summary').textContent = localMode ? '返回揀組別' : '返回首頁';
   }
   function render() {
+    document.body.classList.toggle('has-demo-navigation', false);
+    $('demo-navigation').hidden = true;
     restoreRecallText();
     renderSound();
     renderWordVoiceLabel();
@@ -287,6 +289,16 @@
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
     document.querySelectorAll('[data-stage]').forEach((element, index) => { element.classList.toggle('active', index === stageIndex); element.classList.toggle('done', index < stageIndex); if (index === stageIndex) element.setAttribute('aria-current', 'step'); else element.removeAttribute('aria-current'); });
     $('demo-controls').hidden = a.phase !== 'watch'; $('extra-demo-controls').hidden = a.phase !== 'watch';
+    const assigned = state.occurrences.filter(item => item.wordId === word.id);
+    const position = assigned.findIndex(item => item.id === a.occurrenceId);
+    const browse = !quiz && a.phase === 'watch' && !state.resting && assigned.length > 1;
+    $('demo-navigation').hidden = !browse;
+    document.body.classList.toggle('has-demo-navigation', browse);
+    for (const [button, direction, label] of [['demo-previous', -1, '上一字：'], ['demo-next', 1, '下一字：']]) {
+      const target = assigned[position + direction];
+      $(button).hidden = !browse || !target;
+      $(button).textContent = target ? label + target.character : '';
+    }
     $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) || a.writingDone;
     $('extra-writing-controls').hidden = !['guided', 'recall', 'quiz'].includes(a.phase) && !(complete && ['recall', 'quiz'].includes(a.completedPhase));
     $('hint-stroke').hidden = quiz || a.writingDone || complete; $('hint-outline').hidden = quiz || a.writingDone || complete;
@@ -665,6 +677,8 @@
   $('teacher-skip').addEventListener('click', () => { cancelDictation(); if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
   $('teacher-end').addEventListener('click', () => { cancelDictation(); dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
   $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
+  $('demo-previous').addEventListener('click', () => event('BROWSE_DEMO', { direction: -1 }));
+  $('demo-next').addEventListener('click', () => event('BROWSE_DEMO', { direction: 1 }));
   $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });

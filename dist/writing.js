@@ -44,7 +44,7 @@
       engine.writer = new root.HanziWriter(element, {
         width: size, height: size, padding: 24, showCharacter: false, showOutline: false,
         strokeColor: '#214b3b', outlineColor: '#d7ddd4', drawingColor: '#214b3b', highlightColor: '#ba642d', drawingWidth: 8,
-        strokeAnimationSpeed: 0.65, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
+        strokeAnimationSpeed: 0.45, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
         showHintAfterMisses: false, highlightOnComplete: false, markStrokeCorrectAfterMisses: false, acceptBackwardsStrokes: false, leniency: 1.65,
         charDataLoader: (_char, done) => done(engine.data)
       });

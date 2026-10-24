@@ -344,7 +344,7 @@ test('recent history remains discoverable after more than 500 existing storage k
   assert(e.$('local-history').textContent.includes('機'));
 });
 async function waitFor(predicate) { const end = Date.now() + 2000; while (!predicate()) { assert(Date.now() < end, 'runtime initialization completed'); await new Promise(resolve => setTimeout(resolve, 10)); } }
-async function feedbackApp(character = '粗', strokeCount = 2) {
+async function feedbackApp(character = '粗', strokeCount = 2, startGuided = true) {
   const e = environment(source('index.html')); e.mounts = [];
   e.context.BishunSession = S;
   e.context.BishunContent = { words: [character], cue: () => ['例子', 'M1 1L2 2'] };
@@ -358,7 +358,7 @@ async function feedbackApp(character = '粗', strokeCount = 2) {
   e.send = (type, extra = {}, mount = e.mounts.at(-1)) => mount.onEvent({ type, token: mount.token, ...extra });
   e.complete = () => { for (let index = e.snapshot().active.currentStroke; index < strokeCount; index++) e.send('STROKE_ACCEPTED', { strokeIndex: index }); e.send('WRITING_COMPLETE'); };
   e.$('word-cards').childNodes[0].click(); await waitFor(() => e.mounts.length === 1);
-  e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'guided');
+  if (startGuided) { e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'guided'); }
   return e;
 }
 function audioMock(e, { pending = false, fail = false } = {}) {
@@ -740,6 +740,8 @@ test('legacy history remains full scope and interrupted v1 work is closed withou
 test('pinned vendor keeps one pointer-end listener pair across repeated mounts and disposals', async () => {
   const e = environment();
   vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context);
+  const settings = [], Vendor = e.context.HanziWriter;
+  e.context.HanziWriter = new Proxy(Vendor, { construct(Target, args) { settings.push(args[1]); return Reflect.construct(Target, args); } });
   vm.runInContext(source('writing.js'), e.context);
   const element = e.$('writer'), events = [], W = e.context.BishunWriting;
   const data = { strokes: ['M 100 500 L 900 500 Z'], medians: [[[100, 500], [900, 500]]] };
@@ -752,6 +754,7 @@ test('pinned vendor keeps one pointer-end listener pair across repeated mounts a
     if (index < 19) handle.dispose();
   }
   const svg = element.childNodes.find(node => node.nodeName === 'svg');
+  assert.equal(settings[0].strokeAnimationSpeed, 0.45); assert.equal(settings[0].delayBetweenStrokes, 520); assert.equal(settings[0].strokeHighlightSpeed, 0.65);
   const transform = e.context.HanziWriter.getScalingTransform(360, 360, 24);
   const point = x => ({ clientX: transform.x + x * transform.scale, clientY: 360 - transform.y - 500 * transform.scale });
   svg.emit('mousedown', point(100)); for (let x = 200; x <= 900; x += 100) svg.emit('mousemove', point(x)); e.document.emit('mouseup');
@@ -1050,4 +1053,48 @@ test('writer rejects malformed accepted ink and missing remount ink as recoverab
   const errorCount = errors.length;
   handle = W.mount(e.$('writer'), '一', data, { phase: 'quiz', token: 'missing', currentStroke: 1, onReady: () => assert.fail('missing ink cannot become ready'), onError: error => errors.push(error), onEvent: event => events.push(event) });
   await waitFor(() => errors.length > errorCount); handle.dispose();
+});
+
+test('watch navigation opens every demo, resets playback and writes the shown glyph', async () => {
+  for (const text of ['鬍鬚', '剪草機', '推來推去', '一二三四五六七八']) {
+    const e = await feedbackApp(text, 2, false), played = [], disposed = [];
+    const old = e.mounts.at(-1);
+    e.context.BishunWriting.mount = (_element, character, _data, options) => {
+      const mount = { ...options, character }; e.mounts.push(mount);
+      return { dispose() { disposed.push(mount); }, pause() {}, play() { played.push(character); options.onDemoState('playing'); } };
+    };
+    assert.equal(e.$('demo-navigation').hidden, false); assert.equal(e.$('demo-previous').hidden, true);
+    const chars = Array.from(text);
+    for (let index = 1; index < chars.length; index++) {
+      assert.equal(e.$('demo-next').textContent, '下一字：' + chars[index]);
+      e.$('demo-next').click(); assert.equal(e.$('demo-navigation').hidden, true);
+      await waitFor(() => e.snapshot().active.phase === 'watch');
+      assert.equal(e.snapshot().active.occurrenceId, 'w0:' + index); assert.equal(e.mounts.at(-1).character, chars[index]);
+      assert.equal(e.$('word-title').textContent, text); assert.equal(e.$('play').textContent, '▶ 播放');
+      assert.equal(played.length, index - 1, 'browsing never autoplays'); e.$('play').click(); assert.equal(played.at(-1), chars[index]);
+      const before = JSON.stringify(e.snapshot()); old.onDemoState('paused'); old.onError(); e.send('WRITING_COMPLETE', {}, old); assert.equal(JSON.stringify(e.snapshot()), before); assert.equal(e.$('play').textContent, '▶ 播放');
+    }
+    assert.equal(e.$('demo-next').hidden, true);
+    e.$('demo-previous').click(); await waitFor(() => e.snapshot().active.phase === 'watch');
+    assert.equal(e.snapshot().active.occurrenceId, 'w0:' + (chars.length - 2)); assert(disposed.length > 0);
+    assert.deepEqual(e.snapshot().attempts, []); assert.deepEqual(e.snapshot().finished, []);
+    e.$('main-next').click(); assert.equal(e.mounts.at(-1).character, chars.at(-2)); assert.equal(e.snapshot().attempts[0].occurrenceId, 'w0:' + (chars.length - 2)); assert.equal(e.$('demo-navigation').hidden, true);
+    assert(e.mounts.every(mount => Array.from(mount.character).length === 1));
+  }
+});
+
+test('sparse repeated demo positions keep their own targets and a single assigned position hides navigation', async () => {
+  for (const indexes of [[0, 2, 3], [3]]) {
+    const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '推來推去'; e.$('validate-words').click();
+    chooseCharacters(e, indexes.map(index => 'w0:' + index)); e.$('apply-words').click(); startLocal(e);
+    e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+    e.$('word-cards').childNodes[0].click(); await waitFor(() => e.snapshot().active.phase === 'watch');
+    assert.equal(e.$('demo-navigation').hidden, indexes.length === 1);
+    for (const index of indexes.slice(1)) {
+      e.$('demo-next').click(); await waitFor(() => e.snapshot().active.phase === 'watch');
+      assert.equal(e.snapshot().active.occurrenceId, 'w0:' + index); assert.equal(e.mounts.at(-1).character, Array.from('推來推去')[index]);
+    }
+    assert.deepEqual(e.snapshot().attempts, []); assert.deepEqual(e.snapshot().finished, []);
+    e.$('rest').click(); assert.equal(e.$('demo-navigation').hidden, true); const before = JSON.stringify(e.snapshot()); e.$('demo-previous').emit('click'); assert.equal(JSON.stringify(e.snapshot()), before);
+  }
 });

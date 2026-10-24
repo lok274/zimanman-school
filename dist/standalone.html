@@ -58,6 +58,8 @@
 .teacher-words-heading,.dictation-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.teacher-words-heading{margin:18px 0 10px}.teacher-words-heading .field-label{margin:0 auto 0 0}.teacher-words-heading .button,.dictation-actions .button{min-height:64px;font-size:22px}#dictation-pending{display:block;width:100%;min-height:64px;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:10px 14px;font-size:22px;margin:8px 0}#dictation-review{margin-bottom:16px}#dictation-status{margin:8px 0}
 .word-card .word-name,.word-card:only-child .word-name{display:flex;flex-wrap:wrap;justify-content:center;min-width:0;font-size:clamp(40px,calc(200px / var(--word-length)),160px);line-height:1.35}
 .word-character{display:inline-block}
+.demo-navigation{display:flex;gap:8px;margin-top:6px}.demo-navigation .button{flex:1;min-height:64px;font-size:22px;padding-inline:6px;white-space:nowrap}
+@media(orientation:portrait){.simplified-practice.has-demo-navigation .grid-shell{width:min(100%,max(300px,calc(100svh - 560px)))}}
 .word-panel h1:not(.concealed),.simplified-practice .word-panel h1:not(.concealed){display:flex;flex-wrap:wrap;max-width:100%;font-size:clamp(32px,calc(256px / var(--word-length)),64px);line-height:1;letter-spacing:0}
 #group-cards .mode-card span{overflow-wrap:anywhere}
 @media(orientation:portrait),(max-width:759px){
@@ -106,6 +108,7 @@
         <div class="practice-body"><div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><svg id="quiz-mark" class="quiz-mark" viewBox="0 0 100 100" aria-hidden="true" hidden><path class="quiz-cross" d="M78 10L94 26M94 10L78 26"/><circle class="quiz-circle" cx="50" cy="50" r="46"/></svg><div id="board-message" class="board-message" hidden></div></div></div>
           <div class="practice-side">
             <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
+            <div id="demo-navigation" class="demo-navigation" hidden><button id="demo-previous" class="button secondary" hidden></button><button id="demo-next" class="button secondary" hidden></button></div>
             <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
             <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個字</button></div>
             <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
@@ -309,6 +312,13 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       return { ...state, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
     }
     if (event.token !== a.token) return state;
+    if (event.type === 'BROWSE_DEMO') {
+      if (state.mode !== 'practice' || a.phase !== 'watch' || ![1, -1].includes(event.direction) || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || state.attempts.some(item => item.id === event.newToken)) return state;
+      const current = state.occurrences.find(item => item.id === a.occurrenceId);
+      const assigned = state.occurrences.filter(item => item.wordId === current.wordId);
+      const target = assigned[assigned.findIndex(item => item.id === current.id) + event.direction];
+      return target ? { ...state, active: { phase: 'loading', occurrenceId: target.id, token: event.newToken } } : state;
+    }
     const writing = ['guided', 'recall', 'quiz'].includes(a.phase);
     const s = JSON.parse(JSON.stringify(state));
     const active = s.active;
@@ -647,7 +657,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       engine.writer = new root.HanziWriter(element, {
         width: size, height: size, padding: 24, showCharacter: false, showOutline: false,
         strokeColor: '#214b3b', outlineColor: '#d7ddd4', drawingColor: '#214b3b', highlightColor: '#ba642d', drawingWidth: 8,
-        strokeAnimationSpeed: 0.65, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
+        strokeAnimationSpeed: 0.45, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
         showHintAfterMisses: false, highlightOnComplete: false, markStrokeCorrectAfterMisses: false, acceptBackwardsStrokes: false, leniency: 1.65,
         charDataLoader: (_char, done) => done(engine.data)
       });
@@ -1015,6 +1025,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('choice-summary').textContent = localMode ? '返回揀組別' : '返回首頁';
   }
   function render() {
+    document.body.classList.toggle('has-demo-navigation', false);
+    $('demo-navigation').hidden = true;
     restoreRecallText();
     renderSound();
     renderWordVoiceLabel();
@@ -1046,6 +1058,16 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
     document.querySelectorAll('[data-stage]').forEach((element, index) => { element.classList.toggle('active', index === stageIndex); element.classList.toggle('done', index < stageIndex); if (index === stageIndex) element.setAttribute('aria-current', 'step'); else element.removeAttribute('aria-current'); });
     $('demo-controls').hidden = a.phase !== 'watch'; $('extra-demo-controls').hidden = a.phase !== 'watch';
+    const assigned = state.occurrences.filter(item => item.wordId === word.id);
+    const position = assigned.findIndex(item => item.id === a.occurrenceId);
+    const browse = !quiz && a.phase === 'watch' && !state.resting && assigned.length > 1;
+    $('demo-navigation').hidden = !browse;
+    document.body.classList.toggle('has-demo-navigation', browse);
+    for (const [button, direction, label] of [['demo-previous', -1, '上一字：'], ['demo-next', 1, '下一字：']]) {
+      const target = assigned[position + direction];
+      $(button).hidden = !browse || !target;
+      $(button).textContent = target ? label + target.character : '';
+    }
     $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) || a.writingDone;
     $('extra-writing-controls').hidden = !['guided', 'recall', 'quiz'].includes(a.phase) && !(complete && ['recall', 'quiz'].includes(a.completedPhase));
     $('hint-stroke').hidden = quiz || a.writingDone || complete; $('hint-outline').hidden = quiz || a.writingDone || complete;
@@ -1424,6 +1446,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   $('teacher-skip').addEventListener('click', () => { cancelDictation(); if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
   $('teacher-end').addEventListener('click', () => { cancelDictation(); dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
   $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
+  $('demo-previous').addEventListener('click', () => event('BROWSE_DEMO', { direction: -1 }));
+  $('demo-next').addEventListener('click', () => event('BROWSE_DEMO', { direction: 1 }));
   $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });

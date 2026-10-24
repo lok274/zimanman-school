@@ -211,3 +211,47 @@ test('v3 rejects unknown modes, invalid timing and stored ink while v2 keeps sel
   const legacy = S.createSession({ id: 'v2', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [2] }] }); legacy.version = 2; delete legacy.mode;
   const raw = JSON.stringify(legacy); assert.equal(S.validateSnapshot(legacy), true); assert.equal(S.summarize(legacy)[0].index, 2); assert.equal(S.summarize(legacy)[0].elapsedMs, null); assert.equal(JSON.stringify(legacy), raw);
 });
+
+test('demo browsing visits assigned positions in both directions without awarding work', () => {
+  for (const [text, indexes] of [['鬍鬚', [0, 1]], ['剪草機', [0, 1, 2]], ['推來推去', [0, 1, 2, 3]], ['一二三四五六七八', [0, 1, 2, 3, 4, 5, 6, 7]], ['推來推去', [0, 2, 3]], ['剪草機', [0, 2]], ['推來推去', [3]]]) {
+    let state = S.createSession({ id: 'browse', entries: [{ text, selectedIndexes: indexes }, { text: '粗', selectedIndexes: [0] }], startedAt: 1 });
+    state = send(send(state, 'CHOOSE_WORD', { wordId: 'w0' }), 'DATA_READY', { strokeCount: 2 });
+    const original = state;
+    assert.equal(send(state, 'BROWSE_DEMO', { direction: -1 }), state);
+    for (const index of indexes.slice(1)) {
+      const oldToken = state.active.token;
+      state = send(state, 'BROWSE_DEMO', { direction: 1 });
+      assert.equal(state.active.phase, 'loading'); assert.equal(state.active.occurrenceId, 'w0:' + index);
+      assert.equal(send(state, 'DATA_READY', { token: oldToken, strokeCount: 2 }), state);
+      assert(S.validateSnapshot(state));
+      state = send(state, 'DATA_READY', { strokeCount: 2 });
+    }
+    assert.equal(send(state, 'BROWSE_DEMO', { direction: 1 }), state);
+    for (const index of indexes.slice(0, -1).reverse()) {
+      state = send(state, 'BROWSE_DEMO', { direction: -1 });
+      assert.equal(state.active.occurrenceId, 'w0:' + index);
+      state = send(state, 'DATA_READY', { strokeCount: 2 });
+    }
+    assert.deepEqual(state.entries, original.entries); assert.deepEqual(state.occurrences, original.occurrences);
+    assert.deepEqual(state.attempts, []); assert.deepEqual(state.finished, []);
+    assert(S.summarize(state).every(row => !row.guided && !row.independent && !row.skipped));
+  }
+});
+
+test('demo browsing rejects wrong phases, modes, directions and reused tokens', () => {
+  let watch = send(send(create('鬍鬚'), 'CHOOSE_WORD', { wordId: 'w0' }), 'DATA_READY', { strokeCount: 2 });
+  const abandoned = send(send(watch, 'START_GUIDED'), 'PREVIOUS_STEP');
+  for (const extra of [{ direction: 0 }, { direction: 2 }, { direction: '1' }, { newToken: '' }, { newToken: null }, { newToken: watch.active.token }, { token: 'old' }]) assert.equal(send(watch, 'BROWSE_DEMO', { direction: 1, ...extra }), watch);
+  assert.equal(send(abandoned, 'BROWSE_DEMO', { direction: 1, newToken: abandoned.attempts[0].id }), abandoned);
+  const loading = send(create('鬍鬚'), 'CHOOSE_WORD', { wordId: 'w0' }), guidance = send(watch, 'START_GUIDED'), recall = send(finish(guidance), 'START_RECALL');
+  for (const state of [create('鬍鬚'), loading, send(loading, 'DATA_FAILED'), guidance, recall, finish(recall), send(watch, 'REST'), { ...watch, mode: 'quiz' }, send(watch, 'END_SESSION')]) assert.equal(send(state, 'BROWSE_DEMO', { direction: 1 }), state);
+});
+
+test('writing the chosen demo records that position and normal NEXT returns to unfinished work', () => {
+  let state = send(send(create('鬍鬚'), 'CHOOSE_WORD', { wordId: 'w0' }), 'DATA_READY', { strokeCount: 2 });
+  state = send(send(state, 'BROWSE_DEMO', { direction: 1 }), 'DATA_READY', { strokeCount: 2 });
+  state = send(state, 'START_GUIDED'); assert.equal(state.attempts[0].occurrenceId, 'w0:1');
+  state = finish(send(finish(state), 'START_RECALL'));
+  assert.deepEqual(state.finished, ['w0:1']); assert(state.attempts.every(attempt => attempt.occurrenceId === 'w0:1'));
+  state = send(state, 'NEXT'); assert.equal(state.active.phase, 'loading'); assert.equal(state.active.occurrenceId, 'w0:0');
+});

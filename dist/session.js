@@ -38,6 +38,13 @@
       return { ...state, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
     }
     if (event.token !== a.token) return state;
+    if (event.type === 'BROWSE_DEMO') {
+      if (state.mode !== 'practice' || a.phase !== 'watch' || ![1, -1].includes(event.direction) || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || state.attempts.some(item => item.id === event.newToken)) return state;
+      const current = state.occurrences.find(item => item.id === a.occurrenceId);
+      const assigned = state.occurrences.filter(item => item.wordId === current.wordId);
+      const target = assigned[assigned.findIndex(item => item.id === current.id) + event.direction];
+      return target ? { ...state, active: { phase: 'loading', occurrenceId: target.id, token: event.newToken } } : state;
+    }
     const writing = ['guided', 'recall', 'quiz'].includes(a.phase);
     const s = JSON.parse(JSON.stringify(state));
     const active = s.active;
