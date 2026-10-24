@@ -118,12 +118,16 @@
       const n = Math.round(element.getBoundingClientRect().width);
       if (n > 0) { writer.updateDimensions({ width: n, height: n, padding: 24 }); placeStart(); }
     }); observer.observe(element);
-    function demoDone(run) { if (alive && run === demoRun) { playing = false; paused = false; options.onDemoState && options.onDemoState('stopped'); } }
+    function demoDone(run, result, fullCharacter = false) {
+      if (!alive || suspended || run !== demoRun) return;
+      playing = false; paused = false; options.onDemoState && options.onDemoState('stopped');
+      if (fullCharacter && result && result.canceled === false && options.onCharacterDemoComplete) options.onCharacterDemoComplete();
+    }
     return {
       play(replay) {
         if (!alive || options.phase !== 'watch') return;
         if (paused && !replay) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
-        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; ready(() => writer.animateCharacter().then(() => demoDone(run))); }
+        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; ready(() => writer.animateCharacter().then(result => demoDone(run, result, true))); }
         options.onDemoState && options.onDemoState('playing');
       },
       pause() { if (!alive) return; ready(() => writer.pauseAnimation()); if (playing) { paused = true; options.onDemoState && options.onDemoState('paused'); } },

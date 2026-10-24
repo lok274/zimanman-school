@@ -1098,3 +1098,131 @@ test('sparse repeated demo positions keep their own targets and a single assigne
     e.$('rest').click(); assert.equal(e.$('demo-navigation').hidden, true); const before = JSON.stringify(e.snapshot()); e.$('demo-previous').emit('click'); assert.equal(JSON.stringify(e.snapshot()), before);
   }
 });
+async function demoApp(words = '鬍鬚', indexes, autoReady = true) {
+  const e = environment(source('index.html')); e.mounts = []; e.played = [];
+  e.context.BishunSession = S; e.context.HanziWriter = {};
+  e.context.BishunContent = { words: words.split('\n'), cue: () => ['例子', 'M1 1L2 2'] };
+  e.context.BishunWriting = {
+    loadCharacter: () => Promise.resolve({ strokes: ['M1 1L2 2'] }),
+    mount(_el, character, _data, options) {
+      const mount = { ...options, character }; e.mounts.push(mount);
+      if (autoReady) options.onReady();
+      return { dispose() {}, play() { e.played.push(mount); options.onDemoState('playing'); }, pause() {}, nextStroke() {} };
+    }
+  };
+  vm.runInContext(source('app.js'), e.context);
+  if (indexes) {
+    e.$('teacher-open').click(); chooseCharacters(e, indexes.map(index => 'w0:' + index)); e.$('apply-words').click();
+  }
+  startLocal(e);
+  e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  e.$('word-cards').childNodes[0].click(); await waitFor(() => e.mounts.length === 1);
+  return e;
+}
+const flushDemo = () => new Promise(resolve => setImmediate(resolve));
+
+test('full demos autoplay each assigned occurrence once and stop within the selected word without recording writing', async () => {
+  for (const [text, indexes] of [['鬍鬚'], ['剪草機'], ['推來推去'], ['一二三四五六七八'], ['推來推去', [0, 2, 3]], ['推來推去', [3]], ['粗'], ['鬍鬚\n剪草機\n粗']]) {
+    const e = await demoApp(text, indexes), chars = Array.from(text.split('\n')[0]), expected = indexes || chars.map((_, index) => index);
+    assert.equal(e.played.length, 0); e.$('play').click();
+    for (const index of expected) {
+      const mount = e.mounts.at(-1);
+      assert.equal(mount.character, chars[index]); assert.equal(e.snapshot().active.occurrenceId, 'w0:' + index);
+      mount.onCharacterDemoComplete(); await flushDemo();
+      mount.onCharacterDemoComplete(); mount.onReady(); await flushDemo();
+    }
+    assert.deepEqual(e.played.map(mount => mount.character), expected.map(index => chars[index]));
+    assert.equal(e.snapshot().active.occurrenceId, 'w0:' + expected.at(-1));
+    assert.deepEqual(e.snapshot().attempts, []); assert.deepEqual(e.snapshot().finished, []);
+    e.$('main-next').click();
+    assert.equal(e.mounts.at(-1).character, chars[expected.at(-1)]);
+    assert.equal(e.snapshot().attempts[0].occurrenceId, 'w0:' + expected.at(-1));
+  }
+});
+
+test('autoplay waits for readiness once, rejects old completions and manual browsing stays idle', async () => {
+  const e = await demoApp('推來推去', undefined, false), first = e.mounts[0];
+  first.onReady(); e.$('play').click(); first.onCharacterDemoComplete(); await flushDemo();
+  assert.equal(e.mounts.at(-1).character, '來'); assert.equal(e.played.length, 1);
+  first.onCharacterDemoComplete(); first.onReady(); await flushDemo(); assert.equal(e.played.length, 1);
+  const second = e.mounts.at(-1); second.onReady(); second.onReady(); await flushDemo();
+  assert.equal(e.played.length, 2);
+  e.$('demo-next').click(); await flushDemo(); e.mounts.at(-1).onReady(); await flushDemo();
+  assert.equal(e.mounts.at(-1).character, '推'); assert.equal(e.played.length, 2);
+  second.onCharacterDemoComplete(); await flushDemo(); assert.equal(e.snapshot().active.occurrenceId, 'w0:2');
+});
+
+test('lifecycle changes clear pending autoplay and returning to a demo remains idle', async () => {
+  for (const change of ['rest', 'teacher', 'hidden', 'pagehide', 'guided', 'home']) {
+    const e = await demoApp('鬍鬚', undefined, false), first = e.mounts[0];
+    first.onReady(); e.$('play').click(); first.onCharacterDemoComplete(); await flushDemo();
+    const pending = e.mounts.at(-1); pending.onReady();
+    if (change === 'rest') { e.$('rest').click(); e.$('resume').click(); }
+    if (change === 'teacher') { e.$('teacher-open').click(); e.$('teacher-close').click(); }
+    if (change === 'hidden') { e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); }
+    if (change === 'pagehide') { e.emitWindow('pagehide'); e.emitWindow('pageshow'); }
+    if (change === 'guided') e.$('main-next').click();
+    if (change === 'home') e.document.querySelector('.brand').click();
+    pending.onReady(); pending.onCharacterDemoComplete(); e.mounts.at(-1).onReady(); await flushDemo();
+    assert.equal(e.played.length, 1, change);
+  }
+});
+
+test('data and mount failures cancel autoplay and retry needs a manual play', async () => {
+  for (const failure of ['load', 'mount']) {
+    const e = await demoApp('鬍鬚', undefined, false), first = e.mounts[0];
+    if (failure === 'load') e.context.BishunWriting.loadCharacter = () => Promise.reject(new Error('offline'));
+    first.onCharacterDemoComplete(); await flushDemo();
+    if (failure === 'mount') e.mounts.at(-1).onError();
+    assert.equal(e.snapshot().active.phase, 'unavailable');
+    e.context.BishunWriting.loadCharacter = () => Promise.resolve({ strokes: ['M1 1L2 2'] });
+    e.$('retry-data').click(); await flushDemo(); e.mounts.at(-1).onReady(); await flushDemo();
+    assert.equal(e.snapshot().active.phase, 'watch'); assert.equal(e.played.length, 0);
+  }
+});
+
+test('writer full completion distinguishes cancel, replay, pause, one-stroke, suspension and disposal', async () => {
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const runs = [], strokes = [], states = [], complete = [], prototype = e.context.HanziWriter.prototype;
+  let resumes = 0, pauses = 0;
+  prototype.animateCharacter = function() { return new Promise(resolve => runs.push(resolve)); };
+  prototype.animateStroke = function(index) { return new Promise(resolve => strokes.push({ index, resolve })); };
+  prototype.pauseAnimation = () => { pauses++; }; prototype.resumeAnimation = () => { resumes++; };
+  const data = { strokes: ['M100 500L900 500Z'], medians: [[[100, 500], [900, 500]]] };
+  let ready = 0;
+  const mount = phase => e.context.BishunWriting.mount(e.$('writer'), '一', data, { phase, token: 'watch', onReady: () => ready++, onEvent() {}, onDemoState: state => states.push(state), onCharacterDemoComplete: () => complete.push('done') });
+  let handle = mount('watch'); await waitFor(() => ready === 1);
+  handle.play(); await flushDemo(); handle.pause(); await flushDemo(); assert.equal(states.at(-1), 'paused');
+  handle.play(); await flushDemo(); assert.equal(runs.length, 1); assert(resumes > 0); assert(pauses > 0);
+  runs[0]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 1);
+  handle.play(); await flushDemo(); runs[1]({ canceled: true }); await flushDemo(); assert.equal(complete.length, 1);
+  handle.play(); await flushDemo(); handle.play(true); await flushDemo();
+  runs[2]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 1);
+  runs[3]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
+  handle.play(); await flushDemo(); handle.nextStroke(); await flushDemo();
+  runs[4]({ canceled: false }); strokes[0].resolve({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2); assert.equal(states.at(-1), 'stopped');
+  handle.play(); await flushDemo(); handle.suspend(); runs[5]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
+  handle.dispose(); handle = mount('watch'); await waitFor(() => ready === 2);
+  handle.play(); await flushDemo(); handle.dispose(); runs[6]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
+  handle = mount('quiz'); await waitFor(() => ready === 3); handle.play(); handle.nextStroke(); await flushDemo(); assert.equal(runs.length, 7); assert.equal(strokes.length, 1); handle.dispose();
+});
+
+test('autoplay intent is discarded during loading and manual navigation before the ready microtask', async () => {
+  const e = await demoApp('鬍鬚'), loads = [];
+  e.context.BishunWriting.loadCharacter = () => new Promise(resolve => loads.push(resolve));
+  e.$('play').click(); e.mounts[0].onCharacterDemoComplete(); await flushDemo();
+  assert.equal(e.snapshot().active.phase, 'loading');
+  e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); await flushDemo();
+  const data = { strokes: ['M1 1L2 2'] }; loads[0](data); await flushDemo(); assert.equal(e.snapshot().active.phase, 'loading');
+  loads[1](data); await flushDemo(); assert.equal(e.snapshot().active.phase, 'watch'); assert.equal(e.played.length, 1);
+  const manual = await demoApp('推來推去', undefined, false);
+  manual.mounts[0].onCharacterDemoComplete(); await flushDemo(); manual.mounts.at(-1).onReady();
+  manual.$('demo-next').click(); await flushDemo(); manual.mounts.at(-1).onReady(); await flushDemo();
+  assert.equal(manual.snapshot().active.occurrenceId, 'w0:2'); assert.equal(manual.played.length, 0);
+});
+
+test('a quiz mount cannot advance demos or add hints from a full-demo callback', async () => {
+  const e = await quizApp(); await e.enter(); const before = JSON.stringify(e.snapshot());
+  e.mounts.at(-1).onCharacterDemoComplete(); await flushDemo();
+  assert.equal(JSON.stringify(e.snapshot()), before); assert.deepEqual(e.snapshot().attempts[0].help, []);
+});

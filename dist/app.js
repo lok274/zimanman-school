@@ -10,7 +10,7 @@
   let feedback = null, feedbackAnimation = null, tone = null;
   let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
   let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
-  let readyMount = null, mountGeneration = 0, segment = null, leaving = false;
+  let readyMount = null, mountGeneration = 0, segment = null, leaving = false, pendingDemoToken = null;
   let clockTick = null;
   let boardNavigationRun = null;
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -54,6 +54,7 @@
     if (document.hidden || leaving || !$('teacher-dialog').open) cancelDictation();
     checkpoint();
     if (!available()) {
+      pendingDemoToken = null;
       feedback = null; cancelFeedbackEffects(); stopSpeech();
       if (loadingController) { loadingController.abort(); loadingController = null; mountedKey = ''; mountGeneration++; }
       if (handle && state && state.active.phase !== 'character-complete') { handle.dispose(); handle = null; mountedKey = ''; readyMount = null; mountGeneration++; }
@@ -123,13 +124,15 @@
     render();
   }
   function showGroups(mode) { goHome(); localMode = mode; render(); }
-  function stopEffects() { checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
+  function stopEffects() { pendingDemoToken = null; checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
   function dispatch(event) {
     checkpoint();
     const before = state;
     const next = S.transition(state, { at: Date.now(), ...event });
     if (next === state) { openSegment(); return false; }
-    state = next; cancelFeedbackEffects(); feedback = feedbackFor(before, next, event); save(); render(); openSegment();
+    state = next;
+    if (pendingDemoToken !== state.active.token || !['loading', 'watch'].includes(state.active.phase)) pendingDemoToken = null;
+    cancelFeedbackEffects(); feedback = feedbackFor(before, next, event); save(); render(); openSegment();
     if (feedback && feedback.celebrate) celebrateFeedback();
     return true;
   }
@@ -368,6 +371,10 @@
       onReady: () => {
         if (!state || generation !== mountGeneration || state.active.token !== a.token || !available()) return;
         readyMount = { generation, token: a.token };
+        if (pendingDemoToken === a.token) Promise.resolve().then(() => {
+          if (pendingDemoToken !== a.token || !available() || generation !== mountGeneration || state.active.token !== a.token || state.active.phase !== 'watch') return;
+          pendingDemoToken = null; handle.play(false);
+        });
         if (state.mode === 'quiz') {
           const attempt = state.attempts.find(item => item.id === state.active.attemptId);
           if (attempt && attempt.elapsedMs === null) state = S.transition(state, { type: 'DURATION_SNAPSHOT', token: a.token, elapsedMs: 0 });
@@ -375,6 +382,12 @@
         }
       },
       onError: () => { if (state && generation === mountGeneration && state.active.token === a.token) dispatch({ type: 'MOUNT_FAILED', token: a.token }); },
+      onCharacterDemoComplete: () => {
+        if (!available() || generation !== mountGeneration || state.active.token !== a.token || state.mode !== 'practice' || state.active.phase !== 'watch') return;
+        const newToken = id();
+        pendingDemoToken = newToken;
+        if (!event('BROWSE_DEMO', { direction: 1, newToken })) pendingDemoToken = null;
+      },
       onDemoState: value => { if (!state || generation !== mountGeneration || state.active.token !== a.token) return; demoState = value; $('pause').disabled = value !== 'playing'; $('play').textContent = value === 'paused' ? '▶ 繼續播放' : '▶ 播放'; },
       onEvent: incoming => {
         if (!available() || generation !== mountGeneration || !state || state.active.token !== a.token) return;
@@ -677,8 +690,8 @@
   $('teacher-skip').addEventListener('click', () => { cancelDictation(); if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
   $('teacher-end').addEventListener('click', () => { cancelDictation(); dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
   $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
-  $('demo-previous').addEventListener('click', () => event('BROWSE_DEMO', { direction: -1 }));
-  $('demo-next').addEventListener('click', () => event('BROWSE_DEMO', { direction: 1 }));
+  $('demo-previous').addEventListener('click', () => { pendingDemoToken = null; event('BROWSE_DEMO', { direction: -1 }); });
+  $('demo-next').addEventListener('click', () => { pendingDemoToken = null; event('BROWSE_DEMO', { direction: 1 }); });
   $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
