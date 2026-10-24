@@ -36,6 +36,7 @@ test('ordinary teacher page gets canonical six-word scope and retains its reques
   assert.match(e.draft.ownerCapability, /^[a-f0-9]{64}$/);
   assert.equal(e.owners.get('zimanman:teacher-owner'), e.draft.ownerCapability);
   assert(!/signin-with-chatgpt|ChatGPT|type="password"/.test(html));
+  assert(!/同學用班級碼|第一份原卷計分|開班資料由|原筆跡和批改只供/.test(html));
 });
 test('teacher chooses reviewed mode, privately collects originals, publishes and deliberately deletes', async () => {
   const reviewedRoom = { ...room, assignment: { ...room.assignment, version: 2, mode: 'listen' } };

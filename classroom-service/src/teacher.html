@@ -2,13 +2,10 @@
 <html lang="zh-Hant-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>寫字樂 · 班級測驗</title>
 <style>__ASSESSMENT_CSS__</style>
 <style>body{font:18px/1.7 system-ui,sans-serif;background:#f6f3e9;color:#243d32;margin:0}main{max-width:800px;padding:24px;margin:auto}button,a{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px}button{background:#214b3b;color:white;border:0;cursor:pointer}button:disabled{opacity:.5}a{color:#214b3b}section{background:#fffdf6;padding:20px;border:1px solid #d9dece;border-radius:12px;margin:20px 0}#code{font-size:42px;letter-spacing:5px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #d9dece}p{overflow-wrap:anywhere}[hidden]{display:none!important}:focus-visible{outline:3px solid #ba642d;outline-offset:4px}</style></head>
-<body><main><h1>寫字樂 · 班級測驗</h1><p>同學用班級碼和暱稱交原筆跡，老師批改後公布班級榜。</p>
+<body><main><h1>寫字樂 · 班級測驗</h1>
 <section><h2>今次題目</h2><p id="assignment"></p><label for="mode">題型 </label><select id="mode"><option value="copy">看字寫</option><option value="listen">聽詞寫</option></select> <button id="create">建立班級</button> <button id="new-class" hidden>開新一班</button></section>
 <p id="status" role="status"></p>
-<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p>同學到 <a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">寫字樂學生頁面</a>，撳「加入班級測驗」。請用暱稱，唔好填真名。</p><button id="refresh">更新收卷及批改</button> <button id="publish">公布班級榜</button> <button id="delete-class">提早刪除此班</button><div id="members"></div><div id="board"></div><section id="review" hidden></section></section>
-<p>第一份原卷計分。字形正確一字一分，同分同名次，時間只供老師參考。改分後，已公布的榜單會一併更新。</p>
-<p>開班資料由呢個瀏覽器保存。清除瀏覽器資料後，無法取回原班嘅管理權限。每個瀏覽器最多同時開 10 班，服務最多 100 班。</p>
-<p>原筆跡和批改只供本人及開班老師查看。班級建立 24 小時後停止存取，服務會清理到期資料；供應商備份不保證同時刪除。共用平板要先撳「換下一位同學」。</p></main>
+<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p><a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">學生頁面</a></p><button id="refresh">更新收卷及批改</button> <button id="publish">公布班級榜</button> <button id="delete-class">提早刪除此班</button><div id="members"></div><div id="board"></div><section id="review" hidden></section></section></main>
 <script>
 __ASSESSMENT_SCRIPTS__
 const $ = id => document.getElementById(id);
