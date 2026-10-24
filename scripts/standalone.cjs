@@ -4,12 +4,14 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const dist = path.join(__dirname, '..', 'dist');
-const scripts = ['vendor/hanzi-writer.min.js', 'data/characters.js', 'content.js', 'session.js', 'quiz-results.js', 'classroom.js', 'writing.js', 'app.js'];
+const scripts = ['vendor/hanzi-writer.min.js', 'data/characters.js', 'content.js', 'session.js', 'quiz-results.js', 'assessment.js', 'assessment-store.js', 'freehand.js', 'assessment-review.js', 'classroom.js', 'assessment-ui.js', 'writing.js', 'app.js'];
 let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
 html = html.replace('<body>', '<body data-standalone>');
-const cssTags = html.match(/<link rel="stylesheet" href="styles\.css(?:\?[^"]*)?">/g) || [];
-assert.equal(cssTags.length, 1, 'exactly one stylesheet tag');
-html = html.replace(cssTags[0], () => '<style>\n' + fs.readFileSync(path.join(dist, 'styles.css'), 'utf8') + '\n</style>');
+for (const file of ['styles.css', 'assessment.css']) {
+  const tags = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].filter(match => match[1].split('?')[0] === file);
+  assert.equal(tags.length, 1, 'exactly one stylesheet tag for ' + file);
+  html = html.replace(tags[0][0], () => '<style>\n' + fs.readFileSync(path.join(dist, file), 'utf8') + '\n</style>');
+}
 for (const file of scripts) {
   const tags = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].filter(match => match[1].split('?')[0] === file);
   assert.equal(tags.length, 1, 'exactly one script tag for ' + file);

@@ -15,7 +15,7 @@ const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
 function boot({ data = new Map(), owners = new Map(), hash = '', blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
   const nodes = new Map();
   const node = () => ({ textContent: '', children: [], listeners: {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; }, addEventListener(type, handler) { this.listeners[type] = handler; } });
-  for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board']) nodes.set(id, { ...node(), hidden: ['room', 'new-class'].includes(id) });
+  for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board', 'mode', 'publish', 'delete-class', 'members', 'review']) nodes.set(id, { ...node(), hidden: ['room', 'new-class'].includes(id) });
   const controls = { blocked, blockedOwners };
   const storage = (map, flag) => ({ getItem: key => map.get(key) || null, setItem(key, value) { if (controls[flag]) throw new Error('blocked'); map.set(key, value); } });
   const calls = [], navigation = [];
@@ -37,6 +37,18 @@ test('ordinary teacher page gets canonical six-word scope and retains its reques
   assert.equal(e.owners.get('zimanman:teacher-owner'), e.draft.ownerCapability);
   assert(!/signin-with-chatgpt|ChatGPT|type="password"/.test(html));
 });
+test('teacher chooses reviewed mode, privately collects originals, publishes and deliberately deletes', async () => {
+  const reviewedRoom = { ...room, assignment: { ...room.assignment, version: 2, mode: 'listen' } };
+  const e = boot({ fetch: async (url, options) => response(options.method === 'DELETE' ? { deleted: true } : url.endsWith('/reviews') ? { members: [{ alias: '小星', memberId: 'one', runId: 'run', score: null, elapsedMs: 40 }], published: false, rows: [] } : url.endsWith('/publication') ? { published: true, rows: [{ alias: '小星', rank: 1, score: 1 }] } : reviewedRoom) });
+  const first = e.draft.requestId; e.nodes.get('mode').value = 'listen'; e.nodes.get('mode').listeners.change();
+  assert.notEqual(e.draft.requestId, first); await e.click('create');
+  assert.equal(JSON.parse(e.calls[0].options.body).mode, 'listen'); assert.equal(JSON.parse(e.calls[0].options.body).version, 2);
+  await e.click('refresh'); assert.equal(e.calls[1].url, '/api/v1/classes/' + room.code + '/reviews');
+  assert.equal(e.calls[1].options.headers['X-Teacher-Capability'], e.draft.ownerCapability);
+  await e.click('publish'); assert.equal(e.calls[2].options.method, 'POST'); assert.equal(e.nodes.get('publish').disabled, true);
+  const before = e.calls.length; await e.click('delete-class'); assert.equal(e.calls.length, before);
+  await e.click('delete-class'); assert.equal(e.calls.at(-1).options.method, 'DELETE'); assert.equal(e.nodes.get('room').hidden, true); assert.equal(e.draft.room, undefined);
+});
 
 test('selected scope remains optional and storage failure disables creation before writing', () => {
   const entries = [{ text: '推來推去', selectedIndexes: [3] }];
@@ -57,7 +69,7 @@ test('teacher retries retain owner and request, reload restores room and an expl
   assert.match(e.nodes.get('status').textContent, /未能連線/); assert.equal(e.nodes.get('create').disabled, false);
   await e.click('create');
   assert.equal(e.calls[0].options.body, e.calls[1].options.body); assert.equal(e.calls[1].options.headers['X-Teacher-Capability'], owner);
-  assert.deepEqual(JSON.parse(e.calls[1].options.body), { requestId, entries: e.draft.entries });
+  assert.deepEqual(JSON.parse(e.calls[1].options.body), { requestId, version: 2, mode: 'copy', entries: e.draft.entries });
   assert.equal(e.draft.room.code, room.code); assert.equal(e.nodes.get('create').disabled, true);
   const reload = boot({ data: e.data, owners: e.owners, fetch: async () => response({ rows: [] }) });
   assert.equal(reload.nodes.get('room').hidden, false); assert.equal(reload.nodes.get('code').textContent, room.code);
@@ -150,7 +162,7 @@ test('standalone service export builds with exact shared content and scorer copi
   try {
     fs.cpSync(root, fixture, { recursive: true, filter: file => !['node_modules', '.wrangler', 'dist', 'shared'].includes(path.basename(file)) });
     fs.mkdirSync(path.join(fixture, 'shared'));
-    for (const file of ['quiz-results.js', 'content.js']) fs.copyFileSync(path.join(__dirname, '../dist', file), path.join(fixture, 'shared', file));
+    for (const file of ['quiz-results.js', 'content.js', 'assessment.js', 'freehand.js', 'assessment-review.js', 'assessment.css']) fs.copyFileSync(path.join(__dirname, '../dist', file), path.join(fixture, 'shared', file));
     execFileSync(process.execPath, [path.join(fixture, 'build.mjs')]);
     assert.equal(fs.readFileSync(path.join(fixture, 'dist/server/index.js'), 'utf8'), fs.readFileSync(path.join(root, 'dist/server/index.js'), 'utf8'));
   } finally {

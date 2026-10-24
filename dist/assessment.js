@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const limits = Object.freeze({ bytes: 4194304, points: 200000, strokes: 256, positions: 48, coordinate: 10000, duration: 86400000 });
+  const limits = Object.freeze({ bytes: 1800000, bodyBytes: 4194304, points: 200000, strokes: 256, positions: 48, coordinate: 10000, duration: 86400000 });
   function assignment(entries, mode) {
     if (!['copy', 'listen'].includes(mode)) throw new Error('請揀照寫或聽寫。');
     const base = root.BishunQuizResults.assignment(entries);
@@ -8,7 +8,8 @@
   }
   function positions(assigned) { return assigned.entries.flatMap((entry, wordIndex) => entry.selectedIndexes.map(index => ({ id: 'w' + wordIndex + ':' + index, word: entry.text, index, character: Array.from(entry.text)[index] }))); }
   function start(assigned, runId, now = Date.now()) {
-    return { version: 2, runId, assignment: assignment(assigned.entries, assigned.mode), startedAt: now, elapsedMs: 0, phase: 'writing', cursor: 0, answers: positions(assigned).map(item => ({ occurrenceId: item.id, status: 'draft', strokes: [] })) };
+    const canonical = assignment(assigned.entries, assigned.mode);
+    return { version: 2, runId, assignment: canonical, startedAt: now, elapsedMs: 0, phase: 'writing', cursor: 0, answers: positions(canonical).map(item => ({ occurrenceId: item.id, status: 'draft', strokes: [] })) };
   }
   function ink(strokes, count) {
     if (!Array.isArray(strokes) || strokes.length > limits.strokes) throw new Error('每字最多 256 筆，原筆跡仍然保留，請返回檢查。');
@@ -44,7 +45,7 @@
     else if (event.type === 'ANSWER') {
       if (answer.status !== 'draft' || !['submitted', 'skipped'].includes(event.status)) throw new Error('此字已提交。');
       if (event.status === 'submitted' && !answer.strokes.length) throw new Error('未寫字，請先書寫或選跳過。');
-      ink(answer.strokes, { n: 0 }); answer.status = event.status;
+      answer.status = event.status; checkInk(next);
       next.cursor = Math.min(next.cursor + 1, next.answers.length - 1);
     } else if (event.type === 'SELECT') {
       if (!Number.isInteger(event.index) || event.index < 0 || event.index >= next.answers.length) throw new Error('題目無效。');
@@ -54,6 +55,11 @@
       return validateSubmission(next.assignment, next);
     } else throw new Error('測驗操作無效。');
     return next;
+  }
+  function checkInk(run) {
+    const count = { n: 0 };
+    for (const answer of run.answers) ink(answer.strokes, count);
+    if (new TextEncoder().encode(JSON.stringify(run)).length > limits.bytes) throw new Error('筆跡超出容量，請撤回本字上一筆再試。原稿仍然保留。');
   }
   function review(assigned, marks) {
     const expected = positions(assigned);
@@ -69,7 +75,7 @@
     let rank = 0;
     return rows.filter(row => Number.isInteger(row.score)).sort((a, b) => b.score - a.score || a.alias.localeCompare(b.alias)).map((row, i, sorted) => { if (!i || row.score !== sorted[i - 1].score) rank = i + 1; return { ...row, rank }; });
   }
-  const api = { limits, assignment, positions, start, transition, validateSubmission, review, unmarked, ranks };
+  const api = { limits, assignment, positions, start, transition, checkInk, validateSubmission, review, unmarked, ranks };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.BishunAssessment = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

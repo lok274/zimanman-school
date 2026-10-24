@@ -11,7 +11,10 @@ const contentSource = fs.existsSync(path.join(root, '../dist/content.js')) ? '..
 const context = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(root, contentSource), 'utf8'), context);
 const defaults = context.BishunContent.words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) }));
-const teacher = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8').replace('__DEFAULT_ENTRIES__', JSON.stringify(defaults));
+const teacherScripts = [canonical, assessment, shared('freehand.js'), shared('assessment-review.js')].join('\n');
+const teacher = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8').replace('__DEFAULT_ENTRIES__', JSON.stringify(defaults))
+  .replace('__ASSESSMENT_SCRIPTS__', () => teacherScripts.replace(/<\/script/gi, '<\\/script'))
+  .replace('__ASSESSMENT_CSS__', () => shared('assessment.css'));
 fs.writeFileSync(path.join(root, 'src/quiz-results.js'), canonical + '\nexport default globalThis.BishunQuizResults;\n');
 fs.writeFileSync(path.join(root, 'src/assessment.js'), assessment + '\nexport default globalThis.BishunAssessment;\n');
 fs.writeFileSync(path.join(root, 'src/teacher-page.js'), 'export default ' + JSON.stringify(teacher) + ';\n');

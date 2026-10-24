@@ -40,6 +40,20 @@ test('teacher shape scores alone determine tied ranks; missing marks stay pendin
   assert.equal(A.review(assigned, marks).score, null);
   marks[1].correct = false; assert.equal(A.review(assigned, marks).score, 1);
 });
+test('aggregate capacity is checked before the current answer becomes immutable', () => {
+  for (const [samples, point] of [[100001, [1, 1, 0]], [60000, [10000, 10000, 86400000]]]) {
+    let run = A.start(assigned, 'aggregate');
+    const stroke = Array.from({ length: samples }, () => [...point]);
+    run = A.transition(run, { type: 'STROKE', stroke });
+    run = A.transition(run, { type: 'ANSWER', status: 'submitted' });
+    run = A.transition(run, { type: 'STROKE', stroke });
+    assert.throws(() => A.transition(run, { type: 'ANSWER', status: 'submitted' }), /容量/);
+    assert.equal(run.answers[1].status, 'draft'); assert.equal(run.answers[1].strokes[0].length, samples);
+    run = A.transition(run, { type: 'UNDO' });
+    run = A.transition(run, { type: 'ANSWER', status: 'skipped' });
+    assert.equal(A.transition(run, { type: 'SEAL', elapsedMs: 1 }).phase, 'sealed');
+  }
+});
 test('the full 12-position 151-stroke fixture with 512 samples retains original points', () => {
   require('../dist/content.js');
   const assignment = A.assignment(BishunContent.words.map(text => ({ text, selectedIndexes: Array.from(text, (_, i) => i) })), 'copy');
@@ -51,4 +65,15 @@ test('the full 12-position 151-stroke fixture with 512 samples retains original 
   assert.equal(valid.answers.flatMap(a => a.strokes).flat().length, 77312);
   assert.deepEqual(valid.answers, run.answers);
   assert(Buffer.byteLength(JSON.stringify(valid)) > 262144);
+});
+test('ordinary JSON near the supported D1 row budget passes and oversize fails explicitly', () => {
+  const run = completed(), point = [10000, 10000, 86400000];
+  const samples = Math.floor(A.limits.bytes / (Buffer.byteLength(JSON.stringify(point)) + 1)) - 50;
+  run.answers[0].strokes = [Array.from({ length: samples }, () => [...point])];
+  const valid = A.validateSubmission(assigned, run), bytes = Buffer.byteLength(JSON.stringify(valid));
+  assert(bytes > 1790000 && bytes < 1800000);
+  assert(bytes + Buffer.byteLength(JSON.stringify(A.unmarked(assigned))) + 1000 < 2000000);
+  run.answers[0].strokes[0].push(...Array.from({ length: 100 }, () => [...point]));
+  assert.throws(() => A.validateSubmission(assigned, run), /容量/);
+  assert.equal(run.answers[0].strokes[0].length, samples + 100);
 });

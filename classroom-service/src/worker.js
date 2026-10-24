@@ -26,7 +26,7 @@ async function body(request, maximum = 262144) {
   catch { fail(400, 'INVALID_BODY', '資料無效。'); }
 }
 function key(value) { if (typeof value !== 'string' || !keyPattern.test(value)) fail(400, 'INVALID_ID', '紀錄編號無效。'); return value; }
-function canonicalAssignment(data) { try { return data.version === 2 ? A.assignment(data.entries, data.mode) : Q.assignment(data.entries); } catch (error) { fail(400, 'INVALID_ASSIGNMENT', error.message); } }
+function canonicalAssignment(data) { try { if (data.version !== undefined && ![1, 2].includes(data.version)) throw new Error('測驗版本不支援。'); return data.version === 2 ? A.assignment(data.entries, data.mode) : Q.assignment(data.entries); } catch (error) { fail(400, 'INVALID_ASSIGNMENT', error.message); } }
 function roomReply(room) { return { code: room.code, assignment: JSON.parse(room.assignment_json), expiresAt: room.expires_at }; }
 async function roomFor(db, code) {
   const room = await db.prepare('SELECT * FROM classes WHERE code = ?').bind(code).first();
@@ -65,20 +65,24 @@ function original(row, includeTime = false) {
   if (!includeTime) { delete run.elapsedMs; delete run.startedAt; }
   return { run, marks: JSON.parse(row.marks_json), revision: row.revision, score: row.score, ...(includeTime ? { elapsedMs: row.elapsed_ms } : {}) };
 }
+async function cleanup(db) {
+  if (!db) fail(503, 'UNAVAILABLE', '班級服務暫未準備好。');
+  await db.prepare('DELETE FROM classes WHERE code IN (SELECT code FROM classes WHERE expires_at <= ? ORDER BY expires_at LIMIT 10)').bind(Date.now()).run();
+  return { cleaned: true };
+}
 async function api(request, env, url) {
   const db = env.DB;
   if (!db) fail(503, 'UNAVAILABLE', '班級服務暫未準備好。');
   const route = url.pathname.split('/').filter(Boolean).slice(3);
   if (route.length === 1 && route[0] === 'cleanup' && request.method === 'POST') {
-    await db.prepare('DELETE FROM classes WHERE code IN (SELECT code FROM classes WHERE expires_at <= ? ORDER BY expires_at LIMIT 10)').bind(Date.now()).run();
-    return { cleaned: true };
+    return cleanup(db);
   }
   if (!route.length && request.method === 'POST') {
     sameOrigin(request); const owner = await teacher(request), data = await body(request);
     const requestId = key(data.requestId), assignment = canonicalAssignment(data), payloadHash = await hash(JSON.stringify(assignment));
     const existing = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
     if (existing) { if (existing.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (existing.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(existing); }
-    await db.prepare('DELETE FROM classes WHERE code IN (SELECT code FROM classes WHERE expires_at <= ? ORDER BY expires_at LIMIT 10)').bind(Date.now()).run();
+    await cleanup(db);
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     for (let attempt = 0; attempt < 4; attempt++) {
       const code = [...crypto.getRandomValues(new Uint8Array(8))].map(n => alphabet[n % alphabet.length]).join('');
@@ -112,7 +116,7 @@ async function api(request, env, url) {
       return { answer: saved ? original(saved) : null, expiresAt: room.expires_at };
     }
     if (request.method === 'PUT') {
-      const data = await body(request, A.limits.bytes);
+      const data = await body(request, A.limits.bodyBytes);
       let run;
       try { run = A.validateSubmission(assigned, data); } catch (error) { fail(400, 'INVALID_INK', error.message); }
       const json = JSON.stringify(run), bytes = new TextEncoder().encode(json).length, payloadHash = await hash(json);

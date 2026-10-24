@@ -215,3 +215,35 @@ test('expiry, bounded maintenance and owner deletion cascade original ink and re
   await next.call('/cleanup', 'POST');
   assert.equal(next.sqlite.prepare('SELECT COUNT(*) AS n FROM reviewed_submissions').get().n, 0);
 });
+test('simultaneous byte quota checks are atomic per class and across classes', async t => {
+  for (const global of [false, true]) {
+    const e = await reviewed(t); await e.put();
+    const bytes = Buffer.byteLength(JSON.stringify(e.run));
+    let room = e.room;
+    if (global) room = (await e.call('', 'POST', { requestId: 'another', version: 2, mode: 'listen', entries }, { ...teacherHeaders, 'x-teacher-capability': 'b'.repeat(64) })).data;
+    e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes = ?').run((global ? 268435456 : 67108864) - bytes);
+    const a = await e.join(room.code, 'a'), b = await e.join(room.code, 'b');
+    const put = member => e.call('/' + room.code + '/answers', 'PUT', e.run, { authorization: 'Bearer ' + member.token });
+    const results = await Promise.all([put(a), put(b)]);
+    assert.deepEqual(results.map(result => result.status).sort(), [200, 507]);
+    assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reviewed_submissions').get().n, 2);
+  }
+});
+test('maintenance is bounded, ignores caller cutoffs and never exposes an MCP service', async t => {
+  const e = setup(t);
+  for (let i = 0; i < 11; i++) {
+    const room = await e.create('expired-' + i);
+    e.sqlite.prepare('UPDATE classes SET expires_at = ? WHERE code = ?').run(Date.now() + 100000, room.data.code);
+    if (i === 8) e.sqlite.prepare('UPDATE classes SET owner_id = ?').run('other-owner');
+  }
+  const live = (await e.create('live')).data;
+  e.sqlite.prepare('UPDATE classes SET expires_at = 0 WHERE code != ?').run(live.code);
+  const response = await (await worker).fetch(new Request('https://class.test/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) }), { DB: e.db });
+  assert.equal(response.status, 404);
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM classes').get().n, 12);
+  assert.deepEqual((await e.call('/cleanup', 'POST', { cutoff: Number.MAX_SAFE_INTEGER })).data, { cleaned: true });
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM classes').get().n, 2);
+  assert(e.sqlite.prepare('SELECT code FROM classes WHERE code = ?').get(live.code));
+  await e.call('/cleanup', 'POST', { cutoff: Number.MAX_SAFE_INTEGER });
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM classes').get().n, 1);
+});

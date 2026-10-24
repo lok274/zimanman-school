@@ -25,6 +25,19 @@
   const Q = globalThis.BishunQuizResults;
   const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
   const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
+  const assessment = globalThis.BishunAssessmentUI?.create({ classroom, onClose: goHome,
+    onPractice: assigned => startSession(S.createSession({ id: id(), entries: assigned.entries, startedAt: Date.now(), mode: 'practice' })) });
+  function assessmentMode() { return $('assessment-mode')?.value || 'copy'; }
+  function refreshLocalResume() { if (assessment) assessment.hasLocal().then(found => { $('resume-assessment').hidden = !found; }).catch(() => {}); }
+  if (assessment) {
+    refreshLocalResume();
+    $('resume-assessment').addEventListener('click', () => { stopEffects(); assessment.resumeLocal().catch(error => { $('storage-notice').hidden = false; $('storage-notice').textContent = error.message; }); });
+  }
+  function startLocalAssessment(group) {
+    const candidate = sessionCandidate('quiz', group, selected);
+    stopEffects();
+    assessment.open(globalThis.BishunAssessment.assignment(Q.entriesFromSession(candidate), assessmentMode()));
+  }
   const dataCache = new Map();
   function available() { return state && !state.resting && !document.hidden && !$('teacher-dialog').open && !leaving; }
   function checkpoint() {
@@ -137,6 +150,7 @@
     if (state) { try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {} }
     W.resetPractice?.(null);
     state = null; localMode = null; curriculumLevel = 0; feedback = null; boardNavigationRun = null;
+    refreshLocalResume();
     render();
   }
   function showGroups(mode, level = 0) { goHome(); localMode = mode; curriculumLevel = level; render(); }
@@ -262,8 +276,8 @@
     }
     localGroups().forEach((group, index) => {
       const button = document.createElement('button'); button.className = 'mode-card'; button.disabled = !group.length;
-      button.append(textNode('strong', label + (index + 1)), textNode('span', group.map(word => word.text).join('、')));
-      button.addEventListener('click', () => startSession(sessionCandidate(localMode, group, selected))); container.append(button);
+      button.append(textNode('strong', label + (index + 1)), textNode('span', localMode === 'quiz' && assessmentMode() === 'listen' ? '聽詞寫 · ' + group.length + ' 項詞語' : group.map(word => word.text).join('、')));
+      button.addEventListener('click', () => localMode === 'quiz' && assessment ? startLocalAssessment(group) : startSession(sessionCandidate(localMode, group, selected))); container.append(button);
     });
   }
   function renderChoices() {
@@ -540,7 +554,8 @@
     $('class-leave').hidden = !member;
     $('class-leave').textContent = view.pending ? '換下一位（未交紀錄會清除）' : '換下一位同學';
     $('class-switch-note').hidden = !member;
-    $('class-dialog-board-link').hidden = !view.accepted || !view.receipt;
+    $('class-dialog-board-link').hidden = member?.assignment.version === 2 || !view.accepted || !view.receipt;
+    if (member?.assignment.version === 2) { $('class-start').textContent = '開始／繼續原卷'; $('class-switch-note').textContent = '換人後，上一位的原稿不會顯示。'; }
     const classSummary = state?.active.phase === 'summary' && view.boundRunId === state.id;
     $('class-result-status').textContent = classSummary ? view.message + (!view.storageOkay ? ' 此頁未能保存待交紀錄，請勿關閉。' : '') : '';
     $('class-retry').hidden = !classSummary || !view.pending;
@@ -583,6 +598,7 @@
   function startClassQuiz() {
     try {
       const member = classroom.view().member;
+      if (member.assignment.version === 2 && assessment) { stopEffects(); localMode = null; $('class-dialog').close(); assessment.open(member.assignment, member); return; }
       const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
       classroom.bindRun(candidate.id); localMode = null; $('class-dialog').close(); startSession(candidate);
     } catch (error) { $('class-status').textContent = error.message; }
@@ -602,7 +618,8 @@
       const parsed = S.parseEntries($('teacher-words').value);
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
       const candidate = sessionCandidate('quiz', draftEntries, draftSelected);
-      window.open(classOrigin + '/teacher#' + encodeURIComponent(JSON.stringify(Q.assignment(Q.entriesFromSession(candidate)))), '_blank', 'noopener,noreferrer');
+      const assigned = globalThis.BishunAssessment ? globalThis.BishunAssessment.assignment(Q.entriesFromSession(candidate), assessmentMode()) : Q.assignment(Q.entriesFromSession(candidate));
+      window.open(classOrigin + '/teacher#' + encodeURIComponent(JSON.stringify(assigned)), '_blank', 'noopener,noreferrer');
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
   function selectedOptions() {

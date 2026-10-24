@@ -1,20 +1,22 @@
 <!doctype html>
-<html lang="zh-Hant-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>字慢慢 · 班級測驗</title>
+<html lang="zh-Hant-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>寫字樂 · 班級測驗</title>
+<style>__ASSESSMENT_CSS__</style>
 <style>body{font:18px/1.7 system-ui,sans-serif;background:#f6f3e9;color:#243d32;margin:0}main{max-width:800px;padding:24px;margin:auto}button,a{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px}button{background:#214b3b;color:white;border:0;cursor:pointer}button:disabled{opacity:.5}a{color:#214b3b}section{background:#fffdf6;padding:20px;border:1px solid #d9dece;border-radius:12px;margin:20px 0}#code{font-size:42px;letter-spacing:5px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #d9dece}p{overflow-wrap:anywhere}[hidden]{display:none!important}:focus-visible{outline:3px solid #ba642d;outline-offset:4px}</style></head>
-<body><main><h1>班級測驗</h1><p>老師直接開班，同學只需班級碼和暱稱。全班做同一份題目，完成全份測驗先見排行榜。</p>
-<section><h2>今次題目</h2><p id="assignment"></p><button id="create">建立班級</button> <button id="new-class" hidden>開新一班</button></section>
+<body><main><h1>寫字樂 · 班級測驗</h1><p>同學用班級碼和暱稱交原筆跡，老師批改後公布班級榜。</p>
+<section><h2>今次題目</h2><p id="assignment"></p><label for="mode">題型 </label><select id="mode"><option value="copy">看字寫</option><option value="listen">聽詞寫</option></select> <button id="create">建立班級</button> <button id="new-class" hidden>開新一班</button></section>
 <p id="status" role="status"></p>
-<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p>同學到 <a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">字慢慢學生頁面</a>，撳「加入班級測驗」。請用暱稱，唔好填真名。</p><button id="refresh">更新班級榜</button><div id="board"></div></section>
-<p>先比錯誤次數，再比有效書寫時間；所有重試都計算。每位只顯示最好一次，同分同名次。跳過題目或缺少時間嘅紀錄不排名。</p>
+<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p>同學到 <a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">寫字樂學生頁面</a>，撳「加入班級測驗」。請用暱稱，唔好填真名。</p><button id="refresh">更新收卷及批改</button> <button id="publish">公布班級榜</button> <button id="delete-class">提早刪除此班</button><div id="members"></div><div id="board"></div><section id="review" hidden></section></section>
+<p>第一份原卷計分。字形正確一字一分，同分同名次，時間只供老師參考。改分後，已公布的榜單會一併更新。</p>
 <p>開班資料由呢個瀏覽器保存。清除瀏覽器資料後，無法取回原班嘅管理權限。每個瀏覽器最多同時開 10 班，服務最多 100 班。</p>
-<p>暱稱、測驗結果會存喺班級服務；班級 24 小時後停止使用。呢個係課堂活動，瀏覽器提交嘅成績唔能夠防作弊。共用平板要先撳「換下一位同學」。</p></main>
+<p>原筆跡和批改只供本人及開班老師查看。班級建立 24 小時後停止存取，服務會清理到期資料；供應商備份不保證同時刪除。共用平板要先撳「換下一位同學」。</p></main>
 <script>
+__ASSESSMENT_SCRIPTS__
 const $ = id => document.getElementById(id);
 const storageKey = 'zimanman:teacher';
 const ownerKey = 'zimanman:teacher-owner';
 const defaultEntries = __DEFAULT_ENTRIES__;
 const validCapability = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-let draft = null;
+let draft = null, stopReview = null, deleteArmed = false, expiryTimer = null;
 try {
   let ownerCapability = localStorage.getItem(ownerKey);
   if (!validCapability(ownerCapability)) {
@@ -25,15 +27,23 @@ try {
   if (draft && !validCapability(draft.ownerCapability)) draft = { requestId: crypto.randomUUID(), entries: draft.entries, ownerCapability };
   if (location.hash.length > 1) {
     const assignment = JSON.parse(decodeURIComponent(location.hash.slice(1)));
-    draft = { requestId: crypto.randomUUID(), entries: assignment.entries, ownerCapability };
+    draft = { requestId: crypto.randomUUID(), entries: assignment.entries, mode: assignment.mode || 'copy', ownerCapability };
     history.replaceState(null, '', '/teacher');
   }
-  if (!draft) draft = { requestId: crypto.randomUUID(), entries: defaultEntries, ownerCapability };
+  if (!draft) draft = { requestId: crypto.randomUUID(), entries: defaultEntries, mode: 'copy', ownerCapability };
+  if (!draft.mode) { draft.mode = 'copy'; if (!draft.room) draft.requestId = crypto.randomUUID(); }
   if (!Array.isArray(draft.entries) || !draft.entries.length || draft.entries.some(entry => typeof entry.text !== 'string' || !Array.isArray(entry.selectedIndexes))) throw new Error();
   sessionStorage.setItem(storageKey, JSON.stringify(draft));
 } catch { draft = null; $('status').textContent = '設定未能保存，請允許瀏覽器儲存資料後重新開頁。'; }
 $('assignment').textContent = draft?.entries?.map(word => word.selectedIndexes.map(index => Array.from(word.text)[index]).join('、')).join(' / ') || '未能載入題目。';
 $('create').disabled = !draft || !!draft.room;
+$('mode').value = draft?.mode || 'copy'; $('mode').disabled = !draft || !!draft.room;
+$('mode').addEventListener('change', () => {
+  if ($('mode').disabled) return;
+  const next = { ...draft, mode: $('mode').value, requestId: crypto.randomUUID() };
+  try { sessionStorage.setItem(storageKey, JSON.stringify(next)); draft = next; }
+  catch { $('mode').value = draft.mode; $('status').textContent = '設定未能保存，請再試。'; }
+});
 async function request(path, options = {}) {
   let response, data;
   try {
@@ -43,32 +53,43 @@ async function request(path, options = {}) {
   if (!response.ok) throw Object.assign(new Error(data.error?.message || '未能連線，請重試。'), { code: data.error?.code });
   return data;
 }
-function showRoom(room) { $('room').hidden = false; $('code').textContent = room.code; $('expiry').textContent = '到期時間：' + new Date(room.expiresAt).toLocaleString('zh-HK'); $('new-class').hidden = false; }
+function showRoom(room) {
+  $('room').hidden = false; $('code').textContent = room.code; $('expiry').textContent = '到期時間：' + new Date(room.expiresAt).toLocaleString('zh-HK'); $('new-class').hidden = false; $('mode').disabled = true; $('publish').hidden = $('delete-class').hidden = room.assignment.version !== 2;
+  if (globalThis.setTimeout) {
+    clearTimeout(expiryTimer);
+    expiryTimer = setTimeout(() => {
+      if (draft.room?.code !== room.code) return;
+      stopReview?.(); stopReview = null; $('review').replaceChildren(); $('members').replaceChildren(); $('board').replaceChildren(); $('room').hidden = true; $('status').textContent = '班級已到期，請開新一班。';
+    }, Math.max(0, room.expiresAt - Date.now()));
+  }
+}
 if (draft?.room) showRoom(draft.room);
 $('new-class').addEventListener('click', () => {
   if ($('new-class').disabled) return;
-  const next = { requestId: crypto.randomUUID(), entries: draft.entries, ownerCapability: draft.ownerCapability };
+  const next = { requestId: crypto.randomUUID(), entries: draft.entries, mode: draft.mode, ownerCapability: draft.ownerCapability };
   try { sessionStorage.setItem(storageKey, JSON.stringify(next)); }
   catch { $('status').textContent = '設定未能保存，請允許瀏覽器儲存資料後再試。'; return; }
-  draft = next; $('room').hidden = true; $('new-class').hidden = true; $('board').replaceChildren(); $('create').disabled = false; $('status').textContent = '';
+  stopReview?.(); stopReview = null; deleteArmed = false; $('delete-class').textContent = '提早刪除此班';
+  draft = next; $('room').hidden = true; $('new-class').hidden = true; $('board').replaceChildren(); $('members').replaceChildren(); $('review').hidden = true; $('create').disabled = false; $('mode').disabled = false; $('status').textContent = '';
 });
 $('create').addEventListener('click', async () => {
   if ($('create').disabled) return;
-  $('create').disabled = true; $('new-class').disabled = true; $('status').textContent = '建立中…';
+  $('create').disabled = true; $('new-class').disabled = true; $('mode').disabled = true; $('status').textContent = '建立中…';
   try {
     try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); }
     catch { throw new Error('設定未能保存，請允許瀏覽器儲存資料後再試。'); }
-    const room = await request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: draft.requestId, entries: draft.entries }) });
+    const room = await request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: draft.requestId, version: 2, mode: draft.mode, entries: draft.entries }) });
     draft.room = room; showRoom(room);
     try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { $('status').textContent = '已開班，請記低班級碼；此頁未能保存。'; return; }
     $('status').textContent = '班級已建立。將班級碼交畀同學。';
   } catch (error) { $('status').textContent = error.message; if (error.code === 'EXPIRED') $('new-class').hidden = false; }
-  finally { $('create').disabled = !!draft.room; $('new-class').disabled = false; }
+  finally { $('create').disabled = !!draft.room; $('mode').disabled = !!draft.room; $('new-class').disabled = false; }
 });
 $('refresh').addEventListener('click', async () => {
   $('refresh').disabled = true;
   try {
     const room = draft.room;
+    if (room.assignment.version === 2) { await refreshReviewed(room); return; }
     const data = await request('/' + room.code + '/teacher-board');
     if (draft.room?.code !== room.code) return;
     const table = document.createElement('table');
@@ -79,5 +100,57 @@ $('refresh').addEventListener('click', async () => {
     $('board').replaceChildren(table); $('status').textContent = data.rows.length ? '已更新。' : '未有可排名嘅完成紀錄。';
   } catch (error) { $('status').textContent = error.message; }
   finally { $('refresh').disabled = false; }
+});
+function text(tag, value) { const el = document.createElement(tag); el.textContent = value; return el; }
+function showBoard(data) {
+  const section = document.createElement('div');
+  section.append(text('h2', data.published ? '已公布班級榜' : '班級榜尚未公布'));
+  for (const row of data.rows) section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+  $('board').replaceChildren(section); $('publish').disabled = data.published;
+}
+async function refreshReviewed(room) {
+  const data = await request('/' + room.code + '/reviews');
+  if (draft.room?.code !== room.code) return;
+  const list = document.createElement('div');
+  for (const member of data.members) {
+    const row = document.createElement('p');
+    row.append(text('span', member.alias + ' · ' + (!member.runId ? '未交卷' : member.score === null ? '待批改' : member.score + ' 字正確')));
+    if (member.runId) {
+      const button = text('button', '查看／批改原卷');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const original = await request('/' + room.code + '/reviews/' + member.memberId);
+          if (draft.room?.code !== room.code) return;
+          stopReview?.(); $('review').hidden = false;
+          stopReview = BishunAssessmentReview.mount($('review'), original, async changes => {
+            const result = await request('/' + room.code + '/reviews/' + member.memberId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
+            if (draft.room?.code === room.code) await refreshReviewed(room);
+            return result;
+          });
+        } catch (error) { if (draft.room?.code === room.code) $('status').textContent = error.message; }
+        finally { button.disabled = false; }
+      }); row.append(button);
+    }
+    list.append(row);
+  }
+  $('members').replaceChildren(list); showBoard(data); $('status').textContent = '收卷及批改已更新。';
+}
+$('publish').addEventListener('click', async () => {
+  if ($('publish').disabled) return; $('publish').disabled = true; const room = draft.room;
+  try { const data = await request('/' + room.code + '/publication', { method: 'POST' }); if (draft.room?.code === room.code) showBoard(data); }
+  catch (error) { if (draft.room?.code === room.code) { $('status').textContent = error.message; $('publish').disabled = false; } }
+});
+$('delete-class').addEventListener('click', async () => {
+  if ($('delete-class').disabled) return;
+  if (!deleteArmed) { deleteArmed = true; $('delete-class').textContent = '確認刪除此班及原筆跡'; return; }
+  const room = draft.room; $('delete-class').disabled = true; $('new-class').disabled = true;
+  try {
+    await request('/' + room.code, { method: 'DELETE' });
+    stopReview?.(); stopReview = null; delete draft.room; draft.requestId = crypto.randomUUID();
+    $('room').hidden = true; $('review').replaceChildren(); $('members').replaceChildren(); $('board').replaceChildren(); $('create').disabled = false; $('mode').disabled = false; $('status').textContent = '班級及原筆跡已刪除。';
+    try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { $('status').textContent = '班級及原筆跡已刪除；本頁未能保存新設定。'; }
+  } catch (error) { $('status').textContent = error.message; }
+  finally { $('delete-class').disabled = false; $('new-class').disabled = false; deleteArmed = false; $('delete-class').textContent = '提早刪除此班'; }
 });
 </script></body></html>

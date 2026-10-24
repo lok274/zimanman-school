@@ -10,7 +10,7 @@ const { createHash } = require('node:crypto');
 
 test('page asset URLs change when the application or stylesheet changes', () => {
   const dist = path.join(__dirname, '..', 'dist');
-  for (const [page, assets] of [['index.html', ['app.js', 'session.js', 'writing.js', 'quiz-results.js', 'classroom.js', 'styles.css']], ['leaderboard.html', ['leaderboard.js', 'quiz-results.js', 'classroom.js', 'styles.css']]]) {
+  for (const [page, assets] of [['index.html', ['app.js', 'session.js', 'writing.js', 'quiz-results.js', 'classroom.js', 'styles.css', 'assessment.js', 'assessment-store.js', 'freehand.js', 'assessment-review.js', 'assessment-ui.js', 'assessment.css']], ['leaderboard.html', ['leaderboard.js', 'quiz-results.js', 'assessment.js', 'classroom.js', 'styles.css']]]) {
     const html = fs.readFileSync(path.join(dist, page), 'utf8');
     for (const file of assets) {
       const version = createHash('sha256').update(fs.readFileSync(path.join(dist, file), 'utf8').replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);

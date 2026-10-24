@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#214b3b">
   <title>寫字樂 · 一筆一筆，慢慢學</title>
   <link rel="stylesheet" href="styles.css?v=d8c88175845e">
+  <link rel="stylesheet" href="assessment.css?v=53c115745cc6">
 </head>
 <body>
   <header class="app-header">
@@ -15,8 +16,9 @@
   <div id="storage-notice" class="notice storage-notice" role="status" hidden></div>
   <main>
     <section id="home-view" class="home-view" aria-label="首頁">
-      <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>揀用途，自己寫或跟住寫</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>睇題目，自己寫</span></button></div>
+      <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>揀用途，自己寫或跟住寫</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>自己寫，交原卷</span></button></div>
       <button id="class-open" class="button secondary class-entry">加入班級測驗</button>
+      <button id="resume-assessment" class="button secondary" hidden>繼續本機小測</button>
       <p class="standalone-class-note small">單檔版保留本機測驗。跨平板班級測驗請開 <a href="https://lok274.github.io/zimanman-school/">網上學生頁面</a>。</p>
     </section>
     <section id="group-view" class="home-view" hidden aria-labelledby="group-title">
@@ -77,20 +79,26 @@
     <button id="validate-words" class="button secondary">更新可選詞語</button>
     <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><div id="teacher-word-options"></div><p id="teacher-selection-total" role="status" aria-live="polite"></p></fieldset>
     <button id="apply-words" class="button primary">套用並返回首頁</button>
+    <label class="field-label" for="assessment-mode">測驗題型</label><select id="assessment-mode"><option value="copy">看字寫</option><option value="listen">聽詞寫</option></select>
     <button id="teacher-class" class="button secondary">用以上範圍開班級測驗 ↗</button>
     <div id="teacher-active" class="teacher-active" hidden><h3>今節練習</h3><button id="teacher-skip" class="button secondary">老師協助，略過呢個字</button><button id="teacher-end" class="button quiet">結束今節並睇紀錄</button></div>
     <details id="license-details"><summary>字庫授權及修改說明</summary><p>Copyright 1999 Arphic Technology Co., Ltd. Copyright 2016 Shaunak Kishore. 字庫按 Arphic Public License 提供，並無擔保。你可以按授權條款修改及再分發。</p><p>本版將「草」改為十畫，交換「密」第七、八畫，並調整「來」嘅筆順。初始十一字嘅筆順已對照教育局圖示；字形仍有字庫風格差異。</p><p><a href="data/ARPHICPL.TXT" target="_blank" rel="noopener">Arphic Public License 全文</a> · <a href="data/NOTICE.txt" target="_blank" rel="noopener">字庫來源及修改紀錄</a> · <a href="LICENSES/hanzi-writer-MIT.txt" target="_blank" rel="noopener">Hanzi Writer 3.5.0 MIT 授權</a></p></details>
     <details id="history-details"><summary>呢部裝置嘅練習紀錄</summary><div id="local-history"></div></details>
   </dialog>
-  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級測驗</h2><button id="class-close" class="icon-button" aria-label="關閉班級測驗">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（唔好用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級測驗</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次測驗</button><button id="class-leave" class="button secondary" hidden>換下一位同學</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><p id="class-switch-note" class="small" hidden>換人會清除參加身份和未交紀錄。請先交卷。</p><p class="small">完成全份測驗後，自動睇排行榜。</p></dialog>
+  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級測驗</h2><button id="class-close" class="icon-button" aria-label="關閉班級測驗">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（唔好用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級測驗</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次測驗</button><button id="class-leave" class="button secondary" hidden>換下一位同學</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><p id="class-switch-note" class="small" hidden>換人會清除參加身份和未交紀錄。請先交卷。</p><p class="small">交卷後可查看自己的原卷。老師批改及公布後可睇班級榜。</p></dialog>
   <dialog id="rest-dialog" aria-labelledby="rest-title"><div class="rest-illustration" aria-hidden="true"><svg viewBox="0 0 120 100"><path d="M58 88V37M58 58C24 60 18 26 28 23C52 21 58 58 58 58ZM58 45C92 45 105 9 92 10C66 10 58 45 58 45ZM35 88H82"/></svg></div><h2 id="rest-title">休息一下</h2><p>伸一伸手指，望一望遠處。</p><button id="resume" class="button primary large">我準備好喇</button></dialog>
   <script src="vendor/hanzi-writer.min.js"></script>
   <script src="data/characters.js"></script>
   <script src="content.js?v=051508558ead"></script>
   <script src="session.js?v=c2754267b78f"></script>
   <script src="quiz-results.js?v=6f36d387a7d2"></script>
-  <script src="classroom.js?v=f252cb4b7a03"></script>
+  <script src="assessment.js?v=dda2d0aa75e8"></script>
+  <script src="assessment-store.js?v=b963ca447478"></script>
+  <script src="freehand.js?v=4e0cd289f165"></script>
+  <script src="assessment-review.js?v=bfae81f05885"></script>
+  <script src="classroom.js?v=f3c988415333"></script>
+  <script src="assessment-ui.js?v=0d544326e175"></script>
   <script src="writing.js?v=e225700b5fb1"></script>
-  <script src="app.js?v=af833d558828"></script>
+  <script src="app.js?v=fb29178bbb24"></script>
 </body>
 </html>
