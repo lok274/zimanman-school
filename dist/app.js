@@ -336,6 +336,7 @@
     $('next-row').hidden = $('main-next').hidden;
     $('stroke-progress').textContent = a.strokeCount && ['guided', 'recall'].includes(a.phase) ? '已寫 ' + a.currentStroke + ' / ' + a.strokeCount + ' 畫' : a.strokeCount && a.phase === 'watch' ? '共 ' + a.strokeCount + ' 畫' : '';
     const attempt = state.attempts.find(item => item.id === a.attemptId);
+    const guide = a.phase === 'guided' && !a.writingDone ? W.guide(currentOccurrence().character, dataCache.get(currentOccurrence().character), a.currentStroke) : null;
     let title = '', instruction = '', defaultFeedback = '';
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
     if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = safeText(['可以再載入，或者請老師幫手。', '資料未準備好，稍後再試。', '想求助就撳老師工具。']); }
@@ -350,32 +351,38 @@
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
       if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
     }
+    if (guide) { title += ' · ' + guide.label; instruction = guide.instruction; }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
     const practiceCue = !quiz && ['guided', 'recall', 'character-complete'].includes(a.phase);
     const eventCue = practiceCue && !!feedback;
-    $('practice-instruction').hidden = quizComplete || eventCue || ['watch', 'quiz'].includes(a.phase);
+    $('practice-instruction').hidden = !!guide || quizComplete || eventCue || ['watch', 'quiz'].includes(a.phase);
     $('feedback').hidden = practiceCue && !eventCue;
     $('feedback').classList.toggle('sr-only', quizComplete);
-    $('hear-instruction').setAttribute('aria-describedby', quizComplete ? 'main-next' : eventCue ? 'feedback-text' : 'practice-instruction');
-    const nextInstruction = quizComplete ? $('main-next').textContent.replace(/ →$/, '') : eventCue ? feedback.text : instruction;
-    const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction].join(':');
+    $('hear-instruction').setAttribute('aria-describedby', quizComplete ? 'main-next' : guide ? 'practice-instruction' : eventCue ? 'feedback-text' : 'practice-instruction');
+    const nextInstruction = quizComplete ? $('main-next').textContent.replace(/ →$/, '') : guide ? guide.instruction : eventCue ? feedback.text : instruction;
+    const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction, guide ? a.currentStroke : ''].join(':');
     if (nextSpeechKey !== speechKey || instructionStatus && instructionText !== nextInstruction) { stopSpeech(); speechKey = nextSpeechKey; }
     instructionText = nextInstruction;
     renderInstructionVoice();
     const message = quizComplete ? '測驗完成' : feedback ? feedback.text : defaultFeedback;
     if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;
-    const icon = !quizComplete && feedback ? feedback.icon : '';
+    const icon = !quizComplete && !(a.phase === 'guided' && a.writingDone) && feedback ? feedback.icon : '';
     if ($('feedback-icon').textContent !== icon) $('feedback-icon').textContent = icon;
     if ($('feedback-icon').hidden !== !icon) $('feedback-icon').hidden = !icon;
     $('feedback').setAttribute('data-kind', quizComplete ? 'quiz-complete' : feedback ? feedback.kind : 'instruction');
-    if (!quiz || a.completedPhase !== 'quiz') $('quiz-mark').setAttribute('hidden', '');
-    else $('quiz-mark').removeAttribute('hidden');
+    renderCompletionMark();
     $('board-message').hidden = !['loading', 'unavailable'].includes(a.phase);
     $('board-message').textContent = a.phase === 'loading' ? '整理緊筆順…' : '未能載入字形\n請再試，或者請老師幫手。';
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
     $('pause').disabled = demoState !== 'playing';
     if (available()) syncWriter();
     maskRecallText();
+  }
+  function renderCompletionMark() {
+    const a = state.active;
+    const guidedReady = a.phase === 'guided' && a.writingDone && available() && readyMount?.generation === mountGeneration && readyMount.token === a.token;
+    if (guidedReady || state.mode === 'quiz' && a.completedPhase === 'quiz') $('quiz-mark').removeAttribute('hidden');
+    else $('quiz-mark').setAttribute('hidden', '');
   }
   function syncWriter() {
     const a = state.active;
@@ -395,13 +402,14 @@
       }).catch(() => { if (state && generation === mountGeneration && state.active.token === token && state.active.phase === 'loading') dispatch({ type: 'DATA_FAILED', token }); }).finally(() => clearTimeout(timer));
       return;
     }
-    if (!['watch', 'guided', 'recall', 'quiz'].includes(a.phase) || a.writingDone) return;
+    if (!['watch', 'guided', 'recall', 'quiz'].includes(a.phase) || a.writingDone && a.phase !== 'guided') return;
     const occurrence = currentOccurrence(), data = dataCache.get(occurrence.character);
     if (!data || !globalThis.HanziWriter) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); return; }
-    try { handle = W.mount($('writer'), occurrence.character, data, { token: a.token, phase: a.phase, currentStroke: a.currentStroke || 0, help: (state.attempts.find(item => item.id === a.attemptId) || { help: [] }).help,
+    try { handle = W.mount($('writer'), occurrence.character, data, { token: a.token, phase: a.phase, currentStroke: a.currentStroke || 0, missesOnCurrentStroke: a.missesOnCurrentStroke, help: (state.attempts.find(item => item.id === a.attemptId) || { help: [] }).help,
       onReady: () => {
         if (!state || generation !== mountGeneration || state.active.token !== a.token || !available()) return;
         readyMount = { generation, token: a.token };
+        renderCompletionMark();
         if (pendingDemoToken === a.token) Promise.resolve().then(() => {
           if (pendingDemoToken !== a.token || !available() || generation !== mountGeneration || state.active.token !== a.token || state.active.phase !== 'watch') return;
           pendingDemoToken = null; handle.play(false);

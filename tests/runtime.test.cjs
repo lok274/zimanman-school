@@ -16,6 +16,7 @@ class Node {
     this.classList = { toggle: (name, value) => { const names = new Set(this.className.split(' ').filter(Boolean)); if (value) names.add(name); else names.delete(name); this.className = [...names].join(' '); } };
   }
   get parentElement() { return this.parentNode; }
+  get firstChild() { return this.childNodes[0] || null; }
   get className() { return this.attributes.class || ''; }
   set className(value) { this.attributes.class = value; }
   get textContent() { return this.nodeType === 3 ? this.nodeValue : this.childNodes.map(node => node.textContent).join(''); }
@@ -23,6 +24,7 @@ class Node {
   set innerHTML(value) { assert.equal(value, ''); this.replaceChildren(); }
   append(...nodes) { nodes.forEach(node => this.appendChild(typeof node === 'string' ? new Node('#text', node) : node)); }
   appendChild(node) { node.remove(); node.parentNode = this; this.childNodes.push(node); return node; }
+  insertBefore(node, reference) { if (!reference) return this.appendChild(node); assert.equal(reference.parentNode, this); node.remove(); this.childNodes.splice(this.childNodes.indexOf(reference), 0, node); node.parentNode = this; return node; }
   removeChild(node) { this.childNodes.splice(this.childNodes.indexOf(node), 1); node.parentNode = null; return node; }
   remove() { if (this.parentNode) this.parentNode.removeChild(this); }
   replaceWith(node) { const parent = this.parentNode; if (!parent) return; const index = parent.childNodes.indexOf(this); node.remove(); parent.childNodes[index] = node; node.parentNode = parent; this.parentNode = null; }
@@ -93,6 +95,13 @@ function openLocalGroups(e, mode = 'practice') {
 }
 function startLocal(e, mode = 'practice', group = 0) { openLocalGroups(e, mode); e.$('group-cards').childNodes[group].click(); }
 function markedPosition(element) { return element.childNodes.findIndex(node => node.getAttribute('aria-current') === 'true'); }
+function lessonGlyph(character) { return JSON.parse(source('data/chars/' + character + '.json')); }
+function drawMedian(e, points, size = 360) {
+  const svg = e.$('writer').childNodes.find(node => node.nodeName === 'svg' && node.className !== 'start-overlay');
+  const t = e.context.HanziWriter.getScalingTransform(size, size, 24);
+  const point = p => ({ clientX: t.x + p[0] * t.scale, clientY: size - t.y - p[1] * t.scale });
+  svg.emit('mousedown', point(points[0])); points.slice(1).forEach(p => svg.emit('mousemove', point(p))); e.document.emit('mouseup');
+}
 
 function dictationApp({ prefixed = false, unsupported = false } = {}) {
   const e = environment(source('index.html')), timers = new Map(), speech = { instances: [] };
@@ -120,7 +129,7 @@ function dictationApp({ prefixed = false, unsupported = false } = {}) {
     fail(error) { this.active = false; this.onerror?.({ error }); }
   }
   if (!unsupported) e.context[prefixed ? 'webkitSpeechRecognition' : 'SpeechRecognition'] = Recognition;
-  e.context.BishunSession = S; e.context.BishunWriting = {};
+  e.context.BishunSession = S; e.context.BishunWriting = { guide: () => null };
   vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context);
   e.speech = speech;
   e.begin = () => { e.$('dictation-start').click(); const recognition = speech.instances.at(-1); recognition.begin(); return recognition; };
@@ -253,7 +262,7 @@ test('both modes open two groups whose sessions cover all twelve default positio
   const words = ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去'];
   for (const mode of ['practice', 'quiz']) {
     const e = environment(source('index.html'));
-    e.context.BishunSession = S; e.context.BishunWriting = {};
+    e.context.BishunSession = S; e.context.BishunWriting = { guide: () => null };
     vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context); openLocalGroups(e, mode);
     assert.equal(e.store.size, 0, 'choosing a mode does not create a session');
     assert.equal(e.$('home-view').hidden, true); assert.equal(e.$('group-view').hidden, false);
@@ -288,7 +297,7 @@ test('both modes open two groups whose sessions cover all twelve default positio
     const practice = environment(source('index.html'));
     let initial = S.createSession({ id: 'photo-practice', entries: assigned(word), startedAt: 1 });
     for (const event of [{ type: 'CHOOSE_WORD', wordId: 'w0' }, { type: 'DATA_READY', strokeCount: 1 }]) initial = S.transition(initial, { at: 2, token: initial.active.token, newToken: 'watch', ...event });
-    practice.context.BishunSession = { ...S, createSession: () => structuredClone(initial) }; practice.context.BishunWriting = {};
+    practice.context.BishunSession = { ...S, createSession: () => structuredClone(initial) }; practice.context.BishunWriting = { guide: () => null };
     vm.runInContext(source('content.js'), practice.context); vm.runInContext(source('app.js'), practice.context); startLocal(practice);
     const cue = practice.$('semantic-cue').childNodes[0];
     assert.equal(cue.nodeName, words.includes(word) ? 'img' : 'svg');
@@ -317,7 +326,7 @@ test('skipped word card shows pending practice instead of a completion stamp', (
   initial = S.transition(initial, { type: 'TEACHER_SKIP', token: initial.active.token, at: 3 });
   initial = { ...initial, active: { phase: 'choose-word' } };
   e.context.BishunSession = { ...S, createSession: () => structuredClone(initial) };
-  e.context.BishunWriting = {};
+  e.context.BishunWriting = { guide: () => null };
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
   assert(e.$('word-cards').textContent.includes('有字待練'));
@@ -328,7 +337,7 @@ test('history counts each character once while retaining assisted and independen
   let snapshot = recallSnapshot('機');
   for (const event of [{ type: 'REQUEST_HELP', kind: 'outline' }, { type: 'STROKE_ACCEPTED', strokeIndex: 0 }, { type: 'WRITING_COMPLETE' }, { type: 'RETRY' }, { type: 'STROKE_ACCEPTED', strokeIndex: 0 }, { type: 'WRITING_COMPLETE' }, { type: 'END_SESSION' }]) snapshot = S.transition(snapshot, { at: 3, token: snapshot.active.token, newToken: 'unassisted-retry', ...event });
   e.store.set('bishun-school:v1:' + snapshot.id, JSON.stringify(snapshot));
-  e.context.BishunSession = S; e.context.BishunWriting = {};
+  e.context.BishunSession = S; e.context.BishunWriting = { guide: () => null };
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
   e.$('teacher-open').click();
@@ -342,7 +351,7 @@ test('recent history remains discoverable after more than 500 existing storage k
   for (let index = 0; index < 500; index++) e.store.set('other-app-' + index, 'unrelated');
   const latest = S.createSession({ id: 'newest-at-last', entries: assigned('機'), startedAt: Date.now() + 1000 });
   e.store.set('bishun-school:v1:' + latest.id, JSON.stringify(latest));
-  e.context.BishunSession = S; e.context.BishunWriting = {};
+  e.context.BishunSession = S; e.context.BishunWriting = { guide: () => null };
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
   e.$('teacher-open').click();
@@ -355,6 +364,7 @@ async function feedbackApp(character = '粗', strokeCount = 2, startGuided = tru
   e.context.BishunContent = { words: [character], cue: () => ['例子', 'M1 1L2 2'] };
   e.context.HanziWriter = {};
   e.context.BishunWriting = {
+    guide: () => null,
     loadCharacter: () => Promise.resolve({ strokes: Array(strokeCount).fill('M1 1L2 2') }),
     mount(_element, character, _data, options) { e.mounts.push({ ...options, character }); return { dispose() {}, pause() {}, suspend() {}, showHelp() {} }; }
   };
@@ -474,7 +484,7 @@ test('previous button returns practice steps, retains results and stops completi
 test('returning during loading aborts the request and ignores its late result', async () => {
   const e = environment(source('index.html')); let resolveData, loadSignal;
   e.context.BishunSession = S; e.context.BishunContent = { words: ['粗'], cue: () => ['例子', 'M1 1L2 2'] };
-  e.context.BishunWriting = { loadCharacter(_character, signal) { loadSignal = signal; return new Promise(resolve => { resolveData = resolve; }); } };
+  e.context.BishunWriting = { guide: () => null, loadCharacter(_character, signal) { loadSignal = signal; return new Promise(resolve => { resolveData = resolve; }); } };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
   assert(!e.document.body.className.includes('writing-view'));
   assert.equal(e.$('previous-step').hidden, true); e.$('word-cards').childNodes[0].click();
@@ -748,7 +758,7 @@ test('new instruction and presentation controls stay readable and target-safe in
 test('legacy history remains full scope and interrupted v1 work is closed without migration', () => {
   const e = environment(source('index.html')), legacy = require('./fixtures/session-v1.json');
   e.store.set('bishun-school:v1:' + legacy.id, JSON.stringify(legacy)); e.store.set('bishun-school:v1:current', legacy.id);
-  e.context.BishunSession = S; e.context.BishunWriting = {}; e.context.BishunContent = { words: ['粗'], cue: () => ['例子', 'M1 1L2 2'] };
+  e.context.BishunSession = S; e.context.BishunWriting = { guide: () => null }; e.context.BishunContent = { words: ['粗'], cue: () => ['例子', 'M1 1L2 2'] };
   vm.runInContext(source('app.js'), e.context); startLocal(e); e.$('teacher-open').click();
   const closed = JSON.parse(e.store.get('bishun-school:v1:' + legacy.id)); assert.equal(closed.version, 1); assert.equal(closed.occurrences.length, 5); assert.equal(closed.attempts.at(-1).outcome, 'abandoned');
   assert(e.$('local-history').textContent.includes('自己完成 0 · 有提示完成 1 · 跳過 0 · 待練 4')); assert(e.$('local-history').textContent.includes('推來推去 第 3 字「推」待練'));
@@ -788,6 +798,7 @@ async function quizApp({ autoReady = true, failMount = false } = {}) {
   e.context.BishunSession = S; e.context.HanziWriter = {};
   e.context.BishunContent = { words: ['推來推去'], photos: { '推來推去': 'images/push-block.webp' }, cue: () => ['例子', 'M1 1L2 2'] };
   e.context.BishunWriting = {
+    guide: () => null,
     loadCharacter: () => Promise.resolve({ strokes: ['M1 1L2 2', 'M1 3L2 3'] }),
     mount(_element, character, _data, options) {
       e.mounts.push({ ...options, character });
@@ -870,6 +881,7 @@ async function classroomApp({ uploadFails = false, holdUpload = false, restoredS
   e.context.HanziWriter = {};
   e.context.location.assign = url => e.navigation.push(url);
   e.context.BishunSession = S; e.context.BishunWriting = {
+    guide: () => null,
     loadCharacter: () => Promise.resolve({ strokes: ['M1 1L2 2'] }),
     mount(_el, _char, _data, options) { e.mounts.push(options); queueMicrotask(options.onReady); return { dispose() {}, pause() {} }; }
   };
@@ -1024,7 +1036,7 @@ test('retry, previous and home retain exact abandoned time and cold reload never
   const reload = environment(source('index.html')); const interrupted = structuredClone(closed); interrupted.active = { ...closed.active, phase: 'quiz', token: interrupted.attempts[2].id, attemptId: interrupted.attempts[2].id, occurrenceId: 'w0:0' }; delete interrupted.endedAt;
   interrupted.attempts[2].outcome = 'active'; delete interrupted.attempts[2].endedAt;
   reload.store.set('bishun-school:v1:' + id, JSON.stringify(interrupted)); reload.store.set('bishun-school:v1:current', id);
-  reload.context.BishunSession = S; reload.context.BishunWriting = {}; reload.context.BishunContent = e.context.BishunContent;
+  reload.context.BishunSession = S; reload.context.BishunWriting = { guide: () => null }; reload.context.BishunContent = e.context.BishunContent;
   vm.runInContext(source('app.js'), reload.context); const saved = JSON.parse(reload.store.get('bishun-school:v1:' + id));
   assert.equal(saved.active.phase, 'summary'); assert.equal(saved.attempts[2].elapsedMs, 100); assert.equal(saved.version, 3); assert.equal(reload.$('home-view').hidden, false);
 });
@@ -1120,6 +1132,7 @@ async function demoApp(words = '鬍鬚', indexes, autoReady = true) {
   e.context.BishunSession = S; e.context.HanziWriter = {};
   e.context.BishunContent = { words: words.split('\n'), cue: () => ['例子', 'M1 1L2 2'] };
   e.context.BishunWriting = {
+    guide: () => null,
     loadCharacter: () => Promise.resolve({ strokes: ['M1 1L2 2'] }),
     mount(_el, character, _data, options) {
       const mount = { ...options, character }; e.mounts.push(mount);
@@ -1457,4 +1470,162 @@ test('Pages and standalone source branding use 寫字樂 while persistent keys a
   assert(source('leaderboard.html').includes('href="index.html">寫字樂</a>'));
   assert(source('app.js').includes("const prefix = 'bishun-school:v1:'"));
   assert(source('app.js').includes('https://zimanman-classroom-1023.lokyau65.chatgpt.site'));
+});
+
+test('component guidance covers every reviewed real glyph boundary and rejects incompatible data', () => {
+  const W = require('../dist/writing.js');
+  const ranges = { 粗: [[6, '米'], [11, '且']], 濃: [[3, '氵'], [9, '曲'], [16, '辰']], 鬍: [[10, '髟'], [15, '古'], [19, '月']], 鬚: [[10, '髟'], [13, '彡'], [22, '頁']], 密: [[3, '宀'], [8, '必'], [11, '山']], 剪: [[9, '前'], [11, '刀']], 草: [[4, '艹'], [10, '早']], 機: [[4, '木'], [16, '幾']], 推: [[3, '扌'], [11, '隹']], 來: [[8, '來']], 去: [[3, '土'], [5, '厶']] };
+  let strokes = 0;
+  for (const [character, parts] of Object.entries(ranges)) {
+    const data = W.validateCharacter(character, lessonGlyph(character));
+    let start = 0;
+    for (const [end, label] of parts) {
+      assert(end > start);
+      for (let index = start; index < end; index++) {
+        const guide = W.guide(character, data, index);
+        assert.equal(guide.label, label, character + ' stroke ' + index);
+        assert(guide.instruction.includes('由橙點開始'));
+        assert(!/[髟隹厶]/u.test(guide.instruction));
+        strokes++;
+      }
+      start = end;
+    }
+    assert.equal(start, data.strokes.length); assert.equal(W.guide(character, data, start), null);
+    assert.equal(W.guide(character, data, -1), null); assert.equal(W.guide(character, data, 0.5), null);
+  }
+  assert.equal(strokes, 140);
+  assert.equal(W.guide('粗', { strokes: ['M1 1L2 2', 'M1 3L2 3'] }, 0), null);
+  assert.equal(W.guide('二', { strokes: ['M1 1L2 2', 'M1 3L2 3'] }, 0), null);
+  assert.equal(W.guide('粗', undefined, 0), null);
+});
+test('guided direction follows the ordered short median prefix and treats dots and early turns safely', async () => {
+  const W = require('../dist/writing.js'), data = lessonGlyph('來');
+  const sample = median => ({ ...data, medians: [median, ...data.medians.slice(1)] });
+  assert(W.guide('來', sample([[100, 500], [100, 500], [300, 500], [300, 0], [0, 0]]), 0).instruction.includes('向右起筆'));
+  assert(W.guide('來', sample([[100, 500], [100, 700]]), 0).instruction.includes('向上起筆'));
+  assert(W.guide('來', sample([[0, 0], [10, 0], [60, -50]]), 0).instruction.includes('向右起筆'));
+  for (const median of [[[100, 500], [100, 500]], [[100, 500], [110, 490]], [[100, 500], [110, 500], [110, 200]]]) {
+    assert(W.guide('來', sample(median), 0).instruction.includes('跟住提示慢慢寫'));
+  }
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  let ready = false;
+  const handle = e.context.BishunWriting.mount(e.$('writer'), '來', sample([[100, 500], [100, 500], [140, 500], [300, 500], [300, 0], [0, 0]]), { phase: 'guided', token: 'prefix', missesOnCurrentStroke: 1, onReady: () => { ready = true; }, onEvent() {} });
+  await waitFor(() => ready);
+  const arrow = walk(e.$('writer')).find(node => node.className === 'stroke-direction');
+  assert(arrow.attributes.d.startsWith('M100 500 L140 500 L185 500 M'));
+  assert(!arrow.attributes.d.includes('300')); assert.equal(arrow.style.display, ''); handle.dispose();
+});
+test('real guided components change in one live vendor mount while retaining accepted strokes and restoring current help', async () => {
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const data = lessonGlyph('粗'), events = [], calls = [], prototype = e.context.HanziWriter.prototype, originalQuiz = prototype.quiz, originalHighlight = prototype.highlightStroke;
+  let callbacks, ready = 0;
+  prototype.quiz = function(options) { calls.push(options.quizStartStrokeNum); callbacks = options; return originalQuiz.call(this, options); };
+  prototype.highlightStroke = function(index) { calls.push('highlight-' + index); return originalHighlight.call(this, index); };
+  const mount = (currentStroke, extra = {}) => e.context.BishunWriting.mount(e.$('writer'), '粗', data, { phase: 'guided', token: 'component', currentStroke, onReady: () => ready++, onEvent: event => events.push(event), ...extra });
+  let handle = mount(5); await waitFor(() => ready === 1);
+  const overlay = e.$('writer').firstChild, focus = overlay.childNodes[0].childNodes[0], arrow = walk(overlay).find(node => node.className === 'stroke-direction');
+  assert.equal(overlay.className, 'start-overlay'); assert.equal(focus.childNodes.length, 6);
+  assert.equal(focus.childNodes.filter(node => node.attributes.fill === '#9eafa0').length, 1);
+  assert.equal(arrow.style.display, 'none');
+  callbacks.onMistake({ strokeNum: 5 }); assert.equal(arrow.style.display, '');
+  handle.showHelp('stroke'); await new Promise(resolve => setImmediate(resolve)); assert(calls.includes('highlight-5'));
+  await waitFor(() => walk(e.$('writer').childNodes[1]).some(node => node.nodeName === 'path' && node.attributes.stroke === 'rgba(186,100,45,1)' && Number(node.style.opacity) > 0));
+  drawMedian(e, data.medians[5]); await waitFor(() => events.some(event => event.type === 'STROKE_ACCEPTED'));
+  assert.equal(events.at(-1).strokeIndex, 5); assert.equal(arrow.style.display, 'none'); assert.equal(focus.childNodes.length, 5);
+  assert.equal(focus.childNodes.filter(node => node.attributes.fill === '#9eafa0').length, 5);
+  assert.deepEqual(calls.filter(value => typeof value === 'number'), [5]); assert.equal(e.document.listeners.mouseup.length, 1);
+  const vendor = e.$('writer').childNodes[1]; assert.notEqual(vendor, overlay);
+  const mainPaths = walk(vendor).filter(node => node.nodeName === 'path' && node.attributes.stroke === 'rgba(33,75,59,1)');
+  await waitFor(() => mainPaths.filter(node => Number(node.style.opacity) === 1).length === 6);
+  handle.dispose(); handle = mount(6, { missesOnCurrentStroke: 1 }); await waitFor(() => ready === 2);
+  assert.equal(walk(e.$('writer')).find(node => node.className === 'stroke-direction').style.display, '');
+  handle.dispose(); handle = mount(6, { help: [{ kind: 'stroke', strokeIndex: 5 }] }); await waitFor(() => ready === 3);
+  assert.equal(walk(e.$('writer')).find(node => node.className === 'stroke-direction').style.display, 'none');
+  handle.showHelp('stroke'); const oldHighlights = calls.filter(value => value === 'highlight-6').length;
+  callbacks.onCorrectStroke({ strokeNum: 6 }); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.filter(value => value === 'highlight-6').length, oldHighlights, 'queued help cannot highlight a previous stroke');
+  assert(!calls.includes('highlight-7'), 'queued help cannot highlight a successor stroke');
+  handle.dispose(); handle = mount(7, { help: [{ kind: 'stroke', strokeIndex: 7 }] }); await waitFor(() => ready === 4);
+  assert.equal(walk(e.$('writer')).find(node => node.className === 'stroke-direction').style.display, '', 'current stroke help restores direction');
+  handle.dispose(); assert.equal(e.observers.size, 0);
+});
+async function componentApp(character) {
+  const e = environment(source('index.html')); e.context.BishunSession = S;
+  e.context.BishunContent = { words: [character], cue: () => ['例子', 'M1 1L2 2'] };
+  for (const file of ['data/characters.js', 'vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  e.mounts = []; const original = e.context.BishunWriting.mount;
+  e.context.BishunWriting.mount = (...args) => { e.mounts.push(args[3]); return original(...args); };
+  vm.runInContext(source('app.js'), e.context); startLocal(e); e.$('word-cards').childNodes[0].click();
+  e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  await waitFor(() => e.$('writer').style.visibility === ''); e.$('main-next').click();
+  await waitFor(() => e.mounts.length === 2 && e.$('writer').style.visibility === '');
+  return e;
+}
+test('mapped guided speech takes priority over encouragement and cancels on every stroke including identical wording', async () => {
+  const e = await componentApp('粗'), data = lessonGlyph('粗'); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
+  assert.equal(e.$('practice-title').textContent, '跟住寫 · 米'); assert.equal(e.$('practice-instruction').hidden, true);
+  assert(!visibleText(e.document).includes('由橙點開始')); assert.equal(e.voices.spoken.length, 0);
+  e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, e.$('practice-instruction').textContent);
+  e.mounts.at(-1).onEvent({ type: 'STROKE_MISSED', token: e.snapshot().active.token, strokeIndex: 0 });
+  assert.equal(e.$('feedback-text').textContent, '再試呢一畫。'); e.$('hear-instruction').click();
+  assert.notEqual(e.voices.spoken.at(-1).text, e.$('feedback-text').textContent); assert.equal(e.$('hear-instruction').getAttribute('aria-describedby'), 'practice-instruction');
+  e.mounts.at(-1).onEvent({ type: 'STROKE_MISSED', token: e.snapshot().active.token, strokeIndex: 0 });
+  e.mounts.at(-1).onEvent({ type: 'STROKE_MISSED', token: e.snapshot().active.token, strokeIndex: 0 });
+  assert.equal(e.snapshot().attempts[0].help.length, 1, 'repeated misses demonstrate the current stroke only once');
+  for (let index = 0; index < 6; index++) { drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
+  assert.equal(e.$('practice-title').textContent, '跟住寫 · 且'); assert.equal(e.mounts.length, 2); assert.equal(e.$('practice-stars').hidden, true); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
+  e.$('hear-instruction').click(); assert(e.voices.spoken.at(-1).text.includes('右邊部件'));
+  e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.$('writer').style.visibility === '');
+  assert.equal(e.snapshot().active.currentStroke, 6); assert.equal(e.$('practice-title').textContent, '跟住寫 · 且');
+  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === '');
+  assert.equal(e.snapshot().active.currentStroke, 6);
+  for (let index = 6; index < 8; index++) { drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
+  e.$('hear-instruction').click(); const sameWords = e.$('practice-instruction').textContent, sameCancels = e.voices.cancels;
+  drawMedian(e, data.medians[8]); await waitFor(() => e.snapshot().active.currentStroke === 9);
+  assert.equal(e.$('practice-instruction').textContent, sameWords); assert(e.voices.cancels > sameCancels, 'identical instruction still cancels for the next expected stroke');
+  const atomic = await componentApp('來'); atomic.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
+  atomic.$('hear-instruction').click(); const old = atomic.voices.spoken.at(-1), cancels = atomic.voices.cancels;
+  const token = atomic.snapshot().active.token;
+  atomic.mounts.at(-1).onEvent({ type: 'STROKE_ACCEPTED', token, strokeIndex: 0 });
+  assert.equal(atomic.$('practice-title').textContent, '跟住寫 · 來'); assert(atomic.voices.cancels > cancels);
+  old.onerror(); assert.equal(atomic.$('instruction-voice-note').textContent, '');
+  atomic.voices.current = []; atomic.$('hear-instruction').click(); assert(atomic.$('instruction-voice-note').textContent.includes('冇粵語'));
+  e.document.querySelector('.brand').click(); atomic.document.querySelector('.brand').click();
+});
+test('completed real guided character restores as a ready display-only board after rest teacher background and resize', async () => {
+  const e = await componentApp('來'), data = lessonGlyph('來');
+  const prototype = e.context.HanziWriter.prototype, original = prototype.quiz, quizStarts = [];
+  prototype.quiz = function(options) { quizStarts.push(options.quizStartStrokeNum); return original.call(this, options); };
+  for (let index = 0; index < data.strokes.length; index++) { drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
+  await waitFor(() => e.snapshot().active.writingDone);
+  assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.$('feedback-icon').hidden, true); assert.equal(e.$('practice-stars').textContent, '★ 1');
+  const attempt = JSON.stringify(e.snapshot().attempts), animations = e.$('feedback-icon').animations.length;
+  const actions = [() => { e.$('rest').click(); assert.equal('hidden' in e.$('quiz-mark').attributes, true); e.$('resume').click(); }, () => { e.$('teacher-open').click(); e.$('teacher-close').click(); }, () => { e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); }];
+  for (const action of actions) {
+    const count = e.mounts.length; action(); assert.equal(e.mounts.length, count + 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
+    await waitFor(() => e.$('writer').style.visibility === ''); assert.equal('hidden' in e.$('quiz-mark').attributes, false);
+    const canonical = walk(e.$('writer')).filter(node => node.nodeName === 'path' && node.attributes.stroke === 'rgba(33,75,59,1)');
+    assert.equal(canonical.filter(node => Number(node.style.opacity) === 1).length, 8);
+    drawMedian(e, data.medians[0]); assert.equal(JSON.stringify(e.snapshot().attempts), attempt);
+    assert.equal(e.$('practice-stars').textContent, '★ 1'); assert.equal(e.$('feedback-icon').animations.length, animations);
+  }
+  [...e.observers][0].callback(); assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.deepEqual(quizStarts, []);
+  assert.equal(JSON.stringify(e.snapshot().attempts), attempt); e.document.querySelector('.brand').click();
+});
+test('guided completion waits for the current ready mount and hides the circle when restoration fails', async () => {
+  const e = await componentApp('來'), data = lessonGlyph('來');
+  for (let index = 0; index < data.strokes.length; index++) { drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
+  await waitFor(() => e.snapshot().active.writingDone);
+  const attempts = JSON.stringify(e.snapshot().attempts), W = e.context.BishunWriting, originalMount = W.mount, pending = [];
+  W.mount = (...args) => { const options = args[3]; return originalMount(...args.slice(0, 3), { ...options, onReady: () => pending.push(options.onReady) }); };
+  e.$('rest').click(); e.$('resume').click(); await waitFor(() => pending.length === 1);
+  assert.equal('hidden' in e.$('quiz-mark').attributes, true);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => pending.length === 2);
+  pending[0](); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
+  pending[1](); assert.equal('hidden' in e.$('quiz-mark').attributes, false);
+  assert.equal(JSON.stringify(e.snapshot().attempts), attempts);
+  e.context.HanziWriter.prototype.setCharacter = () => Promise.reject(new Error('restoration failed'));
+  e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.snapshot().active.phase === 'unavailable');
+  assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('writer').style.visibility, 'hidden');
+  assert.equal(JSON.stringify(e.snapshot().attempts), attempts); e.document.querySelector('.brand').click();
 });
