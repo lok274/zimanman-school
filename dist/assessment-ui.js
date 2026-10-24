@@ -76,8 +76,8 @@
       const list = node('div', '', 'assessment-choices');
       A.positions(record.run.assignment).forEach((position, index) => {
         const answer = record.run.answers[index], label = answer.status === 'draft' ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交';
-        list.append(button(titleFor(position, index) + ' · ' + label, async () => {
-          const next = { ...record, run: A.transition(record.run, { type: 'SELECT', index }) }; await persist(next); record = next; drawWriting();
+        list.append(button(titleFor(position, index) + ' · ' + label, () => {
+          record = { ...record, run: A.transition(record.run, { type: 'SELECT', index }) }; drawWriting();
         }));
       });
       panel.append(list, message(error));
@@ -101,6 +101,7 @@
           queueCheckpoint();
           try { A.checkInk(record.run); } catch (problem) { error = problem.message; status(error); }
         });
+        pad.lock(busy);
         const answerWith = async outcome => {
           const next = { ...record, run: A.transition(record.run, { type: 'ANSWER', status: outcome }) }; await persist(next); record = next;
           if (record.run.answers.every(item => item.status !== 'draft')) drawList(); else drawWriting();
@@ -144,30 +145,37 @@
       page = 'summary'; shell('原卷紀錄');
       const ready = !context.member || record.receipt, review = record.review;
       panel.append(node('p', !ready ? '原稿已封存，等候交卷。' : review?.score === null || !review ? '已交卷，等老師批改。' : '字形正確 ' + review.score + ' / ' + record.run.answers.length));
-      const list = node('div', '', 'assessment-results');
-      record.run.answers.forEach((answer, index) => {
-        const item = node('div', '', 'assessment-result'), paper = node('div', '', 'review-paper'); F.render(paper, answer.strokes);
-        item.append(node('p', titleFor(A.positions(record.run.assignment)[index], index)), paper);
-        const mark = review?.marks[index];
-        item.append(node('p', mark?.correct === true ? 'O 正確' : mark?.correct === false ? '再練習' : '待批改', mark?.correct === true ? 'teacher-correct' : ''));
-        if (mark?.strokePractice) item.append(node('p', '筆順需要練習'));
-        if (answer.status === 'skipped') item.append(node('p', '已跳過，保留原筆跡'));
-        item.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); })); list.append(item);
-      });
-      panel.append(list, message(error));
       const actions = node('div', '', 'assessment-summary-actions');
+      actions.append(button('查看原筆跡', () => drawOriginal(0)));
       if (context.member) {
         if (!record.receipt) actions.append(button('重試交卷', upload, 'primary'));
         actions.append(button('更新批改及班級榜', refresh));
       } else {
         actions.append(button('老師批改', drawReview, 'primary'), button('本機原卷', localOriginals));
-        actions.append(button('下一位同學／開始新小測', async owner => { if (activeLocal) await store.release(activeLocal.scope, activeLocal.runKey); current(owner); await close(); }, 'secondary', true));
+        actions.append(button('下一位同學', async owner => { if (activeLocal) await store.release(activeLocal.scope, activeLocal.runKey); current(owner); await close(); }, 'secondary', true));
       }
       if (ready) {
         if (record.run.assignment.entries.some(entry => C.purposes[entry.text])) actions.append(button('情境小挑戰', challenge));
         actions.append(button('跟住練習', async () => { const assigned = record.run.assignment; await close(); onPractice(assigned); }, 'secondary', true));
       }
-      panel.append(actions); footer(close, '← 返回課程');
+      panel.append(actions, message(error)); footer(close, '← 返回課程');
+    }
+    function pagination(index, count, draw) {
+      const navigation = node('nav', '', 'assessment-pagination'); navigation.setAttribute('aria-label', '逐項查看');
+      const previous = button('上一項', () => draw(index - 1)), next = button('下一項', () => draw(index + 1));
+      previous.disabled = index === 0; next.disabled = index === count - 1;
+      navigation.append(previous, node('span', (index + 1) + ' / ' + count), next); return navigation;
+    }
+    function drawOriginal(index) {
+      page = 'original'; shell(titleFor(A.positions(record.run.assignment)[index], index));
+      const answer = record.run.answers[index], mark = record.review?.marks[index];
+      const area = node('div', '', 'assessment-writing'), paper = node('div', '', 'assessment-paper'), controls = node('div', '', 'assessment-controls');
+      F.render(paper, answer.strokes);
+      controls.append(node('p', mark?.correct === true ? 'O 正確' : mark?.correct === false ? '再練習' : '待批改', mark?.correct === true ? 'teacher-correct' : ''));
+      if (mark?.strokePractice) controls.append(node('p', '筆順需要練習'));
+      if (answer.status === 'skipped') controls.append(node('p', '已跳過，保留原筆跡'));
+      controls.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }), pagination(index, record.run.answers.length, drawOriginal));
+      controls.append(message(error)); area.append(paper, controls); panel.append(area); footer(drawSummary, '← 返回原卷');
     }
     async function refresh() {
       const owner = context, data = await classroom.ownAnswer(); current(owner, record);
@@ -219,15 +227,15 @@
       }
       if (record.run.phase === 'sealed') drawWorkCard(); else drawList();
     }
-    function drawWorkCard() {
+    function drawWorkCard(index = 0) {
       page = 'card'; shell('我的情境作品卡'); const list = node('div', '', 'assessment-workcards'), positions = A.positions(record.run.assignment);
-      record.run.assignment.entries.forEach(entry => {
-        const card = node('section', '', 'assessment-workcard'), image = node('img'); image.src = C.photos[entry.text]; image.alt = '作品情境圖片';
-        card.append(image, node('h2', C.purposes[entry.text].label), node('p', '給同學看的圖片介紹'));
-        const ink = node('div', '', 'assessment-word-ink');
-        positions.forEach((position, index) => { if (position.word === entry.text) { const paper = node('div', '', 'review-paper'); F.render(paper, record.run.answers[index].strokes); ink.append(paper); } });
-        card.append(ink, node('p', C.purposes[entry.text].intro[0] + '＿＿' + C.purposes[entry.text].intro[1])); list.append(card);
-      }); panel.append(list, message(error)); footer(() => { record = official; drawSummary(); }, '← 返回原卷');
+      const entries = record.run.assignment.entries, entry = entries[index];
+      const card = node('section', '', 'assessment-workcard'), image = node('img'); image.src = C.photos[entry.text]; image.alt = '作品情境圖片';
+      card.append(image, node('h2', C.purposes[entry.text].label), node('p', '給同學看的圖片介紹'));
+      const ink = node('div', '', 'assessment-word-ink'), introduction = node('div', '', 'assessment-introduction');
+      positions.forEach((position, answerIndex) => { if (position.word === entry.text) { const paper = node('div', '', 'review-paper'); F.render(paper, record.run.answers[answerIndex].strokes); ink.append(paper); } });
+      introduction.append(node('span', C.purposes[entry.text].intro[0]), ink, node('span', C.purposes[entry.text].intro[1])); card.append(introduction); list.append(card);
+      panel.append(list, pagination(index, entries.length, drawWorkCard), message(error)); footer(() => { record = official; drawSummary(); }, '← 返回原卷');
     }
     async function open(assigned, joined = null) {
       if (visible) return;

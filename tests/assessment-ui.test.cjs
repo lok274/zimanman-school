@@ -48,7 +48,7 @@ function boot({ store = memory(), classroom = null, now = Date.now(), elapsed = 
   const panel = body.children.at(-1);
   const button = text => panel.all().find(item => item.tagName === 'BUTTON' && item.textContent === text);
   const click = async text => { const item = button(text); assert(item, 'button exists: ' + text); await item.click(); await new Promise(resolve => setImmediate(resolve)); };
-  const stroke = async () => { const svg = panel.all().find(item => item.tagName === 'SVG' && item.listeners.pointerdown); assert(svg, 'freehand pad exists'); await svg.emit('pointerdown', { button: 0, pointerId: 1, clientX: 20, clientY: 30 }); await svg.emit('pointermove', { pointerId: 1, clientX: 420, clientY: 470 }); await svg.emit('pointerup', { pointerId: 1, clientX: 430, clientY: 480 }); await new Promise(resolve => setImmediate(resolve)); };
+  const stroke = async (x = 20) => { const svg = panel.all().find(item => item.tagName === 'SVG' && item.listeners.pointerdown); assert(svg, 'freehand pad exists'); await svg.emit('pointerdown', { button: 0, pointerId: 1, clientX: x, clientY: 30 }); await svg.emit('pointermove', { pointerId: 1, clientX: 420, clientY: 470 }); await svg.emit('pointerup', { pointerId: 1, clientX: 430, clientY: 480 }); await new Promise(resolve => setImmediate(resolve)); };
   const record = () => [...store.records.values()].find(value => value.run && value.kind === 'official');
   return { ui, context, store, panel, previous, calls, assigned, click, button, stroke, record, spoken, timers, listeners, setNow(value) { now = value; } };
 }
@@ -105,7 +105,7 @@ test('local first original, skipped ink, teacher grading, revision and challenge
   await e.click('保存批改'); assert.equal(e.record().review.score, 2); assert.equal(e.record().review.revision, 1);
   selects[1].value = 'practice'; await selects[1].emit('change'); await e.click('保存批改');
   assert.equal(e.record().review.score, 1); assert.equal(e.record().review.revision, 2);
-  await e.click('← 返回原卷'); assert(e.panel.textContent.includes('O 正確'));
+  await e.click('← 返回原卷'); await e.click('查看原筆跡'); assert(e.panel.textContent.includes('O 正確')); await e.click('← 返回原卷');
   await e.click('情境小挑戰'); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke(); await e.click('交答案'); await e.stroke(); await e.click('交答案'); await e.click('完成作品卡');
   assert.match(e.panel.textContent, /我的情境作品卡|給同學看的圖片介紹/);
   assert(e.panel.all().some(item => item.tagName === 'IMG' && item.src === 'images/beard.webp'));
@@ -135,7 +135,7 @@ test('new runtime modules and review styles reach the actual and portable page',
 });
 test('intentional next pupil keeps the prior sealed local original available for teacher review', async () => {
   const e = boot(); await e.ui.open(e.assigned); await fill(e); const first = clone(e.record());
-  await e.click('下一位同學／開始新小測'); assert.equal(e.ui.active(), false);
+  await e.click('下一位同學'); assert.equal(e.ui.active(), false);
   const next = boot({ store: e.store }); await next.ui.open(next.assigned);
   assert.match(next.panel.textContent, /未提交/);
   assert.equal([...e.store.records.values()].filter(item => item.run).length, 2);
@@ -185,10 +185,10 @@ test('persistent storage failure allows audio, pause and repeated undo while ret
 });
 test('reviewing an older local original does not change the active next-pupil pointer', async () => {
   const e = boot(); await e.ui.open(e.assigned); await fill(e); const first = e.record().key;
-  await e.click('下一位同學／開始新小測'); await e.ui.open(e.assigned); await fill(e);
+  await e.click('下一位同學'); await e.ui.open(e.assigned); await fill(e);
   const second = [...e.store.records.values()].find(item => item.run && item.key !== first).key;
   await e.click('本機原卷'); const older = e.panel.all().find(item => item.tagName === 'BUTTON' && /聽詞寫 · 2 字 · 1$/.test(item.textContent));
-  assert(older); await older.click(); await tick(); await e.click('← 返回原卷'); await e.click('下一位同學／開始新小測');
+  assert(older); await older.click(); await tick(); await e.click('← 返回原卷'); await e.click('下一位同學');
   await e.ui.open(e.assigned);
   const runs = [...e.store.records.values()].filter(item => item.run); assert.equal(runs.length, 3);
   assert(runs.some(item => item.key === first)); assert(runs.some(item => item.key === second));
@@ -212,4 +212,39 @@ test('partial formal selections expand to complete words in the separate context
     assert.equal(challenge.run.answers.length, Array.from(word).length); assert.deepEqual(challenge.run.assignment.entries[0].selectedIndexes, Array.from(word, (_, i) => i));
     assert.deepEqual(e.record().run, original); assert.equal(original.answers.length, 1);
   }
+});
+test('twelve-position summary keeps actions separate from paged original details and six work cards', async () => {
+  const e = boot(), words = Array.from(e.context.BishunContent.words);
+  const assignment = e.context.BishunAssessment.assignment(words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) })), 'listen');
+  await e.ui.open(assignment); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
+  for (let index = 0; index < 12; index++) { await e.stroke(); await e.click('交答案'); }
+  await e.click('交整份測驗');
+  assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, 0, 'summary does not render twelve large sheets above its actions');
+  for (const label of ['查看原筆跡', '老師批改', '本機原卷', '下一位同學', '情境小挑戰', '跟住練習', '← 返回課程']) assert(e.button(label));
+  await e.click('查看原筆跡'); assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, 1);
+  assert.equal(e.button('上一項').disabled, true);
+  for (let index = 1; index < 12; index++) { await e.click('下一項'); assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, 1); }
+  assert.equal(e.button('下一項').disabled, true); assert.match(e.panel.textContent, /12 \/ 12/);
+  await e.click('← 返回原卷'); await e.click('情境小挑戰'); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
+  for (let index = 0; index < 12; index++) { await e.stroke(); await e.click('交答案'); }
+  await e.click('完成作品卡');
+  for (const [index, word] of words.entries()) {
+    assert.equal(e.panel.all().filter(item => item.className === 'assessment-workcard').length, 1);
+    assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, Array.from(word).length);
+    assert(!e.panel.textContent.includes('＿＿')); assert(e.button('← 返回原卷'));
+    if (index < words.length - 1) await e.click('下一項');
+  }
+  assert.equal(e.button('下一項').disabled, true);
+});
+test('a conflicting second tab preserves its visible ink and never overwrites the saved first tab', async () => {
+  const store = memory(), first = boot({ store }), second = boot({ store });
+  await first.ui.open(first.assigned); await second.ui.open(second.assigned);
+  await first.click('第 1 題 · 詞語第 1 字 · 未提交'); await second.click('第 1 題 · 詞語第 1 字 · 未提交');
+  await first.stroke(20); const saved = clone(first.record().run.answers);
+  await second.stroke(80); assert.match(second.panel.textContent, /另一分頁/);
+  assert(second.panel.all().some(item => item.attributes.d?.startsWith('M1600 600')));
+  assert.deepEqual(first.record().run.answers, saved);
+  await second.click('重試保存'); assert.match(second.panel.textContent, /另一分頁/);
+  assert(second.panel.all().some(item => item.attributes.d?.startsWith('M1600 600')));
+  assert.deepEqual(first.record().run.answers, saved);
 });
