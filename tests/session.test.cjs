@@ -1,7 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const S = require('../dist/session.js');
+const currentSession = require('../dist/session.js');
+const S = { ...currentSession, createSession(options) { const state = currentSession.createSession(options); if (state.mode === 'practice') { state.version = 3; delete state.wordChoices; } return state; } };
 const W = require('../dist/writing.js');
 let counter = 0;
 const token = () => 'token-' + (++counter);
@@ -254,4 +255,36 @@ test('writing the chosen demo records that position and normal NEXT returns to u
   state = finish(send(finish(state), 'START_RECALL'));
   assert.deepEqual(state.finished, ['w0:1']); assert(state.attempts.every(attempt => attempt.occurrenceId === 'w0:1'));
   state = send(state, 'NEXT'); assert.equal(state.active.phase, 'loading'); assert.equal(state.active.occurrenceId, 'w0:0');
+});
+
+test('v4 choices enter writing directly and keep manual guidance on the same attempt', () => {
+  let s = currentSession.createSession({ id: 'purpose', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [0, 2] }] });
+  assert.equal(s.version, 4); assert(currentSession.validateSnapshot(s));
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0' }); assert.equal(s.active.phase, 'choose-purpose');
+  s = send(s, 'CHOOSE_PURPOSE', { purpose: 'intro' }); assert.equal(s.active.phase, 'choose-route');
+  s = send(s, 'CHOOSE_ROUTE', { route: 'independent' }); assert.equal(s.active.phase, 'loading');
+  s = send(s, 'DATA_READY', { strokeCount: 3 }); assert.equal(s.active.phase, 'recall');
+  s = send(s, 'STROKE_ACCEPTED', { strokeIndex: 0 });
+  s = send(send(s, 'STROKE_MISSED', { strokeIndex: 1 }), 'STROKE_MISSED', { strokeIndex: 1 });
+  const before = structuredClone(s); assert.equal(s.attempts[0].help.length, 0);
+  s = send(s, 'USE_GUIDANCE'); assert.equal(s.active.phase, 'guided'); assert.equal(s.active.attemptId, before.active.attemptId);
+  assert.notEqual(s.active.token, before.active.token); assert.equal(s.active.currentStroke, 1); assert.equal(s.attempts[0].mistakes, 2); assert.equal(s.attempts[0].startedAt, before.attempts[0].startedAt);
+  assert.equal(send(s, 'WRITING_COMPLETE', { token: before.active.token }), s);
+  s = finish(s); assert.equal(s.active.phase, 'character-complete'); assert.equal(s.finished.length, 1);
+  assert.equal(S.summarize(s)[0].assisted, true); assert.equal(S.summarize(s)[0].independent, false);
+  const success = S.summarize(s)[0].completedAttemptId;
+  const retry = send(send(s, 'RETRY'), 'PREVIOUS_STEP'); assert.equal(S.summarize(retry)[0].completedAttemptId, success);
+  s = send(s, 'NEXT'); s = send(s, 'DATA_READY', { strokeCount: 1 }); assert.equal(s.active.phase, 'recall'); assert.equal(s.active.occurrenceId, 'w0:2');
+  s = finish(s); s = send(s, 'NEXT'); assert.equal(s.active.phase, 'word-complete'); assert.equal(s.active.wordId, 'w0'); assert(currentSession.validateSnapshot(s));
+  s = send(s, 'NEXT'); assert.equal(s.active.phase, 'summary'); assert(currentSession.validateSnapshot(s));
+});
+
+test('v4 custom choice, guided finish and back keep the chosen task honest', () => {
+  let s = currentSession.createSession({ id: 'custom', startedAt: 1, entries: [{ text: '來', selectedIndexes: [0] }] });
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0' }); s = send(s, 'CHOOSE_PURPOSE', { purpose: null });
+  assert.equal(send(s, 'PREVIOUS_STEP').active.phase, 'choose-word');
+  s = send(s, 'CHOOSE_ROUTE', { route: 'guided' }); s = send(s, 'DATA_READY', { strokeCount: 1 }); assert.equal(s.active.phase, 'guided');
+  s = finish(s); assert.equal(s.active.phase, 'character-complete'); assert.equal(S.summarize(s)[0].assisted, true); assert.equal(send(s, 'START_RECALL'), s);
+  const legacy = structuredClone(s); legacy.version = 3; delete legacy.wordChoices; assert.equal(S.summarize(legacy)[0].assisted, false); assert.equal(S.summarize(legacy)[0].unfinished, true);
+  for (const mutate of [v => v.wordChoices.w0.points = [], v => v.wordChoices.w0.route = 'auto', v => v.wordChoices.w0.purpose = 'unknown', v => v.active.ink = [], v => v.attempts[0].drawnPath = {}]) { const bad = structuredClone(s); mutate(bad); assert.equal(currentSession.validateSnapshot(bad), false); }
 });
