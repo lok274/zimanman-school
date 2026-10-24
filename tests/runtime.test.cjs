@@ -645,6 +645,7 @@ test('zero selection or changed words cannot end the current valid lesson', asyn
 });
 test('simplified mode defaults on and toggles partial writing without replacing the writer or assessment', async () => {
   const e = await feedbackApp(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'true'); assert(e.document.body.className.includes('simplified-practice'));
+  assert(!e.document.body.className.includes('menu-view'));
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); const before = JSON.stringify(e.snapshot()), mount = e.mounts.at(-1), mounts = e.mounts.length;
   e.$('simplify').click(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'false'); assert(!e.document.body.className.includes('simplified-practice')); assert.equal(e.mounts.length, mounts);
   e.$('simplify').click(); assert.equal(JSON.stringify(e.snapshot()), before); assert.equal(e.mounts.at(-1), mount); assert.equal(e.$('stroke-progress').textContent, '已寫 1 / 2 畫');
@@ -1357,6 +1358,7 @@ for (const mode of ['practice', 'quiz']) {
       assert.equal(e.$('group-title').textContent, titles[index]);
       assert.equal(e.$('group-home').textContent, backs[index]);
       assert.equal(e.$('home-view').hidden, true); assert.equal(e.$('group-view').hidden, false);
+      assert(e.document.body.className.includes('menu-view'));
       e.$('group-cards').childNodes[0].click();
     });
     assert.equal(e.$('group-title').textContent, labels[2]);
@@ -1371,8 +1373,10 @@ for (const mode of ['practice', 'quiz']) {
       assert.equal(e.$('group-home').textContent, backs[index]);
     }
     e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false);
+    assert(!e.document.body.className.includes('menu-view'));
     assert.equal(writes, 0); assert.equal(e.store.size, 0);
     startLocal(e, mode); assert(writes > 0); assert.equal(e.snapshot().mode, mode);
+    assert(e.document.body.className.includes('menu-view'));
     e.$('choice-summary').click(); assert.equal(e.$('group-cards').childNodes.length, 2);
     assert.equal(e.$('group-home').textContent, '返回課文');
     e.$('group-home').click(); assert.equal(e.$('group-cards').childNodes[0].textContent, labels[2]);
