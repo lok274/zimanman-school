@@ -795,19 +795,19 @@ test('boot creates no phantom history and both home modes share only the applied
   e.$('choice-summary').click(); e.$('group-home').click(); startLocal(e, 'quiz'); const quiz = e.snapshot(); assert.equal(quiz.mode, 'quiz'); assert.notEqual(quiz.id, practice.id); assert.deepEqual(quiz.occurrences, practice.occurrences);
   e.$('teacher-open').click(); assert(e.$('local-history').textContent.includes('測驗')); assert(e.$('local-history').textContent.includes('練習'));
 });
-test('quiz emits immediate X and completion O without hints, ticks, outlines or an automatic next', async () => {
+test('quiz gives a neutral retry cue and completion circle without hints, ticks, outlines or an automatic next', async () => {
   const e = await quizApp(); e.$('teacher-open').click(); chooseCharacters(e, ['w0:0']); e.$('apply-words').click(); await e.enter();
   assert.equal(e.$('practice-instruction').hidden, true); assert(!visibleText(e.document).includes('照住題目，自己寫。'));
   e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, '照住題目，自己寫。');
   assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(markedPosition(e.$('word-title')), 0); assert.equal(e.mounts.at(-1).character, '推'); assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, 'images/push-block.webp');
   assert(e.document.querySelector('.step-rail').hidden); assert(e.$('demo-controls').hidden); assert(e.$('hint-outline').hidden); assert(e.$('hint-stroke').hidden); assert(e.$('main-next').hidden);
   for (let i = 0; i < 3; i++) e.send('STROKE_MISSED', { strokeIndex: 0 });
-  assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'miss'); assert.equal(e.snapshot().attempts[0].help.length, 0);
+  assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('feedback-text').textContent, '再試呢一畫。'); assert.equal(e.$('feedback-icon').hidden, true); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.snapshot().attempts[0].mistakes, 3); assert.equal(e.snapshot().attempts[0].help.length, 0);
   e.$('hint-outline').click(); e.$('hint-stroke').click(); assert.equal(e.snapshot().attempts[0].help.length, 0);
   e.$('writer').emit('pointerdown'); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
-  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.$('stroke-progress').textContent, '');
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.$('stroke-progress').textContent, ''); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
-  assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete'); assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.snapshot().active.phase, 'character-complete');
+  assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.snapshot().active.phase, 'character-complete');
   assert.equal(e.$('practice-instruction').hidden, false);
   assert.equal(e.$('quiz-clock-value').textContent, '0.0 秒'); const attempts = e.snapshot().attempts.length;
   e.$('retry-writing').click(); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
@@ -955,7 +955,7 @@ test('mount failures are recoverable and stale same-token callbacks cannot ready
   e.$('retry-data').click(); await waitFor(() => e.snapshot().active.phase === 'quiz'); await new Promise(resolve => setImmediate(resolve));
   failed.onReady(); failed.onError(); assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.snapshot().attempts.at(-1).elapsedMs, 0);
   assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(S.validateSnapshot(e.snapshot()), true);
-  e.context.localStorage.setItem = () => { throw new Error('quota'); }; e.send('STROKE_MISSED', { strokeIndex: 0 }); assert.equal(e.$('storage-notice').hidden, false); assert.equal('hidden' in e.$('quiz-mark').attributes, false);
+  e.context.localStorage.setItem = () => { throw new Error('quota'); }; e.send('STROKE_MISSED', { strokeIndex: 0 }); assert.equal(e.$('storage-notice').hidden, false); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
 });
 test('pinned vendor retains original accepted ink through remount and resize while keeping canonical quiz strokes transparent', async () => {
   const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
@@ -994,7 +994,7 @@ test('completed quiz keeps the same board and circle across rest, teacher and ba
   e.$('rest').click(); e.clock = 1000; e.$('resume').click(); e.$('teacher-open').click(); e.clock = 2000; e.$('teacher-close').click();
   e.document.hidden = true; e.document.emit('visibilitychange'); e.clock = 3000; e.document.hidden = false; e.document.emit('visibilitychange');
   assert.equal(e.mounts.length, count); assert.equal(e.snapshot().attempts[0].elapsedMs, elapsed); assert.equal(e.snapshot().active.phase, 'character-complete');
-  assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.$('quiz-mark').attributes['data-result'], 'complete');
+  assert.equal('hidden' in e.$('quiz-mark').attributes, false);
 });
 test('retry, previous and home retain exact abandoned time and cold reload never extrapolates it', async () => {
   const e = await quizApp(); await e.enter(); const id = e.snapshot().id;

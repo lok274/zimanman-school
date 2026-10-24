@@ -145,7 +145,7 @@
   function feedbackFor(before, next, event) {
     const make = (kind, icon, variants, celebrate = false) => ({ kind, icon, text: safeText(variants, next), celebrate });
     if (next.mode === 'quiz') {
-      if (event.type === 'STROKE_MISSED') return make('quiz-miss', '✕', ['呢一畫未啱，再試一次。']);
+      if (event.type === 'STROKE_MISSED') return make('quiz-miss', '', ['再試呢一畫。']);
       if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '○', ['完成咗！準備好先行下一步。'], true);
       return null;
     }
@@ -346,11 +346,10 @@
     if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;
     const icon = feedback ? feedback.icon : '';
     if ($('feedback-icon').textContent !== icon) $('feedback-icon').textContent = icon;
-    if ($('feedback-icon').hidden !== !feedback) $('feedback-icon').hidden = !feedback;
+    if ($('feedback-icon').hidden !== !icon) $('feedback-icon').hidden = !icon;
     $('feedback').setAttribute('data-kind', feedback ? feedback.kind : 'instruction');
-    if (!quiz || !(feedback && feedback.kind === 'quiz-miss') && a.completedPhase !== 'quiz') $('quiz-mark').setAttribute('hidden', '');
+    if (!quiz || a.completedPhase !== 'quiz') $('quiz-mark').setAttribute('hidden', '');
     else $('quiz-mark').removeAttribute('hidden');
-    $('quiz-mark').setAttribute('data-result', a.completedPhase === 'quiz' ? 'complete' : 'miss');
     $('board-message').hidden = !['loading', 'unavailable'].includes(a.phase);
     $('board-message').textContent = a.phase === 'loading' ? '整理緊筆順…' : '未能載入字形\n請再試，或者請老師幫手。';
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
@@ -716,7 +715,7 @@
   $('rest').addEventListener('click', () => { if (!state) return; dispatch({ type: 'REST' }); $('rest-dialog').showModal(); availabilityChanged(); });
   $('resume').addEventListener('click', () => { $('rest-dialog').close(); dispatch({ type: 'RESUME' }); availabilityChanged(); });
   $('rest-dialog').addEventListener('cancel', event => event.preventDefault());
-  $('writer').addEventListener('pointerdown', () => { if (feedback && feedback.kind === 'quiz-miss') { feedback = null; $('quiz-mark').setAttribute('hidden', ''); $('feedback-text').textContent = ''; $('feedback-icon').hidden = true; } });
+  $('writer').addEventListener('pointerdown', () => { if (feedback && feedback.kind === 'quiz-miss') { feedback = null; $('feedback-text').textContent = ''; $('feedback-icon').hidden = true; } });
   document.querySelector('.brand').addEventListener('click', click => { click.preventDefault(); goHome(); });
   document.addEventListener('visibilitychange', availabilityChanged);
   window.addEventListener('pageshow', () => { leaving = false; availabilityChanged(); });
