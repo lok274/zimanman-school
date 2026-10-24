@@ -69,6 +69,8 @@
   .quiz-mode.simplified-practice .quiz-clock{grid-column:2;margin:6px 0 0 8px;align-self:end}
 }
 
+#practice-stars{font-size:17px;white-space:nowrap;color:var(--green)}
+
 </style>
 </head>
 <body data-standalone>
@@ -111,7 +113,7 @@
             <div id="demo-navigation" class="demo-navigation" hidden><button id="demo-previous" class="button secondary" hidden></button><button id="demo-next" class="button secondary" hidden></button></div>
             <div id="writing-controls" class="writing-controls" hidden><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
             <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個字</button></div>
-            <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="stroke-progress"></span></div>
+            <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="practice-stars" role="img" hidden></span><span id="stroke-progress"></span></div>
             <details id="practice-tools"><summary id="practice-tools-label">更多工具</summary><div id="extra-demo-controls" class="demo-controls"><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div><div id="extra-writing-controls" class="writing-controls" hidden><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div><div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted">寫好一個字，先有短聲。</span></div><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button></details>
             <div id="next-row" class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
             <div id="quiz-clock" class="quiz-clock" hidden><span>本次測驗書寫時間</span><strong id="quiz-clock-value">未開始</strong></div>
@@ -925,10 +927,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const n = next.active.currentStroke;
     switch (event.type) {
       case 'STROKE_ACCEPTED': return before.active.missesOnCurrentStroke
-        ? make('recovered', '✓', ['再試後，完成第 ' + n + ' 畫！', '重試嗰筆已寫好，進度 ' + n + '。', '再做成功，已到 ' + n + '。'])
-        : make('step', '✓', ['完成第 ' + n + ' 畫！', '呢筆已寫好，進度 ' + n + '。', '做到第 ' + n + ' 步。']);
-      case 'STROKE_MISSED': return make('support', '↻', ['慢慢再試，需要提示都可以。', '由起點落筆，或者請老師幫手。', '停低諗吓，想求助就撳掣。']);
-      case 'REQUEST_HELP': return make('support', '•', ['提示已開，可以繼續寫。', '睇住幫手，再試吓。', '有需要就求助，慢慢嚟。']);
+        ? make('recovered', '✓', ['你再試成功咗！', '再試後，完成第 ' + n + ' 畫！', '重試嗰筆已寫好，進度 ' + n + '。', '再做成功，已到 ' + n + '。'])
+        : make('step', '✓', [...(n === 1 ? ['你開始咗，第一畫完成！'] : []), '完成第 ' + n + ' 畫！', '呢筆已寫好，進度 ' + n + '。', '做到第 ' + n + ' 步。']);
+      case 'STROKE_MISSED': return make('support', '↻', ['再試呢一畫。', '慢慢再試，需要提示都可以。', '由起點落筆，或者請老師幫手。', '停低諗吓，想求助就撳掣。']);
+      case 'REQUEST_HELP': return make('support', '•', [...(event.kind === 'stroke' && next.active.missesOnCurrentStroke ? ['睇完呢一畫，再試。'] : []), '提示已開，可以繼續寫。', '睇住幫手，再試吓。', '有需要就求助，慢慢嚟。']);
       case 'RETRY': return make('support', '↻', ['重新試，由起點開始。', '可以再寫，之前嘅紀錄會保留。', '今趟慢慢做，隨時求助。']);
       case 'RESUME': return make('support', '•', ['休息完，可以接住寫。', '返嚟喇，由而家呢筆繼續。', '準備好就再試，隨時求助。']);
       case 'WRITING_COMPLETE': {
@@ -1034,6 +1036,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function render() {
     document.body.classList.toggle('has-demo-navigation', false);
     $('demo-navigation').hidden = true;
+    $('practice-stars').hidden = true;
     restoreRecallText();
     renderSound();
     renderWordVoiceLabel();
@@ -1055,6 +1058,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
     if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
+    const stars = state.mode === 'practice' ? S.summarize(state).filter(row => row.guided || row.independent || row.assisted).length : 0;
+    $('practice-stars').hidden = !stars;
+    const starText = '★ ' + stars, starLabel = safeText(['完成星 ' + stars, '練習達成 ' + stars, '★ ' + stars]);
+    if ($('practice-stars').textContent !== starText) $('practice-stars').textContent = starText;
+    if ($('practice-stars').getAttribute('aria-label') !== starLabel) $('practice-stars').setAttribute('aria-label', starLabel);
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
     if (recall) $('word-title').textContent = '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
     $('word-title').classList.toggle('concealed', recall);
@@ -1077,6 +1085,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
     $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) || a.writingDone;
     $('extra-writing-controls').hidden = !['guided', 'recall', 'quiz'].includes(a.phase) && !(complete && ['recall', 'quiz'].includes(a.completedPhase));
+    $('hint-stroke').textContent = safeText(a.missesOnCurrentStroke ? ['睇一畫再試', '看提示後重做', '求助'] : ['睇呢一畫', '看提示', '求助']);
     $('hint-stroke').hidden = quiz || a.writingDone || complete; $('hint-outline').hidden = quiz || a.writingDone || complete;
     $('data-controls').hidden = a.phase !== 'unavailable';
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall', 'quiz'].includes(a.phase) && !a.writingDone);
@@ -1087,7 +1096,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
     if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = safeText(['可以再載入，或者請老師幫手。', '資料未準備好，稍後再試。', '想求助就撳老師工具。']); }
     if (a.phase === 'watch') { title = safeText(['睇筆順', '看示範', '觀察']); instruction = safeText(['撳播放，睇筆順。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一畫。', '由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
     if (a.phase === 'quiz') { title = '測驗'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
     if (a.phase === 'recall') { title = safeText(['自己試', '試住記', '憑記憶']); instruction = safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
@@ -1098,10 +1107,15 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
     }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
-    $('practice-instruction').hidden = ['watch', 'quiz'].includes(a.phase);
-    instructionText = instruction;
+    const practiceCue = !quiz && ['guided', 'recall', 'character-complete'].includes(a.phase);
+    const eventCue = practiceCue && !!feedback;
+    $('practice-instruction').hidden = eventCue || ['watch', 'quiz'].includes(a.phase);
+    $('feedback').hidden = practiceCue && !eventCue;
+    $('hear-instruction').setAttribute('aria-describedby', eventCue ? 'feedback-text' : 'practice-instruction');
+    const nextInstruction = eventCue ? feedback.text : instruction;
     const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction].join(':');
-    if (nextSpeechKey !== speechKey) { stopSpeech(); speechKey = nextSpeechKey; }
+    if (nextSpeechKey !== speechKey || instructionStatus && instructionText !== nextInstruction) { stopSpeech(); speechKey = nextSpeechKey; }
+    instructionText = nextInstruction;
     renderInstructionVoice();
     const message = feedback ? feedback.text : defaultFeedback;
     if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;

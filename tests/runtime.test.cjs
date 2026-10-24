@@ -381,11 +381,11 @@ test('feedback follows accepted strokes, changes progress and recognizes only ob
   assert.equal(e.$('feedback-text').textContent, '由起點開始，慢慢寫。');
   assert.notEqual(icon.textContent, '✓');
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
-  assert.equal(e.$('feedback-text').textContent, '完成第 1 畫！'); assert.equal(icon.textContent, '✓');
+  assert.equal(e.$('feedback-text').textContent, '你開始咗，第一畫完成！'); assert.equal(icon.textContent, '✓');
   e.send('STROKE_MISSED', { strokeIndex: 1 });
   assert.equal(e.$('feedback').attributes['data-kind'], 'support'); assert.notEqual(icon.textContent, '✓');
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 });
-  assert.equal(e.$('feedback-text').textContent, '再試後，完成第 2 畫！');
+  assert.equal(e.$('feedback-text').textContent, '你再試成功咗！');
   e.send('STROKE_ACCEPTED', { strokeIndex: 2 });
   assert.equal(e.$('feedback-text').textContent, '完成第 3 畫！'); assert.equal(icon.animations.length, 0);
   const acceptedText = e.$('feedback-text').textContent, saved = JSON.stringify(e.snapshot()), writes = e.$('feedback-text').textWrites;
@@ -424,9 +424,9 @@ test('recall chooses readable feedback and sound labels without leaking arbitrar
     const e = await feedbackApp(character, 3); e.complete(); e.$('main-next').click();
     e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
     const initialText = e.$('feedback-text').textContent;
-    assert(!initialText.includes(character)); assert(!initialText.includes('□')); assert(initialText.includes('1'));
+    assert(!initialText.includes(character)); assert(!initialText.includes('□')); assert(initialText.length > 0);
     e.send('STROKE_MISSED', { strokeIndex: 1 }); assert(!e.$('feedback-text').textContent.includes('□'));
-    e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); assert(!e.$('feedback-text').textContent.includes('□')); assert(e.$('feedback-text').textContent.includes('2'));
+    e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); assert(!e.$('feedback-text').textContent.includes('□')); assert(e.$('feedback-text').textContent.length > 0);
     e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
     for (const id of ['feedback-text', 'feedback-sound', 'feedback-sound-note', 'previous-step']) {
       assert(!e.$(id).textContent.includes(character), character + ' hidden in ' + id);
@@ -684,8 +684,8 @@ test('instruction speech keeps the current sentence when watch copy is hidden an
   assert.equal(e.$('voice-note').textContent, '');
   assert.equal(e.voices.spoken.length, 0); const snapshot = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
   const utterance = e.voices.spoken.at(-1); assert.equal(utterance.text, e.$('practice-instruction').textContent); assert.equal(utterance.lang, 'yue-HK'); assert.equal(JSON.stringify(e.snapshot()), snapshot);
-  const cancels = e.voices.cancels; e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.voices.cancels, cancels, 'ordinary stroke render preserves current instruction speech');
-  e.$('simplify').click(); assert.equal(e.voices.cancels, cancels); e.$('hear-instruction').click(); assert.equal(e.voices.spoken.length, 2); assert(e.voices.cancels > cancels);
+  const cancels = e.voices.cancels; e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert(e.voices.cancels > cancels, 'changed visible cue cancels the old instruction');
+  const changedCancels = e.voices.cancels; e.$('simplify').click(); assert.equal(e.voices.cancels, changedCancels); e.$('hear-instruction').click(); assert.equal(e.voices.spoken.length, 2); assert(e.voices.cancels > cancels);
   utterance.onerror(); assert(!e.$('instruction-voice-note').textContent.includes('未能朗讀'), 'stale error cannot replace a new request');
   e.voices.spoken.at(-1).onerror(); assert(e.$('instruction-voice-note').textContent.includes('未能朗讀'));
   assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
@@ -1225,4 +1225,108 @@ test('a quiz mount cannot advance demos or add hints from a full-demo callback',
   const e = await quizApp(); await e.enter(); const before = JSON.stringify(e.snapshot());
   e.mounts.at(-1).onCharacterDemoComplete(); await flushDemo();
   assert.equal(JSON.stringify(e.snapshot()), before); assert.deepEqual(e.snapshot().attempts[0].help, []);
+});
+
+test('practice starts with one cue, acknowledges real ink and keeps missed-stroke help actionable', async () => {
+  const e = await feedbackApp('二', 2);
+  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
+  assert.equal(e.$('practice-instruction').textContent, '先寫一畫。');
+  assert.equal(e.$('feedback').hidden, true); assert.equal(e.$('practice-stars').hidden, true);
+  const beforeTouch = JSON.stringify(e.snapshot()); e.$('writer').emit('pointerdown');
+  assert.equal(JSON.stringify(e.snapshot()), beforeTouch);
+  assert.equal(e.$('practice-instruction').hidden, false);
+  e.send('STROKE_MISSED', { strokeIndex: 0 });
+  assert.equal(e.$('feedback-text').textContent, '再試呢一畫。');
+  assert.equal(e.$('hint-stroke').textContent, '睇一畫再試');
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
+  assert.equal(e.$('feedback-text').textContent, '你再試成功咗！');
+  e.send('STROKE_MISSED', { strokeIndex: 1 }); e.send('STROKE_MISSED', { strokeIndex: 1 });
+  assert.equal(e.snapshot().active.currentStroke, 1); assert.equal(e.snapshot().attempts[0].mistakes, 3);
+  assert.equal(e.snapshot().attempts[0].help.length, 1);
+  assert.equal(e.$('feedback-text').textContent, '睇完呢一畫，再試。');
+  assert.equal(e.$('practice-instruction').hidden, true); assert.equal(e.$('feedback').hidden, false);
+  assert.equal(e.$('hear-instruction').getAttribute('aria-describedby'), 'feedback-text');
+  const beforeVoice = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
+  assert.equal(e.voices.spoken.at(-1).text, e.$('feedback-text').textContent);
+  assert.equal(JSON.stringify(e.snapshot()), beforeVoice);
+  e.complete(); assert.equal(e.$('practice-stars').textContent, '★ 1');
+});
+
+test('one-stroke practice acknowledges the start before retaining its completion category and one star', async () => {
+  const e = await feedbackApp('一', 1);
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
+  assert.equal(e.$('feedback-text').textContent, '你開始咗，第一畫完成！');
+  assert.equal(e.$('practice-stars').hidden, true);
+  e.send('WRITING_COMPLETE');
+  assert.equal(e.$('feedback').getAttribute('data-kind'), 'complete-guided');
+  assert.equal(e.$('practice-stars').hidden, false); assert.equal(e.$('practice-stars').textContent, '★ 1');
+  const complete = JSON.stringify(e.snapshot()), writes = e.$('practice-stars').textWrites;
+  e.voices.changed(); e.send('WRITING_COMPLETE');
+  assert.equal(JSON.stringify(e.snapshot()), complete); assert.equal(e.$('practice-stars').textWrites, writes);
+  e.$('main-next').click(); e.$('hint-stroke').click(); e.complete();
+  assert.equal(e.$('feedback').getAttribute('data-kind'), 'complete-assisted');
+  assert.equal(e.$('practice-stars').textContent, '★ 1');
+  e.$('retry-writing').click(); e.send('STROKE_MISSED', { strokeIndex: 0 });
+  assert.equal(e.$('practice-stars').textContent, '★ 1'); e.complete();
+  assert.equal(e.$('feedback').getAttribute('data-kind'), 'complete-independent');
+  assert.equal(e.$('practice-stars').textContent, '★ 1');
+  assert.equal(e.snapshot().attempts.length, 3); assert.equal(e.snapshot().finished.length, 1);
+  assert.deepEqual(e.snapshot().attempts.map(a => [a.phase, a.outcome, a.mistakes, a.help.length]), [['guided', 'complete', 0, 0], ['recall', 'complete', 0, 1], ['recall', 'complete', 1, 0]]);
+  e.$('main-next').click(); assert.equal(e.$('practice-stars').hidden, true);
+  e.$('new-session').click(); assert.equal(e.$('practice-stars').hidden, true);
+  e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  startLocal(e); e.$('word-cards').childNodes[0].click(); await waitFor(() => e.mounts.at(-1).phase === 'watch');
+  assert.equal(e.$('practice-stars').hidden, true); e.$('main-next').click(); assert.equal(e.$('practice-stars').hidden, true);
+});
+
+test('stars distinguish sparse repeated positions and exclude skipped, abandoned and partial attempts', async () => {
+  const e = await feedbackApp('推來推去', 2, false);
+  e.$('teacher-open').click(); chooseCharacters(e, ['w0:0', 'w0:2', 'w0:3']); e.$('apply-words').click(); startLocal(e);
+  e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
+  assert.equal(e.$('practice-stars').hidden, true);
+  e.$('word-cards').childNodes[0].click(); await waitFor(() => e.snapshot().active.phase === 'watch');
+  assert.equal(e.$('practice-stars').hidden, true); e.$('main-next').click();
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.$('retry-writing').click();
+  assert.equal(e.$('practice-stars').hidden, true); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned');
+  e.complete(); assert.equal(e.$('practice-stars').textContent, '★ 1');
+  e.$('main-next').click(); e.complete(); assert.equal(e.$('practice-stars').textContent, '★ 1');
+  e.$('main-next').click(); await waitFor(() => e.snapshot().active.phase === 'watch');
+  assert.equal(e.snapshot().active.occurrenceId, 'w0:2'); e.$('main-next').click(); e.complete();
+  assert.equal(e.$('practice-stars').textContent, '★ 2');
+  e.$('main-next').click(); e.complete(); e.$('main-next').click(); await waitFor(() => e.snapshot().active.phase === 'watch');
+  e.$('main-next').click(); e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
+  e.$('teacher-open').click(); e.$('teacher-skip').click();
+  assert.equal(e.$('practice-stars').textContent, '★ 2'); assert.equal(e.snapshot().finished.length, 3);
+  assert.equal(e.snapshot().attempts.at(-1).outcome, 'skipped');
+  e.$('main-next').click(); assert.equal(e.$('practice-stars').hidden, true);
+  const skipped = await feedbackApp(); skipped.$('teacher-open').click(); skipped.$('teacher-skip').click();
+  assert.equal(skipped.$('practice-stars').hidden, true);
+  const quiz = await quizApp(); await quiz.enter(); quiz.send('STROKE_ACCEPTED', { strokeIndex: 0 }); quiz.send('STROKE_ACCEPTED', { strokeIndex: 1 }); quiz.send('WRITING_COMPLETE');
+  assert.equal(quiz.$('practice-stars').hidden, true);
+});
+
+test('arbitrary recall targets stay out of new star labels, visible cues and their spoken text', async () => {
+  for (const character of new Set(Array.from('完成星練習達你開始咗第一畫再試成功睇完呢'))) {
+    const e = await feedbackApp(character, 3); e.complete(); e.$('main-next').click();
+    e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
+    for (const action of [() => {}, () => e.send('STROKE_ACCEPTED', { strokeIndex: 0 }), () => e.send('STROKE_MISSED', { strokeIndex: 1 }), () => e.send('STROKE_ACCEPTED', { strokeIndex: 1 })]) {
+      action(); e.$('hear-instruction').click();
+      const cue = e.$(e.$('hear-instruction').getAttribute('aria-describedby'));
+      assert.notEqual(cue.hidden, true);
+      assert.equal(e.voices.spoken.at(-1).text, cue.textContent);
+      assert(!e.voices.spoken.at(-1).text.includes(character)); assert(!visibleText(e.document).includes(character));
+      assert(!e.$('practice-stars').getAttribute('aria-label').includes(character));
+      assert(!e.$('hint-stroke').textContent.includes(character));
+      assert.notEqual(e.$('feedback').hidden, e.$('practice-instruction').hidden);
+    }
+  }
+});
+
+test('a changed stroke cue preserves current word narration but cancels an outdated instruction', async () => {
+  const e = await feedbackApp('二', 3); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
+  e.$('speak').click(); const wordCancels = e.voices.cancels;
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.voices.cancels, wordCancels);
+  e.$('hear-instruction').click(); const instructionCancels = e.voices.cancels;
+  e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); assert(e.voices.cancels > instructionCancels);
+  e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, e.$('feedback-text').textContent);
 });

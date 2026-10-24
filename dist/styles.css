@@ -60,3 +60,5 @@
   .quiz-mode.simplified-practice .next-row{grid-column:1;margin-bottom:0}
   .quiz-mode.simplified-practice .quiz-clock{grid-column:2;margin:6px 0 0 8px;align-self:end}
 }
+
+#practice-stars{font-size:17px;white-space:nowrap;color:var(--green)}
