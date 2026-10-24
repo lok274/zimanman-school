@@ -484,7 +484,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         active.phase = 'loading'; active.token = event.newToken; return s;
       case 'START_GUIDED': return state.mode !== 'quiz' && a.phase === 'watch' ? start('guided') : state;
       case 'START_RECALL': return !purposePractice && state.mode !== 'quiz' && a.phase === 'guided' && a.writingDone ? start('recall') : state;
-      case 'RETRY': return writing ? start(a.phase) : a.phase === 'character-complete' && ['recall', 'quiz', ...(purposePractice ? ['guided'] : [])].includes(a.completedPhase) ? start(purposePractice ? 'recall' : a.completedPhase) : state;
+      case 'RETRY': return writing ? start(purposePractice ? 'recall' : a.phase) : a.phase === 'character-complete' && ['recall', 'quiz', ...(purposePractice ? ['guided'] : [])].includes(a.completedPhase) ? start(purposePractice ? 'recall' : a.completedPhase) : state;
       case 'USE_GUIDANCE':
         if (!purposePractice || a.phase !== 'recall' || a.writingDone || !attempt || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || s.attempts.some(item => item.id === event.newToken)) return state;
         attempt.phase = 'guided'; attempt.help.push({ kind: 'guidance', strokeIndex: a.currentStroke, at: event.at });

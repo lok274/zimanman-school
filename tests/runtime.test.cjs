@@ -1755,6 +1755,16 @@ test('v4 word enters independent writing with visible target and keeps ink throu
   assert(visibleText(e.document).includes('自己完成') || visibleText(e.document).includes('有提示完成')); assert(visibleText(e.document).includes('紀錄只儲存'));
 });
 
+test('v4 guided retry returns to a fresh independent page without a demo route', async () => {
+  const e = await purposeApp('粗'); await e.enter();
+  e.$('use-guidance').click(); await waitFor(() => e.snapshot().active.phase === 'guided' && e.$('writer').style.visibility === '');
+  const guidedAttempt = e.snapshot().active.attemptId; e.$('retry-writing').click();
+  await waitFor(() => e.snapshot().active.phase === 'recall' && e.$('writer').style.visibility === '');
+  assert.notEqual(e.snapshot().active.attemptId, guidedAttempt); assert.deepEqual(e.snapshot().attempts.at(-1).help, []);
+  assert.equal(e.$('practice-title').textContent, '自己寫'); assert.equal(e.$('previous-step').textContent, '← 返回選字');
+  assert(!visibleText(e.document).includes('睇筆順')); e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word');
+});
+
 test('student menus remove generic descriptions and keep privacy and rest guidance', () => {
   const e = environment(source('index.html'));
   assert.equal(e.$('start-practice').textContent, '練習'); assert.equal(e.$('start-quiz').textContent, '測驗');

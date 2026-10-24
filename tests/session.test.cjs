@@ -290,6 +290,15 @@ test('v4 custom choice, guided Back and completion keep the chosen task honest',
   for (const mutate of [v => v.wordChoices.w0.points = [], v => v.wordChoices.w0.route = 'auto', v => v.wordChoices.w0.purpose = 'unknown', v => v.active.ink = [], v => v.attempts[0].drawnPath = {}]) { const bad = structuredClone(s); mutate(bad); assert.equal(currentSession.validateSnapshot(bad), false); }
 });
 
+test('v4 guided retry starts a fresh independent attempt and Back returns to words', () => {
+  let s = currentSession.createSession({ id: 'guided-retry', startedAt: 1, entries: [{ text: '粗', selectedIndexes: [0] }] });
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: 'label' }); s = send(s, 'DATA_READY', { strokeCount: 11 });
+  s = send(s, 'USE_GUIDANCE'); const guidedAttempt = s.active.attemptId;
+  s = send(s, 'RETRY');
+  assert.equal(s.active.phase, 'recall'); assert.notEqual(s.active.attemptId, guidedAttempt); assert.deepEqual(s.attempts.at(-1).help, []);
+  s = send(s, 'PREVIOUS_STEP'); assert.equal(s.active.phase, 'choose-word'); assert(currentSession.validateSnapshot(s));
+});
+
 test('legacy v4 guided Back still returns to watch without inventing guidance', () => {
   let s = currentSession.createSession({ id: 'demos', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [0,2] }] });
   s.wordChoices.w0 = { purpose: 'label', route: 'guided' }; s.active = { phase: 'loading', occurrenceId: 'w0:0', token: token() }; assert(currentSession.validateSnapshot(s));
