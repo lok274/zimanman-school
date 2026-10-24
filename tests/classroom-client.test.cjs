@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Q = require('../dist/quiz-results.js');
 const C = require('../dist/classroom.js');
+globalThis.BishunAssessment = require('../dist/assessment.js');
 const { webcrypto } = require('node:crypto');
 const assignment = Q.assignment([{ text: '一', selectedIndexes: [0] }]);
 const member = { code: 'ABCDEFGH', memberId: 'member-a', alias: '小星', assignment, expiresAt: Date.now() + 86400000 };
@@ -14,6 +15,29 @@ function setup(fetch) {
   const options = { origin: 'https://class.test', storage, crypto: webcrypto, fetch: async (url, init) => { calls.push({ url, ...init }); return fetch(url, init); } };
   return { client: C.create(options), data, calls, storage, options };
 }
+test('reviewed transport keeps sealed payloads out of sessionStorage and requires explicit identity after reload', async () => {
+  const reviewedMember = { ...member, assignment: BishunAssessment.assignment(assignment.entries, 'listen') };
+  const run = BishunAssessment.start(reviewedMember.assignment, 'ink-run'); run.phase = 'sealed'; run.answers[0].status = 'submitted'; run.answers[0].strokes = [[[1, 2, 0], [3, 4, 10]]];
+  const e = setup(url => response(url.endsWith('/members') ? reviewedMember : url.endsWith('/board') ? { published: true, rows: [{ alias: member.alias, rank: 1, score: 1 }] } : { runId: run.runId, official: true }));
+  await e.client.join(member.code, member.alias); await e.client.submitReviewed(run);
+  assert(!e.data.get(C.storageKey).includes('strokes'));
+  const reload = C.create(e.options); assert.equal(reload.view().needsContinue, true);
+  await assert.rejects(reload.ownAnswer(), /身份/);
+  reload.continueMember(); await reload.refresh();
+  assert.equal(reload.view().board.reviewed, true); assert.equal(reload.view().board.personalBest.score, 1);
+  assert(!JSON.stringify(reload.view().board).includes('elapsedMs'));
+});
+test('reviewed late uploads and private reads cannot restore a switched member', async () => {
+  for (const method of ['submitReviewed', 'ownAnswer']) {
+    let finish;
+    const reviewedMember = { ...member, assignment: BishunAssessment.assignment(assignment.entries, 'copy') };
+    const e = setup(url => url.endsWith('/members') ? response(reviewedMember) : new Promise(resolve => { finish = resolve; }));
+    await e.client.join(member.code, member.alias);
+    const pending = e.client[method]({ runId: 'one' }); e.client.leave();
+    finish(response({ runId: 'one', official: true, answer: { private: true } }));
+    await assert.rejects(pending, /身份/); assert.equal(e.client.view().member, null); assert.equal(e.client.view().receipt, null);
+  }
+});
 async function settled(client) { for (let i = 0; i < 30 && client.view().busy; i++) await new Promise(resolve => setImmediate(resolve)); assert.equal(client.view().busy, false); }
 test('lost join responses retry the exact request ID and pre-generated capability', async () => {
   let fail = true;

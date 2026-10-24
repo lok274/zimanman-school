@@ -13,3 +13,12 @@ export const runs = sqliteTable('runs', {
   payloadHash: text('payload_hash').notNull(), mistakes: integer('mistakes'), elapsedMs: integer('elapsed_ms'),
   reason: text('reason'), submittedAt: integer('submitted_at').notNull(),
 }, table => [primaryKey({ columns: [table.memberId, table.id] }), index('runs_member_score').on(table.memberId, table.mistakes, table.elapsedMs)]);
+export const reviewedSubmissions = sqliteTable('reviewed_submissions', {
+  memberId: text('member_id').primaryKey().references(() => members.id, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull(), payloadHash: text('payload_hash').notNull(), inkJson: text('ink_json').notNull(),
+  inkBytes: integer('ink_bytes').notNull(), elapsedMs: integer('elapsed_ms').notNull(), submittedAt: integer('submitted_at').notNull(),
+  marksJson: text('marks_json').notNull(), revision: integer('revision').notNull().default(0), score: integer('score'),
+});
+export const publications = sqliteTable('publications', {
+  code: text('code').primaryKey().references(() => classes.code, { onDelete: 'cascade' }), publishedAt: integer('published_at').notNull(),
+});

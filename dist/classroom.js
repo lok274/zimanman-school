@@ -1,6 +1,7 @@
 (function (root) {
   'use strict';
   const storageKey = 'bishun:classroom:v1';
+  function validateAssignment(value) { return value.version === 2 ? root.BishunAssessment.assignment(value.entries, value.mode) : root.BishunQuizResults.assignment(value.entries); }
   function create({ origin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} }) {
     let saved = {}, accepted = false, generation = 0, controller = null, busy = false, message = '', board = null, storageOkay = true;
     try {
@@ -9,10 +10,10 @@
         const value = JSON.parse(raw);
         if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Invalid saved classroom');
         if (value.member && (!/^[A-Z2-9]{8}$/.test(value.member.code) || !/^[a-f0-9]{64}$/.test(value.member.token) || typeof value.member.memberId !== 'string' || typeof value.member.alias !== 'string' || !Number.isFinite(value.member.expiresAt))) throw new Error('Invalid saved membership');
-        if (value.member) root.BishunQuizResults.assignment(value.member.assignment.entries);
+        if (value.member) validateAssignment(value.member.assignment);
         if (value.join && (!/^[A-Z2-9]{8}$/.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
         if (value.pending && (!value.member || value.pending.runId !== value.boundRunId || !root.BishunQuizResults.evaluate(value.member.assignment.entries, value.pending).terminal)) throw new Error('Invalid pending result');
-        if (value.receipt && (!value.member || typeof value.receipt.runId !== 'string' || typeof value.receipt.ranked !== 'boolean')) throw new Error('Invalid saved receipt');
+        if (value.receipt && (!value.member || typeof value.receipt.runId !== 'string' || (value.member.assignment.version === 2 ? value.receipt.official !== true : typeof value.receipt.ranked !== 'boolean'))) throw new Error('Invalid saved receipt');
         saved = value;
       }
     } catch { storageOkay = false; }
@@ -32,7 +33,7 @@
         catch { throw new Error('班級服務回應無效，請稍後重試。'); }
         if (ownGeneration !== generation) throw Object.assign(new Error('身份已切換。'), { stale: true });
         if (!data || typeof data !== 'object') throw new Error('班級服務回應無效，請稍後重試。');
-        if (!response.ok) throw new Error(data.error?.message || '班級服務未能連線，請稍後重試。');
+        if (!response.ok) throw Object.assign(new Error(data.error?.message || '班級服務未能連線，請稍後重試。'), { code: data.error?.code });
         return data;
       } catch (error) {
         if (ownGeneration !== generation) throw Object.assign(new Error('身份已切換。'), { stale: true });
@@ -52,7 +53,7 @@
       try {
         const member = await request('/' + pending.code + '/members', 'POST', pending.body);
         if (!member || member.code !== pending.code || typeof member.memberId !== 'string' || typeof member.alias !== 'string' || !Number.isFinite(member.expiresAt)) throw new Error('班級回應無效，請重試。');
-        root.BishunQuizResults.assignment(member.assignment.entries);
+        validateAssignment(member.assignment);
         saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始測驗。'; persist();
       } catch (error) { if (error.stale) return; message = error.message || '班級服務未能連線。'; }
       notify();
@@ -86,6 +87,11 @@
       if (!accepted || !saved.member || !saved.receipt || busy) return;
       try {
         const data = await request('/' + saved.member.code + '/board', 'GET', undefined, saved.member.token);
+        if (saved.member.assignment.version === 2) {
+          if (typeof data.published !== 'boolean' || !Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => typeof row.alias !== 'string' || !Number.isInteger(row.score) || row.score < 0 || !Number.isInteger(row.rank) || row.rank < 1)) throw new Error('排行榜回應無效。');
+          board = { ...data, reviewed: true, personalBest: data.rows.find(row => row.alias === saved.member.alias) || null };
+          message = data.published ? '老師已公布班級榜。' : '等老師公布班級榜。'; notify(); return;
+        }
         if (!Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => !row || typeof row.memberId !== 'string' || typeof row.alias !== 'string' || !Number.isInteger(row.rank) || row.rank < 1 || !Number.isSafeInteger(row.mistakes) || row.mistakes < 0 || !Number.isSafeInteger(row.elapsedMs) || row.elapsedMs < 0)) throw new Error('排行榜回應無效。');
         board = { ...data, personalBest: data.rows.find(row => row.memberId === saved.member.memberId) || null };
         message = saved.receipt.ranked ? '班級榜已更新。' : '今次不排名，仍可睇班級榜。';
@@ -93,7 +99,19 @@
       catch (error) { if (error.stale) return; message = '已交卷，班級榜暫未能更新。' + (error.message || '請重試。'); }
       notify();
     }
-    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate };
+    async function reviewedRequest(action, method, value) {
+      if (!accepted || saved.member?.assignment.version !== 2) throw new Error('請先確認參加身份。');
+      const member = saved.member;
+      try { return await request('/' + member.code + '/' + action, method, value, member.token); }
+      finally { notify(); }
+    }
+    async function submitReviewed(run) {
+      const receipt = await reviewedRequest('answers', 'PUT', run);
+      if (receipt.runId !== run.runId || receipt.official !== true) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
+      saved.receipt = receipt; persist(); notify(); return receipt;
+    }
+    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed,
+      ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: () => reviewedRequest('board', 'GET') };
   }
   const api = { create, storageKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
