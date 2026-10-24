@@ -260,8 +260,8 @@ test('writing the chosen demo records that position and normal NEXT returns to u
 test('v4 choices enter writing directly and keep manual guidance on the same attempt', () => {
   let s = currentSession.createSession({ id: 'purpose', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [0, 2] }] });
   assert.equal(s.version, 4); assert(currentSession.validateSnapshot(s));
-  s = send(s, 'CHOOSE_WORD', { wordId: 'w0' }); assert.equal(s.active.phase, 'choose-purpose');
-  s = send(s, 'CHOOSE_PURPOSE', { purpose: 'intro' }); assert.equal(s.active.phase, 'choose-route');
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: 'label' }); assert.equal(s.active.phase, 'choose-route');
+  assert.deepEqual(s.wordChoices.w0, { purpose: 'label', route: null }); assert(currentSession.validateSnapshot(s));
   s = send(s, 'CHOOSE_ROUTE', { route: 'independent' }); assert.equal(s.active.phase, 'loading');
   s = send(s, 'DATA_READY', { strokeCount: 3 }); assert.equal(s.active.phase, 'recall');
   s = send(s, 'STROKE_ACCEPTED', { strokeIndex: 0 });
@@ -281,7 +281,8 @@ test('v4 choices enter writing directly and keep manual guidance on the same att
 
 test('v4 custom choice, guided finish and back keep the chosen task honest', () => {
   let s = currentSession.createSession({ id: 'custom', startedAt: 1, entries: [{ text: '來', selectedIndexes: [0] }] });
-  s = send(s, 'CHOOSE_WORD', { wordId: 'w0' }); s = send(s, 'CHOOSE_PURPOSE', { purpose: null });
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: null });
+  assert.equal(s.active.phase, 'choose-route'); assert.deepEqual(s.wordChoices.w0, { purpose: null, route: null }); assert(currentSession.validateSnapshot(s));
   assert.equal(send(s, 'PREVIOUS_STEP').active.phase, 'choose-word');
   s = send(s, 'CHOOSE_ROUTE', { route: 'guided' }); s = send(s, 'DATA_READY', { strokeCount: 1 }); assert.equal(s.active.phase, 'guided');
   s = finish(s); assert.equal(s.active.phase, 'character-complete'); assert.equal(S.summarize(s)[0].assisted, true); assert.equal(send(s, 'START_RECALL'), s);
@@ -291,7 +292,7 @@ test('v4 custom choice, guided finish and back keep the chosen task honest', () 
 
 test('v4 optional demo browsing preserves watch intent while the chosen route stays independent', () => {
   let s = currentSession.createSession({ id: 'demos', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [0,2] }] });
-  for (const [type, extra] of [['CHOOSE_WORD', { wordId: 'w0' }], ['CHOOSE_PURPOSE', { purpose: 'label' }], ['CHOOSE_ROUTE', { route: 'independent' }], ['DATA_READY', { strokeCount: 11 }], ['USE_GUIDANCE', {}], ['PREVIOUS_STEP', {}]]) s = send(s, type, extra);
+  for (const [type, extra] of [['CHOOSE_WORD', { wordId: 'w0', purpose: 'label' }], ['CHOOSE_ROUTE', { route: 'independent' }], ['DATA_READY', { strokeCount: 11 }], ['USE_GUIDANCE', {}], ['PREVIOUS_STEP', {}]]) s = send(s, type, extra);
   assert.equal(s.active.phase, 'watch'); assert.equal(s.attempts[0].outcome, 'abandoned');
   s = send(s, 'BROWSE_DEMO', { direction: 1 }); assert.equal(s.active.demo, true); assert.equal(s.active.occurrenceId, 'w0:2'); assert(currentSession.validateSnapshot(s));
   s = send(s, 'DATA_READY', { strokeCount: 11 }); assert.equal(s.active.phase, 'watch'); assert.equal(s.active.demo, undefined); assert.equal(s.attempts.length, 1); assert.equal(s.wordChoices.w0.route, 'independent');
@@ -300,10 +301,43 @@ test('v4 optional demo browsing preserves watch intent while the chosen route st
 
 test('v4 work card back keeps purpose and offers a fresh last-position attempt without losing success', () => {
   let s = currentSession.createSession({ id: 'redo', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [2] }] });
-  for (const [type, extra] of [['CHOOSE_WORD', { wordId: 'w0' }], ['CHOOSE_PURPOSE', { purpose: 'intro' }], ['CHOOSE_ROUTE', { route: 'guided' }], ['DATA_READY', { strokeCount: 1 }]]) s = send(s, type, extra);
+  s.active = { phase: 'choose-purpose', wordId: 'w0', token: token() }; s.wordChoices.w0 = { purpose: 'intro', route: null }; assert(currentSession.validateSnapshot(s));
+  for (const [type, extra] of [['CHOOSE_ROUTE', { route: 'guided', purpose: 'label' }], ['DATA_READY', { strokeCount: 1 }]]) s = send(s, type, extra);
   s = send(finish(s), 'NEXT'); const completed = S.summarize(s)[0].completedAttemptId;
   s = send(s, 'PREVIOUS_STEP'); assert.equal(s.active.phase, 'choose-route'); assert.equal(s.wordChoices.w0.purpose, 'intro');
   s = send(s, 'CHOOSE_ROUTE', { route: 'independent' }); s = send(s, 'DATA_READY', { strokeCount: 1 });
   assert.equal(s.active.phase, 'recall'); assert.equal(s.active.occurrenceId, 'w0:2'); assert.equal(S.summarize(s)[0].completedAttemptId, completed);
   s = finish(s); assert.notEqual(S.summarize(s)[0].completedAttemptId, completed); assert.equal(send(s, 'NEXT').active.phase, 'word-complete');
+});
+
+test('v4 choices reject missing or invalid fresh defaults and preserve saved choices on word selection', () => {
+  const fresh = currentSession.createSession({ id: 'defaults', startedAt: 1, entries: [{ text: '粗', selectedIndexes: [0] }] });
+  for (const purpose of [undefined, 'intro', 'unknown', false]) assert.equal(send(fresh, 'CHOOSE_WORD', { wordId: 'w0', purpose }), fresh);
+  for (const purpose of ['label', 'intro', null]) {
+    const saved = { ...fresh, wordChoices: { w0: { purpose, route: null } } };
+    const selected = send(saved, 'CHOOSE_WORD', { wordId: 'w0', purpose: 'label' });
+    assert.equal(selected.active.phase, 'choose-route'); assert.deepEqual(selected.wordChoices, saved.wordChoices); assert(currentSession.validateSnapshot(selected));
+    const back = send(selected, 'PREVIOUS_STEP'); assert.equal(back.active.phase, 'choose-word'); assert.deepEqual(back.wordChoices, saved.wordChoices); assert(currentSession.validateSnapshot(back));
+    const routed = { ...saved, wordChoices: { w0: { purpose, route: 'guided' } } };
+    const continued = send(routed, 'CHOOSE_WORD', { wordId: 'w0' }); assert.equal(continued.active.phase, 'loading'); assert.deepEqual(continued.wordChoices, routed.wordChoices); assert(currentSession.validateSnapshot(continued));
+  }
+});
+
+test('historical v4 purpose states use route choices without overwriting purpose or history', () => {
+  for (const choice of [undefined, { purpose: 'intro', route: 'guided' }, { purpose: 'label', route: null }, { purpose: null, route: null }]) {
+    const old = currentSession.createSession({ id: 'historical', startedAt: 1, entries: [{ text: '粗', selectedIndexes: [0] }] });
+    old.active = { phase: 'choose-purpose', wordId: 'w0', token: token() }; if (choice) old.wordChoices.w0 = choice;
+    assert(currentSession.validateSnapshot(old)); assert(currentSession.validateSnapshot({ ...old, resting: true }));
+    const before = JSON.stringify(old);
+    assert.equal(send(old, 'CHOOSE_PURPOSE', { purpose: 'label' }), old);
+    const back = send(old, 'PREVIOUS_STEP'); assert.equal(back.active.phase, 'choose-word'); assert.deepEqual(back.wordChoices, old.wordChoices); assert(currentSession.validateSnapshot(back));
+    if (!choice) for (const purpose of [undefined, 'intro', 'unknown']) assert.equal(send(old, 'CHOOSE_ROUTE', { route: 'independent', purpose }), old);
+    for (const purpose of ['label', null]) {
+      const routed = send(old, 'CHOOSE_ROUTE', { route: 'independent', purpose });
+      assert.equal(routed.active.phase, 'loading'); assert.deepEqual(routed.wordChoices.w0, { purpose: choice ? choice.purpose : purpose, route: 'independent' }); assert(currentSession.validateSnapshot(routed));
+      assert.equal(send(routed, 'CHOOSE_ROUTE', { route: 'guided', token: old.active.token, purpose }), routed);
+      const ended = send(routed, 'END_SESSION'); assert.equal(ended.active.phase, 'summary'); assert.deepEqual(ended.wordChoices, routed.wordChoices); assert(currentSession.validateSnapshot(ended));
+    }
+    assert.equal(JSON.stringify(old), before);
+  }
 });

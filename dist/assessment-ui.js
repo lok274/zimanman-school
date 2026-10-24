@@ -91,7 +91,6 @@
       area.append(paper, controls); panel.append(area);
       if (isChallenge()) {
         const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = '情境圖片'; photo.className = 'assessment-context'; controls.append(photo);
-        controls.append(node('p', '替圖片寫標籤，向同學介紹。'));
       }
       controls.append(button('聽題目', () => speak(position, isChallenge())), button('休息一下', pause));
       if (answer.status === 'draft') {
@@ -231,7 +230,7 @@
       page = 'card'; shell('我的情境作品卡'); const list = node('div', '', 'assessment-workcards'), positions = A.positions(record.run.assignment);
       const entries = record.run.assignment.entries, entry = entries[index];
       const card = node('section', '', 'assessment-workcard'), image = node('img'); image.src = C.photos[entry.text]; image.alt = '作品情境圖片';
-      card.append(image, node('h2', C.purposes[entry.text].label), node('p', '給同學看的圖片介紹'));
+      card.append(image, node('h2', C.purposes[entry.text].label, 'sr-only'));
       const ink = node('div', '', 'assessment-word-ink'), introduction = node('div', '', 'assessment-introduction');
       positions.forEach((position, answerIndex) => { if (position.word === entry.text) { const paper = node('div', '', 'review-paper'); F.render(paper, record.run.answers[answerIndex].strokes); ink.append(paper); } });
       introduction.append(node('span', C.purposes[entry.text].intro[0]), ink, node('span', C.purposes[entry.text].intro[1])); card.append(introduction); list.append(card);

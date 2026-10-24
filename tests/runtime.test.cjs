@@ -499,6 +499,8 @@ test('returning during loading aborts the request and ignores its late result', 
 test('sound stays off until a gesture and only completion plays a cancellable short chime', async () => {
   const e = await feedbackApp(), audio = audioMock(e), icon = e.$('feedback-icon');
   assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false'); assert.equal(audio.contexts.length, 0);
+  assert.equal(e.$('feedback-sound-note').textContent, ''); assert.equal(e.$('feedback-sound-note').getAttribute('role'), 'status');
+  assert.equal(e.$('feedback-sound').getAttribute('aria-describedby'), 'feedback-sound-note');
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(audio.contexts.length, 0);
   e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(audio.contexts.length, 1); assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'true'); assert.equal(audio.oscillators.length, 0);
@@ -517,7 +519,7 @@ test('sound stays off until a gesture and only completion plays a cancellable sh
 });
 test('pending or failed audio never queues a chime or overrides a newer sound choice', async () => {
   const e = await feedbackApp(), audio = audioMock(e, { pending: true });
-  e.$('feedback-sound').click(); e.complete(); assert.equal(audio.oscillators.length, 0);
+  e.$('feedback-sound').click(); assert(e.$('feedback-sound-note').textContent.includes('準備中')); e.complete(); assert.equal(audio.oscillators.length, 0);
   e.$('feedback-sound').click(); audio.resumes[0].resolve(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false'); assert.equal(audio.oscillators.length, 0);
   e.$('feedback-sound').click(); e.$('feedback-sound').click(); e.$('feedback-sound').click();
@@ -1378,12 +1380,14 @@ for (const mode of ['practice', 'quiz']) {
       assert.equal(e.$('group-cards').childNodes.length, 1);
       assert.equal(e.$('group-cards').childNodes[0].textContent, label);
       assert.equal(e.$('group-title').textContent, titles[index]);
+      assert(e.$('group-title').className.includes('sr-only'));
       assert.equal(e.$('group-home').textContent, backs[index]);
       assert.equal(e.$('home-view').hidden, true); assert.equal(e.$('group-view').hidden, false);
       assert(e.document.body.className.includes('menu-view'));
       e.$('group-cards').childNodes[0].click();
     });
     assert.equal(e.$('group-title').textContent, labels[2]);
+    assert(!e.$('group-title').className.includes('sr-only')); assert(visibleText(e.document).includes(labels[2]));
     const label = mode === 'quiz' ? '測驗' : '練習';
     assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), [label + '1推來推去', label + '2']);
     assert.equal(e.$('group-home').textContent, '返回課文');
@@ -1674,18 +1678,21 @@ test('v4 ink bounds, prefix mismatch and session disposal fail without invented 
   const count = ready; handle = mount('late'); await waitFor(() => ready > count); W.resetPractice(null);
   const before = events.length; callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points: points.slice(0,2) } }); callbacks.onComplete(); assert.equal(events.length, before); handle.dispose();
 });
-async function purposeApp(text = '來', indexes = Array.from(text, (_, index) => index)) {
+async function purposeApp(text = '來', indexes = Array.from(text, (_, index) => index), historical = null) {
   const e = environment(source('index.html')); e.mounts = []; e.vendorCallbacks = [];
-  e.context.BishunSession = { ...currentSession, createSession: options => currentSession.createSession({ ...options, entries: [{ text, selectedIndexes: indexes }] }) };
+  e.context.BishunSession = { ...currentSession, createSession(options) {
+    const state = currentSession.createSession({ ...options, entries: [{ text, selectedIndexes: indexes }] });
+    if (historical) { state.active = { phase: 'choose-purpose', wordId: 'w0', token: 'historical-choice' }; if (historical.choice) state.wordChoices.w0 = historical.choice; }
+    assert(currentSession.validateSnapshot(state)); return state;
+  } };
   for (const file of ['content.js', 'data/characters.js', 'vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
   const originalMount = e.context.BishunWriting.mount, originalQuiz = e.context.HanziWriter.prototype.quiz;
   e.context.BishunWriting.mount = (...args) => { e.mounts.push(args[3]); return originalMount(...args); };
   e.context.HanziWriter.prototype.quiz = function(options) { e.vendorCallbacks.push(options); return originalQuiz.call(this, options); };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
   e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
-  e.$('word-cards').childNodes[0].click();
-  e.enter = async (route = 'independent', purpose = 'label') => {
-    if (e.snapshot().active.phase === 'choose-purpose') e.$('task-options').childNodes[purpose === 'intro' ? 1 : 0].click();
+  if (!historical) e.$('word-cards').childNodes[0].click();
+  e.enter = async (route = 'independent') => {
     e.$('task-options').childNodes[route === 'guided' ? 1 : 0].click();
     if (route === 'independent') { assert.equal(e.$('semantic-cue').childNodes.length, 0); assert(!e.$('word-title').textContent.includes(text)); }
     await waitFor(() => e.$('writer').style.visibility === '' && e.mounts.length > 0);
@@ -1701,8 +1708,11 @@ async function purposeApp(text = '來', indexes = Array.from(text, (_, index) =>
 }
 
 test('v4 independent app conceals the task and uses manual question audio before same-attempt guidance', async () => {
-  const e = await purposeApp('粗'); assert.equal(e.snapshot().active.phase, 'choose-purpose');
-  assert.equal(e.$('task-options').childNodes.length, 2); assert.equal(e.$('task-picture').childNodes[0].nodeName, 'img');
+  const e = await purposeApp('粗'); assert.equal(e.snapshot().active.phase, 'choose-route');
+  assert.deepEqual(e.snapshot().wordChoices.w0, { purpose: 'label', route: null });
+  assert.deepEqual(e.$('task-options').childNodes.map(button => button.textContent), ['自己寫', '跟住寫']);
+  assert(e.$('task-options').childNodes.every(button => button.childNodes.filter(node => node.nodeType === 1).length === 1)); assert.equal(e.$('task-picture'), undefined);
+  assert(e.$('task-title').className.includes('sr-only')); assert.equal(e.$('task-view').getAttribute('aria-labelledby'), 'task-title'); assert(!visibleText(e.document).includes('想用嚟做乜？'));
   await e.enter(); assert.deepEqual(e.mounts.map(mount => mount.phase), ['recall']);
   assert.equal(e.$('semantic-cue').childNodes.length, 0); assert.equal(e.$('word-title').textContent, '寫第 1 個字'); assert(!visibleText(e.document).includes('粗'));
   assert(!walk(e.$('practice-view')).some(node => Object.values(node.attributes).some(value => value.includes('粗'))));
@@ -1726,11 +1736,22 @@ test('v4 independent app conceals the task and uses manual question audio before
   e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert.equal(e.$('task-next').textContent, '睇今次紀錄 →');
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'path').attributes.d, prefix);
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'img').attributes.src, 'images/rope.webp');
+  assert(walk(e.$('work-card')).find(node => node.nodeName === 'h2').className.includes('sr-only'));
   e.$('task-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(walk(e.$('summary-rows')).some(node => node.className === 'original-ink'));
+  for (const copy of ['今節嘅腳印', '呢度記錄今次點樣練', '帶返去紙上試一試', '放低平板']) assert(!visibleText(e.document).includes(copy));
+  assert(visibleText(e.document).includes('自己完成') || visibleText(e.document).includes('有提示完成')); assert(visibleText(e.document).includes('紀錄只儲存'));
+});
+
+test('student menus remove generic descriptions and keep privacy and rest guidance', () => {
+  const e = environment(source('index.html'));
+  assert.equal(e.$('start-practice').textContent, '練習'); assert.equal(e.$('start-quiz').textContent, '測驗');
+  assert(!e.$('class-dialog').textContent.includes('交卷後可查看自己的原卷'));
+  assert(e.$('class-dialog').textContent.includes('暱稱（唔好用真名）')); assert(e.$('class-switch-note').textContent.includes('清除'));
+  assert(e.$('rest-dialog').textContent.includes('伸一伸手指，望一望遠處。')); assert(e.$('class-storage').textContent.includes('可能遺失'));
 });
 
 test('v4 partial repeated word cards mark supplied, skipped and unavailable slots without substitutions', async () => {
-  const e = await purposeApp('推來推去', [0,2]); await e.enter('guided', 'intro'); await e.finish();
+  const e = await purposeApp('推來推去', [0,2], { choice: { purpose: 'intro', route: null } }); await e.enter('guided'); await e.finish();
   const originalAttempt = currentSession.summarize(e.snapshot())[0].completedAttemptId;
   e.$('retry-writing').click(); await waitFor(() => e.$('writer').style.visibility === ''); e.$('teacher-open').click(); e.$('teacher-skip').click();
   assert.equal(currentSession.summarize(e.snapshot())[0].completedAttemptId, originalAttempt);
@@ -1747,10 +1768,38 @@ test('v4 partial repeated word cards mark supplied, skipped and unavailable slot
 });
 
 test('v4 custom route stays generic and teacher help is recorded before fields appear', async () => {
-  const e = await purposeApp(); assert.equal(e.snapshot().active.phase, 'choose-route'); assert.equal(e.$('task-picture').childNodes.length, 0);
+  const e = await purposeApp(); assert.equal(e.snapshot().active.phase, 'choose-route'); assert.equal(e.snapshot().wordChoices.w0.purpose, null); assert.equal(e.$('task-picture'), undefined);
   await e.enter(); e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].help[0].kind, 'outline'); assert.equal(e.$('teacher-dialog').open, true); assert.equal(e.$('teacher-words').value.length > 0, true);
   e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); await e.finish();
   assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert(e.$('work-card').textContent.includes('我嘅詞語作品')); assert.equal(walk(e.$('work-card')).filter(node => node.nodeName === 'img').length, 0);
+  assert(!visibleText(e.document).includes('我嘅詞語作品'));
+});
+
+test('v4 route and work-card Back paths never reveal a purpose picker', async () => {
+  for (const route of ['independent', 'guided']) {
+    const e = await purposeApp('粗');
+    assert.equal(e.$('previous-step').textContent, '← 返回選字'); e.$('previous-step').click();
+    assert.equal(e.snapshot().active.phase, 'choose-word'); assert(e.$('choose-title').className.includes('sr-only')); assert.equal(e.$('choose-view').getAttribute('aria-labelledby'), 'choose-title');
+    assert(!visibleText(e.document).includes('想先寫邊個字')); e.$('word-cards').childNodes[0].click();
+    await e.enter(route); await e.finish(); e.$('main-next').click();
+    const completed = currentSession.summarize(e.snapshot())[0].completedAttemptId;
+    e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-route');
+    assert.equal(e.$('previous-step').textContent, '← 返回選字'); assert.deepEqual(e.$('task-options').childNodes.map(button => button.textContent), ['自己寫', '跟住寫']);
+    assert.equal(currentSession.summarize(e.snapshot())[0].completedAttemptId, completed);
+    e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word'); assert(!visibleText(e.document).includes('做標籤'));
+  }
+});
+
+test('historical v4 purpose UI is a read-only route alias with preserved saved choices', async () => {
+  for (const [text, choice] of [['粗', undefined], ['來', undefined], ['粗', { purpose: 'intro', route: 'guided' }], ['粗', { purpose: 'label', route: null }], ['粗', { purpose: null, route: null }]]) {
+    const e = await purposeApp(text, [0], { choice });
+    assert.equal(e.snapshot().active.phase, 'choose-purpose'); assert.deepEqual(e.snapshot().wordChoices, choice ? { w0: choice } : {});
+    assert.deepEqual(e.$('task-options').childNodes.map(button => button.textContent), ['自己寫', '跟住寫']); assert.equal(e.$('previous-step').textContent, '← 返回選字');
+    const before = JSON.stringify(e.snapshot()); e.voices.changed(); assert.equal(JSON.stringify(e.snapshot()), before);
+    await e.enter('guided'); assert.equal(e.snapshot().wordChoices.w0.purpose, choice ? choice.purpose : text === '粗' ? 'label' : null);
+    e.$('teacher-end').click(); assert(currentSession.validateSnapshot(e.snapshot()));
+  }
+  const e = await purposeApp('粗', [0], {}); e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word');
 });
 
 test('v4 optional demos still browse and automatically advance without starting another attempt', async () => {

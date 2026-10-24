@@ -35,15 +35,19 @@
     if (event.type === 'CHOOSE_WORD' && a.phase === 'choose-word') {
       const occurrence = state.occurrences.find(item => item.wordId === event.wordId && !state.finished.includes(item.id));
       if (!occurrence || typeof event.newToken !== 'string') return state;
-      return { ...state, active: purposePractice && !state.wordChoices[event.wordId]?.route ? { phase: 'choose-purpose', wordId: event.wordId, token: event.newToken } : { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
+      if (purposePractice && !state.wordChoices[event.wordId]?.route) {
+        const choice = state.wordChoices[event.wordId];
+        if (!choice && !['label', null].includes(event.purpose)) return state;
+        return { ...state, wordChoices: { ...state.wordChoices, [event.wordId]: choice || { purpose: event.purpose, route: null } }, active: { phase: 'choose-route', wordId: event.wordId, token: event.newToken } };
+      }
+      return { ...state, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
     }
     if (event.token !== a.token) return state;
-    if (purposePractice && event.type === 'CHOOSE_PURPOSE' && a.phase === 'choose-purpose' && ['label', 'intro', null].includes(event.purpose)) {
-      return { ...state, wordChoices: { ...state.wordChoices, [a.wordId]: { purpose: event.purpose, route: null } }, active: { ...a, phase: 'choose-route' } };
-    }
-    if (purposePractice && event.type === 'CHOOSE_ROUTE' && a.phase === 'choose-route' && ['independent', 'guided'].includes(event.route) && typeof event.newToken === 'string' && event.newToken && event.newToken !== a.token) {
+    if (purposePractice && event.type === 'CHOOSE_ROUTE' && ['choose-route', 'choose-purpose'].includes(a.phase) && ['independent', 'guided'].includes(event.route) && typeof event.newToken === 'string' && event.newToken && event.newToken !== a.token) {
+      const choice = state.wordChoices[a.wordId];
+      if (!choice && !['label', null].includes(event.purpose)) return state;
       const occurrence = state.occurrences.find(item => item.wordId === a.wordId && !state.finished.includes(item.id)) || state.occurrences.filter(item => item.wordId === a.wordId).at(-1);
-      return { ...state, wordChoices: { ...state.wordChoices, [a.wordId]: { ...state.wordChoices[a.wordId], route: event.route } }, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
+      return { ...state, wordChoices: { ...state.wordChoices, [a.wordId]: { ...(choice || { purpose: event.purpose }), route: event.route } }, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
     }
     if (event.type === 'BROWSE_DEMO') {
       if (state.mode !== 'practice' || a.phase !== 'watch' || ![1, -1].includes(event.direction) || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || state.attempts.some(item => item.id === event.newToken)) return state;
@@ -101,8 +105,7 @@
           if (typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token) return state;
           if (attempt && attempt.outcome === 'active') { attempt.outcome = 'abandoned'; attempt.endedAt = event.at; }
           const wordId = a.wordId || s.occurrences.find(item => item.id === a.occurrenceId).wordId;
-          s.active = a.phase === 'choose-purpose' ? { phase: 'choose-word' } : { phase: a.phase === 'choose-route' && s.wordChoices[wordId].purpose !== null ? 'choose-purpose' : 'choose-route', wordId, token: event.newToken };
-          if (a.phase === 'choose-route' && s.wordChoices[wordId].purpose === null) s.active = { phase: 'choose-word' };
+          s.active = ['choose-purpose', 'choose-route'].includes(a.phase) ? { phase: 'choose-word' } : { phase: 'choose-route', wordId, token: event.newToken };
           return s;
         }
         if (s.mode === 'quiz') {

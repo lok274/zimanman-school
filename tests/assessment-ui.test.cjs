@@ -106,8 +106,12 @@ test('local first original, skipped ink, teacher grading, revision and challenge
   selects[1].value = 'practice'; await selects[1].emit('change'); await e.click('保存批改');
   assert.equal(e.record().review.score, 1); assert.equal(e.record().review.revision, 2);
   await e.click('← 返回原卷'); await e.click('查看原筆跡'); assert(e.panel.textContent.includes('O 正確')); await e.click('← 返回原卷');
-  await e.click('情境小挑戰'); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke(); await e.click('交答案'); await e.stroke(); await e.click('交答案'); await e.click('完成作品卡');
-  assert.match(e.panel.textContent, /我的情境作品卡|給同學看的圖片介紹/);
+  await e.click('情境小挑戰'); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
+  assert(!e.panel.textContent.includes('替圖片寫標籤，向同學介紹。')); assert(e.panel.all().some(item => item.tagName === 'IMG' && item.src === 'images/beard.webp'));
+  await e.click('聽題目'); assert.match(e.spoken.at(-1), /第 1 個字/);
+  await e.stroke(); await e.click('交答案'); await e.stroke(); await e.click('交答案'); await e.click('完成作品卡');
+  assert.match(e.panel.textContent, /我的情境作品卡/); assert(!e.panel.textContent.includes('給同學看的圖片介紹'));
+  assert.equal(e.panel.querySelector('h2').className, 'sr-only'); assert(e.panel.all().some(item => item.attributes.d?.includes('8400 9400')));
   assert(e.panel.all().some(item => item.tagName === 'IMG' && item.src === 'images/beard.webp'));
   assert.deepEqual(e.record().run, original);
   await e.click('← 返回原卷'); await e.click('跟住練習'); assert.equal(e.calls.practice.length, 1);
