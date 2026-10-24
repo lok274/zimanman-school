@@ -658,6 +658,7 @@
   function renderPresentation() {
     document.body.classList.toggle('simplified-practice', simplified);
     document.body.classList.toggle('menu-view', !$('group-view').hidden || !$('choose-view').hidden);
+    document.body.classList.toggle('writing-view', !$('practice-view').hidden);
     $('simplify').textContent = safeText(simplified ? ['精簡畫面：開', '只顯示重點', '少啲內容'] : ['精簡畫面：關', '顯示全部內容', '完整模式']);
     $('simplify').setAttribute('aria-pressed', String(simplified));
   }

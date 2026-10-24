@@ -46,7 +46,7 @@
   .simplified-practice .practice-body{display:contents}
   .simplified-practice .board-row{grid-column:1;grid-row:1/3;align-self:start}
   .simplified-practice .practice-side{grid-column:2;grid-row:2}
-  .simplified-practice .grid-shell{width:min(100%,max(300px,calc(100svh - 185px)))}
+  .simplified-practice .grid-shell{width:min(100%,max(300px,calc(100svh - 217px)))}
   .simplified-practice .practice-side .demo-controls,.simplified-practice .practice-side .writing-controls,.simplified-practice .next-row{justify-content:flex-start}
 }
 
@@ -59,7 +59,11 @@
 .word-card .word-name,.word-card:only-child .word-name{display:flex;flex-wrap:wrap;justify-content:center;min-width:0;font-size:clamp(40px,calc(200px / var(--word-length)),160px);line-height:1.35}
 .word-character{display:inline-block}
 .demo-navigation{display:flex;gap:8px;margin-top:6px}.demo-navigation .button{flex:1;min-height:64px;font-size:22px;padding-inline:6px;white-space:nowrap}
-@media(orientation:portrait){.simplified-practice.has-demo-navigation .grid-shell{width:min(100%,max(300px,calc(100svh - 560px)))}}
+@media(orientation:portrait){.simplified-practice.has-demo-navigation .grid-shell{width:min(100%,max(300px,calc(100svh - 564px)))}}
+@media(min-width:571px) and (max-width:759px) and (orientation:portrait){
+  .simplified-practice .grid-shell{width:min(100%,max(300px,calc(100svh - 525px)))}
+  .simplified-practice.has-demo-navigation .grid-shell{width:min(100%,max(300px,calc(100svh - 630px)))}
+}
 .word-panel h1:not(.concealed),.simplified-practice .word-panel h1:not(.concealed){display:flex;flex-wrap:wrap;max-width:100%;font-size:clamp(32px,calc(256px / var(--word-length)),64px);line-height:1;letter-spacing:0}
 #group-cards .mode-card span{overflow-wrap:anywhere}
 @media(orientation:portrait),(max-width:759px){
@@ -77,6 +81,11 @@
 #group-cards.curriculum-cards strong{font-size:clamp(36px,6vw,64px);overflow-wrap:anywhere}
 
 body.menu-view{min-height:100svh;display:flex;flex-direction:column}
+body.writing-view{min-height:100svh;display:flex;flex-direction:column}
+.writing-view .app-header{flex:none;width:100%;margin:0 auto}
+.writing-view main{flex:none;width:100%;margin:0 auto}
+.writing-view .app-footer{flex:none;width:100%;margin:auto auto 0;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.writing-view #previous-step{min-width:200px;min-height:72px;font-size:24px}
 .menu-view .app-header{flex:none;width:100%;margin:0 auto;padding-block:6px}
 .menu-view main{flex:1;display:flex;width:100%;margin:0 auto;padding-block:12px}
 .menu-view #group-view,.menu-view #choose-view{flex:1;min-width:0;width:100%;max-width:1000px;margin:0 auto;display:flex;flex-direction:column}
@@ -1465,6 +1474,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function renderPresentation() {
     document.body.classList.toggle('simplified-practice', simplified);
     document.body.classList.toggle('menu-view', !$('group-view').hidden || !$('choose-view').hidden);
+    document.body.classList.toggle('writing-view', !$('practice-view').hidden);
     $('simplify').textContent = safeText(simplified ? ['精簡畫面：開', '只顯示重點', '少啲內容'] : ['精簡畫面：關', '顯示全部內容', '完整模式']);
     $('simplify').setAttribute('aria-pressed', String(simplified));
   }

@@ -444,6 +444,7 @@ test('recall chooses readable feedback and sound labels without leaking arbitrar
 });
 test('previous button returns practice steps, retains results and stops completion effects without a reward', async () => {
   const e = await feedbackApp(), audio = audioMock(e), icon = e.$('feedback-icon');
+  assert(e.document.body.className.includes('writing-view'));
   assert.equal(e.$('previous-step').hidden, false); assert.equal(e.$('previous-step').textContent, '← 返回睇筆順');
   e.send('STROKE_MISSED', { strokeIndex: 0 }); e.$('hint-stroke').click();
   const oldGuidance = e.mounts.at(-1); e.$('previous-step').click();
@@ -452,27 +453,34 @@ test('previous button returns practice steps, retains results and stops completi
   const watched = JSON.stringify(e.snapshot()); e.send('WRITING_COMPLETE', {}, oldGuidance); assert.equal(JSON.stringify(e.snapshot()), watched);
   e.$('main-next').click(); e.complete(); e.$('main-next').click();
   assert.equal(e.$('previous-step').textContent, '← 返回跟寫');
+  assert(e.document.body.className.includes('writing-view'));
   e.$('hint-outline').click(); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'guided'); assert.equal(e.snapshot().attempts.at(-2).outcome, 'abandoned'); assert.equal(e.snapshot().attempts.at(-2).help.length, 1);
   assert.equal(e.$('main-next').hidden, true); assert.equal(S.summarize(e.snapshot())[0].independent, false);
   e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
   e.complete(); e.$('main-next').click(); e.complete();
   const savedResult = S.summarize(e.snapshot())[0], completed = e.mounts.at(-1), motions = icon.animations.length, tones = audio.oscillators.length;
+  assert(e.document.body.className.includes('writing-view'));
   assert.equal(savedResult.independent, true); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'guided'); assert.equal(S.summarize(e.snapshot())[0].independent, true); assert.equal(e.snapshot().finished.length, 1);
   assert.equal(icon.animations.length, motions); assert(icon.animations.at(-1).cancelled); assert.equal(audio.oscillators.length, tones); assert(audio.oscillators.at(-1).cancelled);
   assert.equal(e.$('feedback').attributes['data-kind'], 'instruction');
   const saved = JSON.stringify(e.snapshot()); e.send('WRITING_COMPLETE', {}, completed); assert.equal(JSON.stringify(e.snapshot()), saved);
   e.$('previous-step').click(); e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word'); assert.equal(e.$('previous-step').hidden, true);
+  assert(!e.document.body.className.includes('writing-view'));
   e.$('choice-summary').click(); assert.equal(e.$('previous-step').hidden, true); assert.equal(e.snapshot().active.phase, 'summary');
+  assert(!e.document.body.className.includes('writing-view'));
 });
 test('returning during loading aborts the request and ignores its late result', async () => {
   const e = environment(source('index.html')); let resolveData, loadSignal;
   e.context.BishunSession = S; e.context.BishunContent = { words: ['粗'], cue: () => ['例子', 'M1 1L2 2'] };
   e.context.BishunWriting = { loadCharacter(_character, signal) { loadSignal = signal; return new Promise(resolve => { resolveData = resolve; }); } };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
+  assert(!e.document.body.className.includes('writing-view'));
   assert.equal(e.$('previous-step').hidden, true); e.$('word-cards').childNodes[0].click();
-  assert.equal(e.$('previous-step').hidden, false); await waitFor(() => loadSignal); e.$('previous-step').click(); assert(loadSignal.aborted); assert.equal(e.$('previous-step').hidden, true);
+  assert.equal(e.$('previous-step').hidden, false); assert(e.document.body.className.includes('writing-view'));
+  await waitFor(() => loadSignal); e.$('previous-step').click(); assert(loadSignal.aborted); assert.equal(e.$('previous-step').hidden, true);
+  assert(!e.document.body.className.includes('writing-view'));
   resolveData({ strokes: ['M1 1L2 2'] }); await new Promise(resolve => setImmediate(resolve));
   const snapshot = [...e.store.values()].map(value => { try { return JSON.parse(value); } catch { return null; } }).find(value => value && value.active);
   assert.equal(snapshot.active.phase, 'choose-word'); assert.equal(snapshot.attempts.length, 0); assert.equal(e.$('feedback-icon').animations.length, 0);
