@@ -334,7 +334,6 @@
     $('data-controls').hidden = a.phase !== 'unavailable';
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall', 'quiz'].includes(a.phase) && !a.writingDone);
     $('next-row').hidden = $('main-next').hidden;
-    $('stroke-progress').textContent = a.strokeCount && ['guided', 'recall'].includes(a.phase) ? '已寫 ' + a.currentStroke + ' / ' + a.strokeCount + ' 畫' : a.strokeCount && a.phase === 'watch' ? '共 ' + a.strokeCount + ' 畫' : '';
     const attempt = state.attempts.find(item => item.id === a.attemptId);
     const guide = a.phase === 'guided' && !a.writingDone ? W.guide(currentOccurrence().character, dataCache.get(currentOccurrence().character), a.currentStroke) : null;
     let title = '', instruction = '', defaultFeedback = '';

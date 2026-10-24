@@ -666,7 +666,7 @@ test('simplified mode defaults on and toggles partial writing without replacing 
   assert(!e.document.body.className.includes('menu-view'));
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); const before = JSON.stringify(e.snapshot()), mount = e.mounts.at(-1), mounts = e.mounts.length;
   e.$('simplify').click(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'false'); assert(!e.document.body.className.includes('simplified-practice')); assert.equal(e.mounts.length, mounts);
-  e.$('simplify').click(); assert.equal(JSON.stringify(e.snapshot()), before); assert.equal(e.mounts.at(-1), mount); assert.equal(e.$('stroke-progress').textContent, '已寫 1 / 2 畫');
+  e.$('simplify').click(); assert.equal(JSON.stringify(e.snapshot()), before); assert.equal(e.mounts.at(-1), mount); assert.doesNotMatch(visibleText(e.document), /已寫\s*\d+\s*\/\s*\d+\s*畫|共\s*\d+\s*畫/);
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }, mount); e.send('WRITING_COMPLETE', {}, mount); assert.equal(e.snapshot().active.writingDone, true);
   assert.equal(e.snapshot().attempts[0].help.length, 0);
 });
@@ -833,7 +833,7 @@ test('quiz gives a neutral retry cue and completion circle without hints, ticks,
   assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('feedback-text').textContent, '再試呢一畫。'); assert.equal(e.$('feedback-icon').hidden, true); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.snapshot().attempts[0].mistakes, 3); assert.equal(e.snapshot().attempts[0].help.length, 0);
   e.$('hint-outline').click(); e.$('hint-stroke').click(); assert.equal(e.snapshot().attempts[0].help.length, 0);
   e.$('writer').emit('pointerdown'); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
-  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.$('stroke-progress').textContent, ''); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.doesNotMatch(visibleText(e.document), /已寫\s*\d+\s*\/\s*\d+\s*畫|共\s*\d+\s*畫/); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.snapshot().active.phase, 'character-complete');
   assert.equal(e.$('practice-instruction').hidden, true);
