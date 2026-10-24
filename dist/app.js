@@ -301,7 +301,10 @@
     });
     sentence.append(wordInk);
     if (choice.purpose === 'intro' && context) sentence.append(textNode('span', context.intro[1], 'sentence-context'));
-    element.append(sentence);
+    if (context && C.photos?.[word.text]) {
+      const body = textNode('div', '', 'work-card-body');
+      body.append(visualCue(word.text), sentence); element.append(body);
+    } else element.append(sentence);
   }
   function renderTask() {
     const a = state.active, word = currentWord(), context = C.purposes?.[word.text];
@@ -350,7 +353,7 @@
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
     if (choose || summary || task) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else if (task) renderTask(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
-    const stars = state.version !== 4 && state.mode === 'practice' ? S.summarize(state).filter(row => row.guided || row.independent || row.assisted).length : 0;
+    const stars = state.mode === 'practice' ? S.summarize(state).filter(row => row.guided || row.independent || row.assisted).length : 0;
     $('practice-stars').hidden = !stars;
     const starText = '★ ' + stars, starLabel = safeText(['完成星 ' + stars, '練習達成 ' + stars, '★ ' + stars]);
     if ($('practice-stars').textContent !== starText) $('practice-stars').textContent = starText;

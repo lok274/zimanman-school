@@ -1721,9 +1721,11 @@ test('v4 independent app conceals the task and uses manual question audio before
   e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.$('writer').style.visibility === ''); assert.equal(paths()[0].attributes.d, prefix);
   e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); assert.equal(paths()[0].attributes.d, prefix);
   await e.finish(); assert.equal(e.snapshot().attempts.length, 1); assert.equal(currentSession.summarize(e.snapshot())[0].assisted, true); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null);
+  assert.equal(e.$('practice-stars').hidden, false); assert.equal(e.$('practice-stars').textContent, '★ 1');
   e.$('rest').click(); e.$('resume').click(); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); assert.equal(paths().length, 11);
   e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert.equal(e.$('task-next').textContent, '睇今次紀錄 →');
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'path').attributes.d, prefix);
+  assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'img').attributes.src, 'images/rope.webp');
   e.$('task-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(walk(e.$('summary-rows')).some(node => node.className === 'original-ink'));
 });
 
@@ -1738,6 +1740,7 @@ test('v4 partial repeated word cards mark supplied, skipped and unavailable slot
   assert.equal(e.snapshot().active.phase, 'word-complete');
   const labels = walk(e.$('work-card')).filter(node => node.className === 'work-label').map(node => node.textContent);
   assert.deepEqual(labels, ['我寫嘅', '配字', '已略過', '配字']); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 1);
+  assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'img').attributes.src, 'images/push-block.webp');
   const context = walk(e.$('work-card')).filter(node => node.className === 'sentence-context').map(node => node.textContent); assert.deepEqual(context, ['我將積木', '。']);
   e.context.BishunWriting.resetPractice(null); e.$('rest').click(); e.$('resume').click();
   assert(walk(e.$('work-card')).some(node => node.className === 'work-label' && node.textContent === '筆跡未能顯示')); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 0);
