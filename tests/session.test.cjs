@@ -260,9 +260,8 @@ test('writing the chosen demo records that position and normal NEXT returns to u
 test('v4 choices enter writing directly and keep manual guidance on the same attempt', () => {
   let s = currentSession.createSession({ id: 'purpose', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [0, 2] }] });
   assert.equal(s.version, 4); assert(currentSession.validateSnapshot(s));
-  s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: 'label' }); assert.equal(s.active.phase, 'choose-route');
-  assert.deepEqual(s.wordChoices.w0, { purpose: 'label', route: null }); assert(currentSession.validateSnapshot(s));
-  s = send(s, 'CHOOSE_ROUTE', { route: 'independent' }); assert.equal(s.active.phase, 'loading');
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: 'label' }); assert.equal(s.active.phase, 'loading');
+  assert.deepEqual(s.wordChoices.w0, { purpose: 'label', route: 'independent' }); assert(currentSession.validateSnapshot(s));
   s = send(s, 'DATA_READY', { strokeCount: 3 }); assert.equal(s.active.phase, 'recall');
   s = send(s, 'STROKE_ACCEPTED', { strokeIndex: 0 });
   s = send(send(s, 'STROKE_MISSED', { strokeIndex: 1 }), 'STROKE_MISSED', { strokeIndex: 1 });
@@ -273,41 +272,63 @@ test('v4 choices enter writing directly and keep manual guidance on the same att
   s = finish(s); assert.equal(s.active.phase, 'character-complete'); assert.equal(s.finished.length, 1);
   assert.equal(S.summarize(s)[0].assisted, true); assert.equal(S.summarize(s)[0].independent, false);
   const success = S.summarize(s)[0].completedAttemptId;
-  const retry = send(send(s, 'RETRY'), 'PREVIOUS_STEP'); assert.equal(S.summarize(retry)[0].completedAttemptId, success);
+  const retry = send(s, 'PREVIOUS_STEP'); assert.equal(retry.active.phase, 'recall'); assert.equal(retry.active.occurrenceId, 'w0:0'); assert.equal(S.summarize(retry)[0].completedAttemptId, success);
   s = send(s, 'NEXT'); s = send(s, 'DATA_READY', { strokeCount: 1 }); assert.equal(s.active.phase, 'recall'); assert.equal(s.active.occurrenceId, 'w0:2');
   s = finish(s); s = send(s, 'NEXT'); assert.equal(s.active.phase, 'word-complete'); assert.equal(s.active.wordId, 'w0'); assert(currentSession.validateSnapshot(s));
   s = send(s, 'NEXT'); assert.equal(s.active.phase, 'summary'); assert(currentSession.validateSnapshot(s));
 });
 
-test('v4 custom choice, guided finish and back keep the chosen task honest', () => {
+test('v4 custom choice, guided Back and completion keep the chosen task honest', () => {
   let s = currentSession.createSession({ id: 'custom', startedAt: 1, entries: [{ text: '來', selectedIndexes: [0] }] });
   s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: null });
-  assert.equal(s.active.phase, 'choose-route'); assert.deepEqual(s.wordChoices.w0, { purpose: null, route: null }); assert(currentSession.validateSnapshot(s));
+  assert.equal(s.active.phase, 'loading'); assert.deepEqual(s.wordChoices.w0, { purpose: null, route: 'independent' }); assert(currentSession.validateSnapshot(s));
   assert.equal(send(s, 'PREVIOUS_STEP').active.phase, 'choose-word');
-  s = send(s, 'CHOOSE_ROUTE', { route: 'guided' }); s = send(s, 'DATA_READY', { strokeCount: 1 }); assert.equal(s.active.phase, 'guided');
+  s = send(s, 'DATA_READY', { strokeCount: 1 }); s = send(s, 'USE_GUIDANCE'); assert.equal(s.active.phase, 'guided');
+  const guided = s; s = send(s, 'PREVIOUS_STEP'); assert.equal(s.active.phase, 'recall'); assert.equal(s.active.attemptId, guided.active.attemptId); assert.deepEqual(s.attempts[0].help, guided.attempts[0].help);
   s = finish(s); assert.equal(s.active.phase, 'character-complete'); assert.equal(S.summarize(s)[0].assisted, true); assert.equal(send(s, 'START_RECALL'), s);
-  const legacy = structuredClone(s); legacy.version = 3; delete legacy.wordChoices; assert.equal(S.summarize(legacy)[0].assisted, false); assert.equal(S.summarize(legacy)[0].unfinished, true);
+  const legacy = structuredClone(s); legacy.version = 3; delete legacy.wordChoices; assert.equal(S.summarize(legacy)[0].assisted, true); assert.equal(S.summarize(legacy)[0].unfinished, false);
   for (const mutate of [v => v.wordChoices.w0.points = [], v => v.wordChoices.w0.route = 'auto', v => v.wordChoices.w0.purpose = 'unknown', v => v.active.ink = [], v => v.attempts[0].drawnPath = {}]) { const bad = structuredClone(s); mutate(bad); assert.equal(currentSession.validateSnapshot(bad), false); }
 });
 
-test('v4 optional demo browsing preserves watch intent while the chosen route stays independent', () => {
+test('v4 guided retry starts a fresh independent attempt and Back returns to words', () => {
+  let s = currentSession.createSession({ id: 'guided-retry', startedAt: 1, entries: [{ text: '粗', selectedIndexes: [0] }] });
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: 'label' }); s = send(s, 'DATA_READY', { strokeCount: 11 });
+  s = send(s, 'USE_GUIDANCE'); const guidedAttempt = s.active.attemptId;
+  s = send(s, 'RETRY');
+  assert.equal(s.active.phase, 'recall'); assert.notEqual(s.active.attemptId, guidedAttempt); assert.deepEqual(s.attempts.at(-1).help, []);
+  s = send(s, 'PREVIOUS_STEP'); assert.equal(s.active.phase, 'choose-word'); assert(currentSession.validateSnapshot(s));
+});
+
+test('legacy v4 guided Back still returns to watch without inventing guidance', () => {
   let s = currentSession.createSession({ id: 'demos', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [0,2] }] });
-  for (const [type, extra] of [['CHOOSE_WORD', { wordId: 'w0', purpose: 'label' }], ['CHOOSE_ROUTE', { route: 'independent' }], ['DATA_READY', { strokeCount: 11 }], ['USE_GUIDANCE', {}], ['PREVIOUS_STEP', {}]]) s = send(s, type, extra);
+  s.wordChoices.w0 = { purpose: 'label', route: 'guided' }; s.active = { phase: 'loading', occurrenceId: 'w0:0', token: token() }; assert(currentSession.validateSnapshot(s));
+  s = send(s, 'DATA_READY', { strokeCount: 11 }); assert.equal(s.active.phase, 'guided'); s = send(s, 'PREVIOUS_STEP');
   assert.equal(s.active.phase, 'watch'); assert.equal(s.attempts[0].outcome, 'abandoned');
   s = send(s, 'BROWSE_DEMO', { direction: 1 }); assert.equal(s.active.demo, true); assert.equal(s.active.occurrenceId, 'w0:2'); assert(currentSession.validateSnapshot(s));
-  s = send(s, 'DATA_READY', { strokeCount: 11 }); assert.equal(s.active.phase, 'watch'); assert.equal(s.active.demo, undefined); assert.equal(s.attempts.length, 1); assert.equal(s.wordChoices.w0.route, 'independent');
+  s = send(s, 'DATA_READY', { strokeCount: 11 }); assert.equal(s.active.phase, 'watch'); assert.equal(s.active.demo, undefined); assert.equal(s.attempts.length, 1); assert.equal(s.wordChoices.w0.route, 'guided');
   const broken = structuredClone(s); broken.active.demo = true; assert.equal(currentSession.validateSnapshot(broken), false);
 });
 
 test('v4 work card back keeps purpose and offers a fresh last-position attempt without losing success', () => {
   let s = currentSession.createSession({ id: 'redo', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [2] }] });
   s.active = { phase: 'choose-purpose', wordId: 'w0', token: token() }; s.wordChoices.w0 = { purpose: 'intro', route: null }; assert(currentSession.validateSnapshot(s));
-  for (const [type, extra] of [['CHOOSE_ROUTE', { route: 'guided', purpose: 'label' }], ['DATA_READY', { strokeCount: 1 }]]) s = send(s, type, extra);
+  for (const [type, extra] of [['CHOOSE_ROUTE', { route: 'independent', purpose: 'label' }], ['DATA_READY', { strokeCount: 1 }]]) s = send(s, type, extra);
   s = send(finish(s), 'NEXT'); const completed = S.summarize(s)[0].completedAttemptId;
-  s = send(s, 'PREVIOUS_STEP'); assert.equal(s.active.phase, 'choose-route'); assert.equal(s.wordChoices.w0.purpose, 'intro');
-  s = send(s, 'CHOOSE_ROUTE', { route: 'independent' }); s = send(s, 'DATA_READY', { strokeCount: 1 });
+  s = send(s, 'PREVIOUS_STEP'); assert.equal(s.active.phase, 'loading'); assert.equal(s.wordChoices.w0.purpose, 'intro');
+  s = send(s, 'DATA_READY', { strokeCount: 1 });
   assert.equal(s.active.phase, 'recall'); assert.equal(s.active.occurrenceId, 'w0:2'); assert.equal(S.summarize(s)[0].completedAttemptId, completed);
   s = finish(s); assert.notEqual(S.summarize(s)[0].completedAttemptId, completed); assert.equal(send(s, 'NEXT').active.phase, 'word-complete');
+});
+
+test('v4 completed second occurrence Back retries that occurrence independently', () => {
+  let s = currentSession.createSession({ id: 'second', startedAt: 1, entries: [{ text: '推來推去', selectedIndexes: [0, 2] }] });
+  s = send(s, 'CHOOSE_WORD', { wordId: 'w0', purpose: null }); s = send(s, 'DATA_READY', { strokeCount: 1 }); s = finish(s);
+  s = send(s, 'NEXT'); s = send(s, 'DATA_READY', { strokeCount: 1 });
+  assert.equal(s.active.occurrenceId, 'w0:2'); assert.equal(s.active.phase, 'recall');
+  s = send(s, 'USE_GUIDANCE'); s = finish(s); const completed = s.active.attemptId;
+  s = send(s, 'PREVIOUS_STEP'); assert.equal(s.active.phase, 'recall'); assert.equal(s.active.occurrenceId, 'w0:2');
+  assert.notEqual(s.active.attemptId, completed); assert.equal(s.wordChoices.w0.route, 'independent');
+  assert.equal(S.summarize(s)[1].completedAttemptId, completed); assert(currentSession.validateSnapshot(s));
 });
 
 test('v4 choices reject missing or invalid fresh defaults and preserve saved choices on word selection', () => {
@@ -316,10 +337,10 @@ test('v4 choices reject missing or invalid fresh defaults and preserve saved cho
   for (const purpose of ['label', 'intro', null]) {
     const saved = { ...fresh, wordChoices: { w0: { purpose, route: null } } };
     const selected = send(saved, 'CHOOSE_WORD', { wordId: 'w0', purpose: 'label' });
-    assert.equal(selected.active.phase, 'choose-route'); assert.deepEqual(selected.wordChoices, saved.wordChoices); assert(currentSession.validateSnapshot(selected));
-    const back = send(selected, 'PREVIOUS_STEP'); assert.equal(back.active.phase, 'choose-word'); assert.deepEqual(back.wordChoices, saved.wordChoices); assert(currentSession.validateSnapshot(back));
+    assert.equal(selected.active.phase, 'loading'); assert.deepEqual(selected.wordChoices.w0, { purpose, route: 'independent' }); assert(currentSession.validateSnapshot(selected));
+    const back = send(selected, 'PREVIOUS_STEP'); assert.equal(back.active.phase, 'choose-word'); assert.deepEqual(back.wordChoices, selected.wordChoices); assert(currentSession.validateSnapshot(back));
     const routed = { ...saved, wordChoices: { w0: { purpose, route: 'guided' } } };
-    const continued = send(routed, 'CHOOSE_WORD', { wordId: 'w0' }); assert.equal(continued.active.phase, 'loading'); assert.deepEqual(continued.wordChoices, routed.wordChoices); assert(currentSession.validateSnapshot(continued));
+    const continued = send(routed, 'CHOOSE_WORD', { wordId: 'w0' }); assert.equal(continued.active.phase, 'loading'); assert.deepEqual(continued.wordChoices.w0, { purpose, route: 'independent' }); assert(currentSession.validateSnapshot(continued));
   }
 });
 

@@ -153,7 +153,7 @@
     if (componentGuided) element.insertBefore(overlay, element.firstChild);
     const direction = componentGuided ? document.createElementNS(ns, 'path') : null;
     if (direction) { direction.setAttribute('class', 'stroke-direction'); direction.setAttribute('fill', 'none'); direction.setAttribute('stroke', '#bf6c36'); direction.setAttribute('stroke-width', '12'); direction.setAttribute('stroke-linecap', 'round'); direction.setAttribute('stroke-linejoin', 'round'); group.append(direction); }
-    const help = quiz ? [] : options.help || [];
+    const help = quiz || practice && options.phase === 'recall' ? [] : options.help || [];
     let directionVisible = componentGuided && (options.missesOnCurrentStroke > 0 || help.some(item => item.kind === 'stroke' && item.strokeIndex === currentStroke));
     let startVisible = options.phase === 'guided' || help.length > 0;
     function drawFocus() {
@@ -247,7 +247,7 @@
         options.onDemoState && options.onDemoState('playing');
       },
       showHelp(kind) {
-        if (quiz || guidedComplete || !alive) return;
+        if (quiz || practice && options.phase === 'recall' || guidedComplete || !alive) return;
         const expectedStroke = currentStroke;
         ready(() => {
           if (currentStroke !== expectedStroke) return;

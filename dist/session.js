@@ -35,15 +35,15 @@
     if (event.type === 'CHOOSE_WORD' && a.phase === 'choose-word') {
       const occurrence = state.occurrences.find(item => item.wordId === event.wordId && !state.finished.includes(item.id));
       if (!occurrence || typeof event.newToken !== 'string') return state;
-      if (purposePractice && !state.wordChoices[event.wordId]?.route) {
+      if (purposePractice) {
         const choice = state.wordChoices[event.wordId];
         if (!choice && !['label', null].includes(event.purpose)) return state;
-        return { ...state, wordChoices: { ...state.wordChoices, [event.wordId]: choice || { purpose: event.purpose, route: null } }, active: { phase: 'choose-route', wordId: event.wordId, token: event.newToken } };
+        return { ...state, wordChoices: { ...state.wordChoices, [event.wordId]: { purpose: choice ? choice.purpose : event.purpose, route: 'independent' } }, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
       }
       return { ...state, active: { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken } };
     }
     if (event.token !== a.token) return state;
-    if (purposePractice && event.type === 'CHOOSE_ROUTE' && ['choose-route', 'choose-purpose'].includes(a.phase) && ['independent', 'guided'].includes(event.route) && typeof event.newToken === 'string' && event.newToken && event.newToken !== a.token) {
+    if (purposePractice && event.type === 'CHOOSE_ROUTE' && ['choose-route', 'choose-purpose'].includes(a.phase) && event.route === 'independent' && typeof event.newToken === 'string' && event.newToken && event.newToken !== a.token) {
       const choice = state.wordChoices[a.wordId];
       if (!choice && !['label', null].includes(event.purpose)) return state;
       const occurrence = state.occurrences.find(item => item.wordId === a.wordId && !state.finished.includes(item.id)) || state.occurrences.filter(item => item.wordId === a.wordId).at(-1);
@@ -95,18 +95,35 @@
         active.phase = 'loading'; active.token = event.newToken; return s;
       case 'START_GUIDED': return state.mode !== 'quiz' && a.phase === 'watch' ? start('guided') : state;
       case 'START_RECALL': return !purposePractice && state.mode !== 'quiz' && a.phase === 'guided' && a.writingDone ? start('recall') : state;
-      case 'RETRY': return writing ? start(a.phase) : a.phase === 'character-complete' && ['recall', 'quiz', ...(purposePractice ? ['guided'] : [])].includes(a.completedPhase) ? start(a.completedPhase) : state;
+      case 'RETRY': return writing ? start(purposePractice ? 'recall' : a.phase) : a.phase === 'character-complete' && ['recall', 'quiz', ...(purposePractice ? ['guided'] : [])].includes(a.completedPhase) ? start(purposePractice ? 'recall' : a.completedPhase) : state;
       case 'USE_GUIDANCE':
         if (!purposePractice || a.phase !== 'recall' || a.writingDone || !attempt || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || s.attempts.some(item => item.id === event.newToken)) return state;
         attempt.phase = 'guided'; attempt.help.push({ kind: 'guidance', strokeIndex: a.currentStroke, at: event.at });
         active.phase = 'guided'; active.token = event.newToken; return s;
       case 'PREVIOUS_STEP':
-        if (purposePractice && ['choose-purpose', 'choose-route', 'word-complete', 'recall', 'loading', 'unavailable'].includes(a.phase)) {
+        if (purposePractice && a.phase === 'guided' && attempt?.help.some(help => help.kind === 'guidance')) {
+          if (typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || s.attempts.some(item => item.id === event.newToken)) return state;
+          active.phase = 'recall'; active.token = event.newToken; attempt.phase = 'recall'; return s;
+        }
+        if (purposePractice && a.phase === 'word-complete') {
+          if (typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token) return state;
+          const occurrence = s.occurrences.filter(item => item.wordId === a.wordId).at(-1);
+          s.wordChoices[a.wordId].route = 'independent';
+          s.active = { phase: 'loading', occurrenceId: occurrence.id, token: event.newToken }; return s;
+        }
+        if (purposePractice && a.phase === 'character-complete') {
+          if (!a.strokeCount) {
+            if (typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token) return state;
+            s.wordChoices[s.occurrences.find(item => item.id === a.occurrenceId).wordId].route = 'independent';
+            s.active = { phase: 'loading', occurrenceId: a.occurrenceId, token: event.newToken }; return s;
+          }
+          s.wordChoices[s.occurrences.find(item => item.id === a.occurrenceId).wordId].route = 'independent';
+          return start('recall');
+        }
+        if (purposePractice && ['choose-purpose', 'choose-route', 'recall', 'loading', 'unavailable'].includes(a.phase)) {
           if (typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token) return state;
           if (attempt && attempt.outcome === 'active') { attempt.outcome = 'abandoned'; attempt.endedAt = event.at; }
-          const wordId = a.wordId || s.occurrences.find(item => item.id === a.occurrenceId).wordId;
-          s.active = ['choose-purpose', 'choose-route'].includes(a.phase) ? { phase: 'choose-word' } : { phase: 'choose-route', wordId, token: event.newToken };
-          return s;
+          s.active = { phase: 'choose-word' }; return s;
         }
         if (s.mode === 'quiz') {
           if (a.phase === 'choose-word') return state;
@@ -128,7 +145,7 @@
         if (!writing || a.writingDone || event.strokeIndex !== a.currentStroke) return state;
         active.missesOnCurrentStroke++; attempt.mistakes++; return s;
       case 'REQUEST_HELP':
-        if (s.mode === 'quiz' || !writing || a.writingDone || !['start', 'outline', 'stroke'].includes(event.kind)) return state;
+        if (s.mode === 'quiz' || purposePractice && a.phase === 'recall' || !writing || a.writingDone || !['start', 'outline', 'stroke'].includes(event.kind)) return state;
         attempt.help.push({ kind: event.kind, strokeIndex: a.currentStroke, at: event.at }); return s;
       case 'WRITING_COMPLETE':
         if (!writing || a.writingDone || a.currentStroke !== a.strokeCount || !attempt || attempt.outcome !== 'active') return state;
@@ -149,6 +166,7 @@
         if (!purposePractice && s.occurrences.every(item => s.finished.includes(item.id))) return transition(s, { type: 'END_SESSION', at: event.at });
         const current = s.occurrences.find(item => item.id === a.occurrenceId);
         const next = s.occurrences.find(item => item.wordId === current.wordId && !s.finished.includes(item.id));
+        if (purposePractice && next) s.wordChoices[current.wordId].route = 'independent';
         s.active = next ? { phase: 'loading', occurrenceId: next.id, token: event.newToken } : purposePractice ? { phase: 'word-complete', wordId: current.wordId, token: event.newToken } : { phase: 'choose-word' }; return s;
       }
       case 'RETURN_TO_WORDS':
