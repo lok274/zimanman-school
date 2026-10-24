@@ -91,7 +91,7 @@
   const concealedText = new Map();
   function restoreRecallText() { concealedText.forEach((text, node) => { node.nodeValue = text; }); concealedText.clear(); }
   function maskRecallText() {
-    if (!state || state.active.phase !== 'recall' && !independentTask()) return;
+    if (!state || state.version === 4 || state.active.phase !== 'recall') return;
     if (state.attempts.find(attempt => attempt.id === state.active.attemptId)?.help.length) return;
     const character = currentOccurrence().character;
     const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
@@ -167,7 +167,7 @@
     return true;
   }
   function concealedCharacter(snapshot) {
-    if (!snapshot || snapshot.active.phase !== 'recall' && !independentTask(snapshot)) return '';
+    if (!snapshot || snapshot.version === 4 || snapshot.active.phase !== 'recall') return '';
     const attempt = snapshot.attempts.find(item => item.id === snapshot.active.attemptId);
     return attempt?.help.length ? '' : snapshot.occurrences.find(item => item.id === snapshot.active.occurrenceId).character;
   }
@@ -331,12 +331,9 @@
       $('task-next').textContent = state.occurrences.every(item => state.finished.includes(item.id)) ? '睇今次紀錄 →' : '揀下一個詞語 →'; return;
     }
     $('task-title').textContent = '想點樣寫？';
-    const choices = [['independent', '自己寫'], ['guided', '跟住寫']];
-    choices.forEach(([route, title]) => {
-      const button = textNode('button', '', 'task-option'); button.append(textNode('strong', title));
-      button.addEventListener('click', () => event('CHOOSE_ROUTE', { route, purpose: defaultPurpose(word) }));
-      $('task-options').append(button);
-    });
+    const button = textNode('button', '', 'task-option'); button.append(textNode('strong', '自己寫'));
+    button.addEventListener('click', () => event('CHOOSE_ROUTE', { route: 'independent', purpose: defaultPurpose(word) }));
+    $('task-options').append(button);
   }
   function render() {
     document.body.classList.toggle('has-demo-navigation', false);
@@ -357,11 +354,15 @@
       document.body.classList.toggle('has-recall', false); renderPresentation(); return;
     }
     const a = state.active, choose = a.phase === 'choose-word', summary = a.phase === 'summary', task = ['choose-purpose', 'choose-route', 'word-complete'].includes(a.phase);
+    const attempt = state.attempts.find(item => item.id === a.attemptId);
     $('task-view').hidden = !task;
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary || task; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
     $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回選字']);
-    if (state.version === 4) $('previous-step').textContent = a.phase === 'guided' ? '← 返回睇筆順' : a.phase === 'character-complete' ? '← 返回跟寫' : ['recall', 'loading', 'unavailable', 'word-complete'].includes(a.phase) ? '← 返回揀寫法' : '← 返回選字';
+    if (state.version === 4) {
+      if (a.phase === 'guided') $('previous-step').textContent = attempt?.help.some(help => help.kind === 'guidance') ? '← 返回自己寫' : '← 返回睇筆順';
+      else $('previous-step').textContent = ['character-complete', 'word-complete'].includes(a.phase) ? '← 再寫一次' : '← 返回選字';
+    }
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
@@ -373,11 +374,10 @@
     if ($('practice-stars').textContent !== starText) $('practice-stars').textContent = starText;
     if ($('practice-stars').getAttribute('aria-label') !== starLabel) $('practice-stars').setAttribute('aria-label', starLabel);
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
-    const quizComplete = quiz && complete && a.completedPhase === 'quiz', concealTask = recall || independentTask();
-    if (concealTask) $('word-title').textContent = state.version === 4 ? '寫第 ' + (currentOccurrence().index + 1) + ' 個字' : '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
+    const quizComplete = quiz && complete && a.completedPhase === 'quiz', concealTask = recall && state.version !== 4;
+    if (concealTask) $('word-title').textContent = '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
     $('word-title').classList.toggle('concealed', concealTask);
-    $('semantic-cue').replaceChildren(...(concealTask && state.version === 4 ? [] : [visualCue(word.text)]));
-    $('semantic-cue').hidden = concealTask && state.version === 4;
+    $('semantic-cue').replaceChildren(visualCue(word.text)); $('semantic-cue').hidden = false;
     document.querySelector('.step-rail').hidden = quiz || state.version === 4;
     $('writer').setAttribute('aria-label', quiz ? '測驗書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
@@ -402,7 +402,6 @@
     $('data-controls').hidden = a.phase !== 'unavailable';
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall', 'quiz'].includes(a.phase) && !a.writingDone);
     $('next-row').hidden = $('main-next').hidden;
-    const attempt = state.attempts.find(item => item.id === a.attemptId);
     const guide = a.phase === 'guided' && !a.writingDone ? W.guide(currentOccurrence().character, dataCache.get(currentOccurrence().character), a.currentStroke) : null;
     let title = '', instruction = '', defaultFeedback = '';
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
@@ -410,7 +409,7 @@
     if (a.phase === 'watch') { title = safeText(['睇筆順', '看示範', '觀察']); instruction = safeText(['撳播放，睇筆順。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
     if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一畫。', '由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
     if (a.phase === 'quiz') { title = '測驗'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
-    if (a.phase === 'recall') { title = safeText(['自己試', '試住記', '憑記憶']); instruction = safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
+    if (a.phase === 'recall') { title = state.version === 4 ? '自己寫' : safeText(['自己試', '試住記', '憑記憶']); instruction = state.version === 4 ? '照住詞語自己寫。需要時可揀跟住寫。' : safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? state.version === 4 ? '再試一次，或者揀跟住寫。' : '再試一次，或者開提示幫手。' : state.version === 4 ? '照住詞語慢慢寫。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && (attempt.help.length || state.version === 4 && attempt.phase === 'guided') ? '有提示完成' : '自己完成';
       title = quizComplete ? '測驗完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
@@ -423,7 +422,7 @@
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
     const practiceCue = !quiz && ['guided', 'recall', 'character-complete'].includes(a.phase);
     const eventCue = practiceCue && !!feedback;
-    $('practice-instruction').hidden = !!guide || quizComplete || eventCue || ['watch', 'quiz'].includes(a.phase);
+    $('practice-instruction').hidden = !!guide || quizComplete || eventCue || ['watch', 'quiz'].includes(a.phase) || state.version === 4 && recall;
     $('feedback').hidden = practiceCue && !eventCue;
     $('feedback').classList.toggle('sr-only', quizComplete);
     $('hear-instruction').setAttribute('aria-describedby', quizComplete ? 'main-next' : guide ? 'practice-instruction' : eventCue ? 'feedback-text' : 'practice-instruction');
@@ -515,7 +514,7 @@
   }
   function renderSummary(snapshot) {
     $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次測驗完成紀錄' : '每一步，都記低咗。';
-    const rows = S.summarize(snapshot), stats = $('summary-stats'); stats.replaceChildren();
+    const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = snapshot.version === 4 ? '自己寫' : '自己試'; stats.replaceChildren();
     const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length], ['老師協助跳過', rows.filter(r => r.skipped && !r.independent && !r.assisted).length], ['待練字次', rows.filter(r => r.unfinished).length]];
     groups.forEach(([label, n]) => { const div = textNode('div', '', 'stat'); div.append(textNode('b', String(n)), textNode('span', label)); stats.append(div); });
     const list = $('summary-rows'); list.replaceChildren();
@@ -526,7 +525,7 @@
         const label = row.independent ? '自己完成' : row.assisted ? '有提示完成' : row.skipped ? '老師協助跳過' : row.guided ? '完成引導練習 · 自己試待練' : '待練';
         text.append(textNode('span', '第 ' + (row.index + 1) + ' 字 · ' + label, 'record-label'));
         const attempts = row.attempts.map((attempt, index) => {
-          const phase = attempt.phase === 'quiz' ? '測驗' : attempt.phase === 'guided' ? '引導' : attempt.phase === 'recall' ? '自己試' : '老師';
+          const phase = attempt.phase === 'quiz' ? '測驗' : attempt.phase === 'guided' ? '引導' : attempt.phase === 'recall' ? recallLabel : '老師';
           const outcome = attempt.outcome === 'complete' ? attempt.phase === 'recall' && !attempt.help.length ? '無提示完成' : '完成' : attempt.outcome === 'skipped' ? '協助跳過' : attempt.outcome === 'abandoned' ? '未完成／重新試' : '未完成';
           return (index + 1) + '. ' + phase + outcome + (attempt.help.length ? '，提示 ' + attempt.help.length + ' 次' : '');
         }).join('；');
@@ -722,7 +721,7 @@
   function renderHistory() {
     const list = $('local-history'); list.replaceChildren(); const all = history();
     if (!all.length) { list.textContent = '暫時未有已儲存紀錄。'; return; }
-    all.slice(0, 15).forEach(snapshot => { const rows = S.summarize(snapshot), div = textNode('div', '', 'history-item');
+    all.slice(0, 15).forEach(snapshot => { const rows = S.summarize(snapshot), div = textNode('div', '', 'history-item'), recallLabel = snapshot.version === 4 ? '自己寫' : '自己試';
       div.append(textNode('div', snapshot.mode === 'quiz' ? '測驗' : '練習'));
       if (snapshot.mode === 'quiz') {
         const completeTiming = rows.every(row => row.timingComplete);
@@ -731,7 +730,7 @@
       div.append(textNode('strong', new Date(snapshot.startedAt).toLocaleString('zh-HK')), textNode('div', snapshot.entries.map(word => word.text).join('、')),
         textNode('div', '自己完成 ' + rows.filter(r => r.independent).length + ' · 有提示完成 ' + rows.filter(r => r.assisted && !r.independent).length + ' · 跳過 ' + rows.filter(r => r.skipped && !r.independent && !r.assisted).length + ' · 待練 ' + rows.filter(r => r.unfinished).length));
       const details = document.createElement('details'); details.append(textNode('summary', '睇每次嘗試'));
-      rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'quiz' ? '測驗' : a.phase === 'guided' ? '引導' : a.phase === 'recall' ? '自己試' : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + (snapshot.mode === 'quiz' ? '，' + durationLabel([a]) : '，提示 ' + a.help.length + ' 次')).join('；') : '待練'))));
+      rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'quiz' ? '測驗' : a.phase === 'guided' ? '引導' : a.phase === 'recall' ? recallLabel : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + (snapshot.mode === 'quiz' ? '，' + durationLabel([a]) : '，提示 ' + a.help.length + ' 次')).join('；') : '待練'))));
       if (snapshot.mode === 'quiz') rows.forEach(row => details.append(textNode('p', '第 ' + (row.index + 1) + ' 字「' + row.character + '」書寫時間：' + durationLabel(row.attempts, true))));
       div.append(details); list.append(div);
     });
@@ -781,7 +780,7 @@
   if ('speechSynthesis' in window && speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', updateVoices);
   $('teacher-open').addEventListener('click', () => {
     cancelDictation();
-    if (state && state.active.phase === 'recall') requestHelp('outline');
+    if (state && state.version !== 4 && state.active.phase === 'recall') requestHelp('outline');
     draftEntries = entries; draftSelected = new Set(selected);
     $('teacher-words').value = draftEntries.map(entry => entry.text).join('\n'); $('teacher-error').textContent = ''; selectedOptions();
     const active = state && !['choose-word', 'summary'].includes(state.active.phase); $('teacher-active').hidden = !active;
