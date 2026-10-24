@@ -39,7 +39,7 @@ test('ordinary teacher page gets canonical six-word scope and retains its reques
 });
 test('teacher chooses reviewed mode, privately collects originals, publishes and deliberately deletes', async () => {
   const reviewedRoom = { ...room, assignment: { ...room.assignment, version: 2, mode: 'listen' } };
-  const e = boot({ fetch: async (url, options) => response(options.method === 'DELETE' ? { deleted: true } : url.endsWith('/reviews') ? { members: [{ alias: '小星', memberId: 'one', runId: 'run', score: null, elapsedMs: 40 }], published: false, rows: [] } : url.endsWith('/publication') ? { published: true, rows: [{ alias: '小星', rank: 1, score: 1 }] } : reviewedRoom) });
+  const e = boot({ fetch: async (url, options) => response(options.method === 'DELETE' ? { deleted: true } : url.endsWith('/reviews') ? { members: [{ alias: '小星', memberId: 'one', runId: 'run', score: 1, elapsedMs: 40 }], published: false, rows: [] } : url.endsWith('/publication') ? { published: true, rows: [{ alias: '小星', rank: 1, score: 1 }] } : reviewedRoom) });
   const first = e.draft.requestId; e.nodes.get('mode').value = 'listen'; e.nodes.get('mode').listeners.change();
   assert.notEqual(e.draft.requestId, first); await e.click('create');
   assert.equal(JSON.parse(e.calls[0].options.body).mode, 'listen'); assert.equal(JSON.parse(e.calls[0].options.body).version, 2);
@@ -48,6 +48,16 @@ test('teacher chooses reviewed mode, privately collects originals, publishes and
   await e.click('publish'); assert.equal(e.calls[2].options.method, 'POST'); assert.equal(e.nodes.get('publish').disabled, true);
   const before = e.calls.length; await e.click('delete-class'); assert.equal(e.calls.length, before);
   await e.click('delete-class'); assert.equal(e.calls.at(-1).options.method, 'DELETE'); assert.equal(e.nodes.get('room').hidden, true); assert.equal(e.draft.room, undefined);
+});
+test('teacher publication stays disabled for no submissions or any incomplete submitted review', async () => {
+  const reviewedRoom = { ...room, assignment: { ...room.assignment, version: 2, mode: 'listen' } }; let members = [];
+  const e = boot({ fetch: async url => response(url.endsWith('/reviews') ? { members, published: false, rows: [] } : reviewedRoom) });
+  await e.click('create'); assert.equal(e.nodes.get('publish').disabled, true);
+  await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
+  members = [{ alias: 'a', runId: null, score: null }]; await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
+  members.push({ alias: 'b', runId: 'one', score: null }); await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
+  members[1].score = 0; await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, false, 'zero is a complete teacher grade');
+  members.push({ alias: 'c', runId: 'two', score: null }); await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
 });
 
 test('selected scope remains optional and storage failure disables creation before writing', () => {

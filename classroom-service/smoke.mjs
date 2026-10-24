@@ -36,6 +36,7 @@ assert.equal((await call('/' + code + '/teacher-board', 'GET', undefined, teache
 console.log(JSON.stringify({ code, checks: 'Real local Worker/D1: anonymous browser-owned creation, owner denial, two memberships, concurrent idempotency, pre-finish board denial, changed-payload conflicts, shared tied best results', passed: true }));
 const reviewed = await call('', 'POST', { entries: [{ text: '鬍鬚', selectedIndexes: [0, 1] }], version: 2, mode: 'listen', requestId: randomUUID() }, teacher);
 assert.equal(reviewed.status, 200); const reviewedCode = reviewed.data.code;
+assert.equal((await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher)).status, 409);
 const reviewers = [];
 for (const alias of ['原稿甲', '原稿乙']) {
   const token = randomBytes(32).toString('hex');
@@ -51,13 +52,17 @@ assert.equal(concurrent[0].status, 200); assert.deepEqual(concurrent[0].data, co
 assert.equal((await put(reviewers[0], { ...submitted, runId: randomUUID() })).status, 409);
 assert.equal((await call('/' + reviewedCode + '/answers', 'GET', undefined, auth(reviewers[1]))).data.answer, null);
 await put(reviewers[1], { ...submitted, runId: randomUUID(), elapsedMs: 1 });
+assert.equal((await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher)).data.error.code, 'MARKING_PENDING');
 const own = await call('/' + reviewedCode + '/answers', 'GET', undefined, auth(reviewers[0]));
 assert.deepEqual(own.data.answer.run.answers, submitted.answers); assert(!Object.hasOwn(own.data.answer.run, 'elapsedMs'));
 assert.equal((await call('/' + reviewedCode + '/reviews', 'GET', undefined, auth(reviewers[0]))).status, 401);
 const marks = A.unmarked(reviewed.data.assignment).map(mark => ({ ...mark, correct: true, strokePractice: true }));
-for (const student of reviewers) assert.equal((await call('/' + reviewedCode + '/reviews/' + student.memberId, 'PUT', { revision: 0, marks }, teacher)).status, 200);
+for (const [index, student] of reviewers.entries()) {
+  assert.equal((await call('/' + reviewedCode + '/reviews/' + student.memberId, 'PUT', { revision: 0, marks }, teacher)).status, 200);
+  if (!index) assert.equal((await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher)).status, 409);
+}
 assert.equal((await call('/' + reviewedCode + '/board', 'GET', undefined, auth(reviewers[0]))).data.published, false);
-await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher);
+assert.equal((await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher)).status, 200);
 let reviewedBoard = (await call('/' + reviewedCode + '/board', 'GET', undefined, auth(reviewers[0]))).data;
 assert.deepEqual(reviewedBoard.rows.map(row => row.rank), [1, 1]);
 assert(reviewedBoard.rows.every(row => Object.keys(row).sort().join() === 'alias,rank,score'));

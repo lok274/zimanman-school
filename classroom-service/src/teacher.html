@@ -55,6 +55,7 @@ async function request(path, options = {}) {
 }
 function showRoom(room) {
   $('room').hidden = false; $('code').textContent = room.code; $('expiry').textContent = '到期時間：' + new Date(room.expiresAt).toLocaleString('zh-HK'); $('new-class').hidden = false; $('mode').disabled = true; $('publish').hidden = $('delete-class').hidden = room.assignment.version !== 2;
+  $('publish').disabled = true;
   if (globalThis.setTimeout) {
     clearTimeout(expiryTimer);
     expiryTimer = setTimeout(() => {
@@ -106,7 +107,10 @@ function showBoard(data) {
   const section = document.createElement('div');
   section.append(text('h2', data.published ? '已公布班級榜' : '班級榜尚未公布'));
   for (const row of data.rows) section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
-  $('board').replaceChildren(section); $('publish').disabled = data.published;
+  const submitted = data.members?.filter(member => member.runId) || [];
+  const ready = submitted.length > 0 && submitted.every(member => Number.isInteger(member.score));
+  if (!data.published && !ready) section.append(text('p', '請先完成已交原卷的批改。'));
+  $('board').replaceChildren(section); $('publish').disabled = data.published || !ready;
 }
 async function refreshReviewed(room) {
   const data = await request('/' + room.code + '/reviews');
@@ -139,7 +143,7 @@ async function refreshReviewed(room) {
 $('publish').addEventListener('click', async () => {
   if ($('publish').disabled) return; $('publish').disabled = true; const room = draft.room;
   try { const data = await request('/' + room.code + '/publication', { method: 'POST' }); if (draft.room?.code === room.code) showBoard(data); }
-  catch (error) { if (draft.room?.code === room.code) { $('status').textContent = error.message; $('publish').disabled = false; } }
+  catch (error) { if (draft.room?.code === room.code) { $('status').textContent = error.message; $('publish').disabled = error.code === 'MARKING_PENDING'; } }
 });
 $('delete-class').addEventListener('click', async () => {
   if ($('delete-class').disabled) return;

@@ -199,6 +199,34 @@ test('reviewed payload validation and checked quotas leave no partial original',
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reviewed_submissions').get().n, 1);
   assert.equal((await e.put()).status, 200, 'exact retries work even when quota is full');
 });
+test('initial publication atomically requires a submission and complete marks on every submitted original', async t => {
+  const e = await reviewed(t), path = '/' + e.room.code;
+  const publish = () => e.call(path + '/publication', 'POST', {}, teacherHeaders);
+  assert.equal((await publish()).data.error.code, 'MARKING_PENDING');
+  await e.put(); assert.equal((await publish()).status, 409);
+  const marks = A.unmarked(e.room.assignment).map(mark => ({ ...mark, correct: true }));
+  await e.call(path + '/reviews/' + e.member.data.memberId, 'PUT', { revision: 0, marks }, teacherHeaders);
+  const other = await e.join(e.room.code, 'late');
+  const prepare = e.db.prepare; let injected = false;
+  e.db.prepare = sql => {
+    const statement = prepare(sql);
+    if (!sql.startsWith('INSERT OR IGNORE INTO publications')) return statement;
+    const run = statement.run;
+    statement.run = async () => {
+      if (!injected) { injected = true; await e.put(e.run, { authorization: 'Bearer ' + other.token }); }
+      return run();
+    };
+    return statement;
+  };
+  assert.equal((await publish()).status, 409, 'a submission arriving immediately before the insert still blocks publication');
+  assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM publications').get().n, 0);
+  await e.call(path + '/reviews/' + other.data.memberId, 'PUT', { revision: 0, marks }, teacherHeaders);
+  assert.equal((await publish()).data.published, true);
+  marks[0].correct = null;
+  await e.call(path + '/reviews/' + other.data.memberId, 'PUT', { revision: 1, marks }, teacherHeaders);
+  assert.equal((await publish()).data.published, true, 'an already published board remains live after a regrade');
+  assert.equal((await publish()).data.rows.length, 1);
+});
 test('expiry, bounded maintenance and owner deletion cascade original ink and reviews', async t => {
   const e = await reviewed(t), path = '/' + e.room.code; await e.put();
   await e.call(path + '/publication', 'POST', {}, teacherHeaders);

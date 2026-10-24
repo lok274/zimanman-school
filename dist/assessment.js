@@ -33,7 +33,7 @@
       if (answer.status === 'submitted' && !strokes.length) throw new Error('未寫字，請先書寫或選跳過。');
       return { occurrenceId: answer.occurrenceId, status: answer.status, strokes };
     });
-    const result = { version: 2, runId: run.runId, assignment: canonical, startedAt: run.startedAt, elapsedMs: run.elapsedMs, phase: 'sealed', answers };
+    const result = envelope({ ...run, assignment: canonical }, answers);
     if (new TextEncoder().encode(JSON.stringify(result)).length > limits.bytes) throw new Error('筆跡超出容量，原稿仍然保留，請聯絡老師。');
     return result;
   }
@@ -59,8 +59,10 @@
   function checkInk(run) {
     const count = { n: 0 };
     for (const answer of run.answers) ink(answer.strokes, count);
-    if (new TextEncoder().encode(JSON.stringify(run)).length > limits.bytes) throw new Error('筆跡超出容量，請撤回本字上一筆再試。原稿仍然保留。');
+    const terminal = envelope({ ...run, elapsedMs: limits.duration }, run.answers.map(answer => ({ occurrenceId: answer.occurrenceId, status: answer.status === 'draft' ? 'submitted' : answer.status, strokes: answer.strokes })));
+    if (new TextEncoder().encode(JSON.stringify(terminal)).length > limits.bytes) throw new Error('筆跡超出容量，請撤回本字上一筆再試。原稿仍然保留。');
   }
+  function envelope(run, answers) { return { version: 2, runId: run.runId, assignment: run.assignment, startedAt: run.startedAt, elapsedMs: run.elapsedMs, phase: 'sealed', answers }; }
   function review(assigned, marks) {
     const expected = positions(assigned);
     if (!Array.isArray(marks) || marks.length !== expected.length) throw new Error('批改項目不完整。');

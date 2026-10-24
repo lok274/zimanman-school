@@ -77,3 +77,30 @@ test('ordinary JSON near the supported D1 row budget passes and oversize fails e
   assert.throws(() => A.validateSubmission(assigned, run), /容量/);
   assert.equal(run.answers[0].strokes[0].length, samples + 100);
 });
+test('an exact-byte draft prefix can skip every remaining answer and seal with the maximum timer', () => {
+  let run = A.start(assigned, 'x', 1); run.answers[0].status = 'submitted'; run.answers[0].strokes = [[]];
+  const point = [10000, 10000, 86400000], pointBytes = Buffer.byteLength(JSON.stringify(point)) + 1;
+  const samples = Math.floor((A.limits.bytes - Buffer.byteLength(JSON.stringify(run)) + 1) / pointBytes);
+  run.answers[0].strokes[0] = Array.from({ length: samples }, () => [...point]);
+  run.runId += 'x'.repeat(A.limits.bytes - Buffer.byteLength(JSON.stringify(run)));
+  assert.equal(Buffer.byteLength(JSON.stringify(run)), A.limits.bytes);
+  run.answers[0].status = 'draft';
+  run = A.transition(run, { type: 'ANSWER', status: 'submitted' });
+  run = A.transition(run, { type: 'ANSWER', status: 'skipped' });
+  const sealed = A.transition(run, { type: 'SEAL', elapsedMs: A.limits.duration });
+  assert.equal(sealed.answers[0].strokes[0].length, samples); assert.equal(sealed.answers[1].status, 'skipped');
+  assert(Buffer.byteLength(JSON.stringify(sealed)) <= A.limits.bytes);
+});
+test('capacity reserves every remaining terminal status before locking a long assignment prefix', () => {
+  const assignment = A.assignment(Array.from({ length: 6 }, (_, i) => ({ text: '一'.repeat(7) + String.fromCodePoint(0x4e01 + i), selectedIndexes: [0, 1, 2, 3, 4, 5, 6, 7] })), 'listen');
+  let run = A.start(assignment, 'reserve', 1);
+  const stroke = Array.from({ length: 78000 }, () => [10000, 10000, 86400000]); run.answers[0].strokes = [stroke];
+  while (Buffer.byteLength(JSON.stringify(run)) < A.limits.bytes - 100) stroke.push([10000, 10000, 86400000]);
+  assert(Buffer.byteLength(JSON.stringify(run)) < A.limits.bytes);
+  assert.throws(() => A.transition(run, { type: 'ANSWER', status: 'submitted' }), /容量/);
+  while (true) { try { A.checkInk(run); break; } catch { stroke.pop(); } }
+  const points = stroke.length; run = A.transition(run, { type: 'ANSWER', status: 'submitted' });
+  while (run.answers.some(answer => answer.status === 'draft')) run = A.transition(run, { type: 'ANSWER', status: 'skipped' });
+  const sealed = A.transition(run, { type: 'SEAL', elapsedMs: A.limits.duration });
+  assert.equal(sealed.answers[0].strokes[0].length, points); assert.equal(sealed.answers.length, 48);
+});

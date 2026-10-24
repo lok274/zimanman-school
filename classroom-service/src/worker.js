@@ -156,7 +156,12 @@ async function api(request, env, url) {
   }
   if (assigned.version === 2 && action === 'publication' && route.length === 2 && request.method === 'POST') {
     await ownerFor(request, room);
-    await db.prepare('INSERT OR IGNORE INTO publications(code, published_at) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)').bind(code, Date.now(), code, Date.now()).run();
+    await db.prepare(`INSERT OR IGNORE INTO publications(code, published_at) SELECT ?, ?
+      WHERE EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)
+      AND EXISTS (SELECT 1 FROM reviewed_submissions s JOIN members m ON m.id = s.member_id WHERE m.code = ?)
+      AND NOT EXISTS (SELECT 1 FROM reviewed_submissions s JOIN members m ON m.id = s.member_id WHERE m.code = ? AND s.score IS NULL)`)
+      .bind(code, Date.now(), code, Date.now(), code, code).run();
+    if (!await db.prepare('SELECT code FROM publications WHERE code = ?').bind(code).first()) { await roomFor(db, code); fail(409, 'MARKING_PENDING', '請先完成已交原卷的批改，再公布。'); }
     return reviewedBoard(db, room);
   }
   if (assigned.version === 2 && action === 'board' && route.length === 2 && request.method === 'GET') {
