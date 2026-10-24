@@ -6,7 +6,7 @@
   function allCharacterPositions(sourceEntries) { return new Set(sourceEntries.flatMap(entry => entry.characters.map((_, index) => entry.id + ':' + index))); }
   let entries = S.parseEntries(C.words.join('\n')), selected = allCharacterPositions(entries);
   let draftEntries = entries, draftSelected = new Set(selected);
-  let state = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
+  let state = null, localMode = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   let feedback = null, feedbackAnimation = null, tone = null;
   let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
   let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
@@ -99,6 +99,11 @@
     if (!assigned.length || assigned.length > 6) throw new Error('今節請揀 1 至 6 項詞語入面嘅字。');
     return S.createSession({ id: id(), entries: assigned, startedAt: Date.now(), mode });
   }
+  function localGroups() {
+    const eligible = entries.filter(entry => entry.characters.some((_, index) => selected.has(entry.id + ':' + index)));
+    const middle = Math.ceil(eligible.length / 2);
+    return [eligible.slice(0, middle), eligible.slice(middle)];
+  }
   function startSession(candidate = sessionCandidate()) {
     cancelDictation();
     stopEffects();
@@ -113,10 +118,11 @@
     cancelDictation();
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
     else save();
-    stopEffects(); state = null; feedback = null; boardNavigationRun = null;
+    stopEffects(); state = null; localMode = null; feedback = null; boardNavigationRun = null;
     try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {}
     render();
   }
+  function showGroups(mode) { goHome(); localMode = mode; render(); }
   function stopEffects() { checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
   function dispatch(event) {
     checkpoint();
@@ -213,6 +219,25 @@
     return image;
   }
   function textNode(tag, text, className) { const element = document.createElement(tag); element.textContent = text; if (className) element.className = className; return element; }
+  function renderWordLabel(element, word, index) {
+    const characters = Array.from(word.text);
+    element.replaceChildren(); element.style.setProperty('--word-length', characters.length);
+    characters.forEach((character, position) => {
+      const span = textNode('span', character, 'word-character');
+      if (position === index) { span.classList.toggle('current-character', true); span.setAttribute('aria-current', 'true'); span.setAttribute('aria-description', (index + 1) + ' / ' + characters.length); }
+      element.append(span);
+    });
+  }
+  function renderGroups() {
+    const label = localMode === 'quiz' ? '測驗' : '練習';
+    $('group-title').textContent = label;
+    const container = $('group-cards'); container.replaceChildren();
+    localGroups().forEach((group, index) => {
+      const button = document.createElement('button'); button.className = 'mode-card'; button.disabled = !group.length;
+      button.append(textNode('strong', label + (index + 1)), textNode('span', group.map(word => word.text).join('、')));
+      button.addEventListener('click', () => startSession(sessionCandidate(localMode, group, selected))); container.append(button);
+    });
+  }
   function renderChoices() {
     $('choose-title').textContent = state.mode === 'quiz' ? '測驗：想先寫邊個字？' : '練習：想先寫邊個字？';
     const container = $('word-cards'); container.replaceChildren();
@@ -223,21 +248,23 @@
       const done = assigned.every(o => state.finished.includes(o.id));
       const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
-      const content = textNode('span', target.character, 'word-name');
+      const content = textNode('span', '', 'word-name'); renderWordLabel(content, word, target.index);
       button.append(content, visualCue(word.text));
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
     });
-    $('choice-summary').textContent = '返回首頁';
+    $('choice-summary').textContent = localMode ? '返回揀組別' : '返回首頁';
   }
   function render() {
     restoreRecallText();
     renderSound();
     renderWordVoiceLabel();
     renderClock();
-    $('home-view').hidden = !!state;
+    $('home-view').hidden = !!state || !!localMode;
+    $('group-view').hidden = !!state || !localMode;
     document.body.classList.toggle('quiz-mode', !!state && state.mode === 'quiz');
     if (!state) {
+      if (localMode) renderGroups();
       $('choose-view').hidden = true; $('practice-view').hidden = true; $('summary-view').hidden = true; $('previous-step').hidden = true;
       document.body.classList.toggle('has-recall', false); renderPresentation(); return;
     }
@@ -251,7 +278,8 @@
     if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
-    $('word-title').textContent = recall ? '詞語收埋咗' : currentOccurrence().character; $('word-title').classList.toggle('concealed', recall);
+    if (recall) $('word-title').textContent = '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
+    $('word-title').classList.toggle('concealed', recall);
     $('semantic-cue').replaceChildren(visualCue(word.text));
     document.querySelector('.step-rail').hidden = quiz;
     $('writer').setAttribute('aria-label', quiz ? '測驗書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
@@ -435,7 +463,7 @@
     try {
       const member = classroom.view().member;
       const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
-      classroom.bindRun(candidate.id); $('class-dialog').close(); startSession(candidate);
+      classroom.bindRun(candidate.id); localMode = null; $('class-dialog').close(); startSession(candidate);
     } catch (error) { $('class-status').textContent = error.message; }
   }
   $('class-open').addEventListener('click', () => { renderClassroom(); $('class-dialog').showModal(); });
@@ -642,9 +670,10 @@
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
   $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
   $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
-  $('choice-summary').addEventListener('click', goHome);
+  $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode) : goHome());
+  $('group-home').addEventListener('click', goHome);
   $('new-session').addEventListener('click', goHome);
-  for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => startSession(sessionCandidate(mode)));
+  for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => showGroups(mode));
   $('rest').addEventListener('click', () => { if (!state) return; dispatch({ type: 'REST' }); $('rest-dialog').showModal(); availabilityChanged(); });
   $('resume').addEventListener('click', () => { $('rest-dialog').close(); dispatch({ type: 'RESUME' }); availabilityChanged(); });
   $('rest-dialog').addEventListener('cancel', event => event.preventDefault());

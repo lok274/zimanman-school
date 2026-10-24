@@ -56,6 +56,10 @@
 .quiz-clock{margin:10px 0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);text-align:right;width:fit-content;max-width:100%;font-variant-numeric:tabular-nums;line-height:1.4}.quiz-clock span{display:block;font-size:12px}.quiz-clock strong{font-size:22px}.quiz-mode .practice-side{display:flex;flex-direction:column;align-self:stretch}.quiz-mode .quiz-clock{margin-top:auto}.quiz-mode .next-row{margin-bottom:10px}.class-entry{margin-top:22px}#class-join-fields input{display:block;width:100%;padding:10px;border:1px solid #acb8a2;border-radius:8px;margin:8px 0 16px;background:#fffefb}#class-code{text-transform:uppercase;letter-spacing:3px}#class-dialog .button{margin:4px 4px 4px 0;white-space:normal}.quiz-results{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.class-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.podium-place{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:14px 8px;border-radius:10px;background:var(--soft);overflow-wrap:anywhere}.podium-place strong{color:var(--green)}.podium-place small{font-size:12px}.quiz-results table,#class-dialog table{width:100%;border-collapse:collapse;font-size:14px}.quiz-results th,.quiz-results td,#class-dialog th,#class-dialog td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.quiz-results caption,#class-dialog caption{font-size:12px;text-align:left}.is-me{background:var(--soft)}#class-again{margin-top:20px}@media(max-width:570px){.class-podium{grid-template-columns:1fr}.quiz-results{padding:12px}.quiz-clock strong{font-size:20px}}
 .leaderboard-page{max-width:980px}.leaderboard-page table{width:100%;border-collapse:collapse;font-size:17px}.leaderboard-page td,.leaderboard-page th{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.leaderboard-page caption{text-align:left;font-size:14px}#board-best{margin:22px 0;font-weight:700}.leaderboard-page .podium-place{padding:24px 12px;font-size:22px}.leaderboard-page .podium-place small{font-size:15px}.leaderboard-page .podium-place strong{font-size:28px}.standalone-class-note{display:none}body[data-standalone] #class-open,body[data-standalone] #teacher-class{display:none}body[data-standalone] .standalone-class-note{display:block}
 .teacher-words-heading,.dictation-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.teacher-words-heading{margin:18px 0 10px}.teacher-words-heading .field-label{margin:0 auto 0 0}.teacher-words-heading .button,.dictation-actions .button{min-height:64px;font-size:22px}#dictation-pending{display:block;width:100%;min-height:64px;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:10px 14px;font-size:22px;margin:8px 0}#dictation-review{margin-bottom:16px}#dictation-status{margin:8px 0}
+.word-card .word-name,.word-card:only-child .word-name{display:flex;flex-wrap:wrap;justify-content:center;min-width:0;font-size:clamp(40px,calc(200px / var(--word-length)),160px);line-height:1.35}
+.word-character{display:inline-block}.current-character{background:#e4ebd7;border-radius:5px;text-decoration:underline;text-decoration-thickness:.045em;text-underline-offset:.1em}
+.word-panel h1:not(.concealed),.simplified-practice .word-panel h1:not(.concealed){display:flex;flex-wrap:wrap;max-width:100%;font-size:clamp(32px,calc(256px / var(--word-length)),64px);line-height:1;letter-spacing:0}
+#group-cards .mode-card span{overflow-wrap:anywhere}
 @media(orientation:portrait),(max-width:759px){
   .quiz-mode.simplified-practice .practice-side{display:grid;grid-template-columns:minmax(0,1fr) auto}
   .quiz-mode.simplified-practice .practice-side>*{grid-column:1/-1}
@@ -77,6 +81,11 @@
       <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>睇筆順，跟住寫，再自己試</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>睇題目，自己寫</span></button></div>
       <button id="class-open" class="button secondary class-entry">加入班級測驗</button>
       <p class="standalone-class-note small">單檔版保留本機測驗。跨平板班級測驗請開 <a href="https://lok274.github.io/zimanman-school/">網上學生頁面</a>。</p>
+    </section>
+    <section id="group-view" class="home-view" hidden aria-labelledby="group-title">
+      <h1 id="group-title">練習</h1>
+      <div id="group-cards" class="mode-cards"></div>
+      <div class="choice-footer"><button id="group-home" class="button secondary">返回首頁</button></div>
     </section>
     <section id="choose-view" class="choose-view" hidden aria-labelledby="choose-title">
       <h1 id="choose-title">你想先寫邊個字？</h1>
@@ -756,7 +765,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function allCharacterPositions(sourceEntries) { return new Set(sourceEntries.flatMap(entry => entry.characters.map((_, index) => entry.id + ':' + index))); }
   let entries = S.parseEntries(C.words.join('\n')), selected = allCharacterPositions(entries);
   let draftEntries = entries, draftSelected = new Set(selected);
-  let state = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
+  let state = null, localMode = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   let feedback = null, feedbackAnimation = null, tone = null;
   let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
   let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
@@ -849,6 +858,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     if (!assigned.length || assigned.length > 6) throw new Error('今節請揀 1 至 6 項詞語入面嘅字。');
     return S.createSession({ id: id(), entries: assigned, startedAt: Date.now(), mode });
   }
+  function localGroups() {
+    const eligible = entries.filter(entry => entry.characters.some((_, index) => selected.has(entry.id + ':' + index)));
+    const middle = Math.ceil(eligible.length / 2);
+    return [eligible.slice(0, middle), eligible.slice(middle)];
+  }
   function startSession(candidate = sessionCandidate()) {
     cancelDictation();
     stopEffects();
@@ -863,10 +877,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     cancelDictation();
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
     else save();
-    stopEffects(); state = null; feedback = null; boardNavigationRun = null;
+    stopEffects(); state = null; localMode = null; feedback = null; boardNavigationRun = null;
     try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {}
     render();
   }
+  function showGroups(mode) { goHome(); localMode = mode; render(); }
   function stopEffects() { checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
   function dispatch(event) {
     checkpoint();
@@ -963,6 +978,25 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     return image;
   }
   function textNode(tag, text, className) { const element = document.createElement(tag); element.textContent = text; if (className) element.className = className; return element; }
+  function renderWordLabel(element, word, index) {
+    const characters = Array.from(word.text);
+    element.replaceChildren(); element.style.setProperty('--word-length', characters.length);
+    characters.forEach((character, position) => {
+      const span = textNode('span', character, 'word-character');
+      if (position === index) { span.classList.toggle('current-character', true); span.setAttribute('aria-current', 'true'); span.setAttribute('aria-description', (index + 1) + ' / ' + characters.length); }
+      element.append(span);
+    });
+  }
+  function renderGroups() {
+    const label = localMode === 'quiz' ? '測驗' : '練習';
+    $('group-title').textContent = label;
+    const container = $('group-cards'); container.replaceChildren();
+    localGroups().forEach((group, index) => {
+      const button = document.createElement('button'); button.className = 'mode-card'; button.disabled = !group.length;
+      button.append(textNode('strong', label + (index + 1)), textNode('span', group.map(word => word.text).join('、')));
+      button.addEventListener('click', () => startSession(sessionCandidate(localMode, group, selected))); container.append(button);
+    });
+  }
   function renderChoices() {
     $('choose-title').textContent = state.mode === 'quiz' ? '測驗：想先寫邊個字？' : '練習：想先寫邊個字？';
     const container = $('word-cards'); container.replaceChildren();
@@ -973,21 +1007,23 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const done = assigned.every(o => state.finished.includes(o.id));
       const pending = done && rows.some(row => row.wordId === word.id && !row.independent && !row.assisted);
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
-      const content = textNode('span', target.character, 'word-name');
+      const content = textNode('span', '', 'word-name'); renderWordLabel(content, word, target.index);
       button.append(content, visualCue(word.text));
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
     });
-    $('choice-summary').textContent = '返回首頁';
+    $('choice-summary').textContent = localMode ? '返回揀組別' : '返回首頁';
   }
   function render() {
     restoreRecallText();
     renderSound();
     renderWordVoiceLabel();
     renderClock();
-    $('home-view').hidden = !!state;
+    $('home-view').hidden = !!state || !!localMode;
+    $('group-view').hidden = !!state || !localMode;
     document.body.classList.toggle('quiz-mode', !!state && state.mode === 'quiz');
     if (!state) {
+      if (localMode) renderGroups();
       $('choose-view').hidden = true; $('practice-view').hidden = true; $('summary-view').hidden = true; $('previous-step').hidden = true;
       document.body.classList.toggle('has-recall', false); renderPresentation(); return;
     }
@@ -1001,7 +1037,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     if (choose || summary) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
-    $('word-title').textContent = recall ? '詞語收埋咗' : currentOccurrence().character; $('word-title').classList.toggle('concealed', recall);
+    if (recall) $('word-title').textContent = '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
+    $('word-title').classList.toggle('concealed', recall);
     $('semantic-cue').replaceChildren(visualCue(word.text));
     document.querySelector('.step-rail').hidden = quiz;
     $('writer').setAttribute('aria-label', quiz ? '測驗書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
@@ -1185,7 +1222,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     try {
       const member = classroom.view().member;
       const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
-      classroom.bindRun(candidate.id); $('class-dialog').close(); startSession(candidate);
+      classroom.bindRun(candidate.id); localMode = null; $('class-dialog').close(); startSession(candidate);
     } catch (error) { $('class-status').textContent = error.message; }
   }
   $('class-open').addEventListener('click', () => { renderClassroom(); $('class-dialog').showModal(); });
@@ -1392,9 +1429,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
   $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
   $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
-  $('choice-summary').addEventListener('click', goHome);
+  $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode) : goHome());
+  $('group-home').addEventListener('click', goHome);
   $('new-session').addEventListener('click', goHome);
-  for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => startSession(sessionCandidate(mode)));
+  for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => showGroups(mode));
   $('rest').addEventListener('click', () => { if (!state) return; dispatch({ type: 'REST' }); $('rest-dialog').showModal(); availabilityChanged(); });
   $('resume').addEventListener('click', () => { $('rest-dialog').close(); dispatch({ type: 'RESUME' }); availabilityChanged(); });
   $('rest-dialog').addEventListener('cancel', event => event.preventDefault());

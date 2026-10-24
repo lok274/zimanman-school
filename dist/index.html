@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#214b3b">
   <title>字慢慢 · 一筆一筆，慢慢學</title>
-  <link rel="stylesheet" href="styles.css?v=0a3bb0afcbb5">
+  <link rel="stylesheet" href="styles.css?v=9e4556bf4f65">
 </head>
 <body>
   <header class="app-header">
@@ -19,6 +19,11 @@
       <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong><span>睇筆順，跟住寫，再自己試</span></button><button id="start-quiz" class="mode-card"><strong>測驗</strong><span>睇題目，自己寫</span></button></div>
       <button id="class-open" class="button secondary class-entry">加入班級測驗</button>
       <p class="standalone-class-note small">單檔版保留本機測驗。跨平板班級測驗請開 <a href="https://lok274.github.io/zimanman-school/">網上學生頁面</a>。</p>
+    </section>
+    <section id="group-view" class="home-view" hidden aria-labelledby="group-title">
+      <h1 id="group-title">練習</h1>
+      <div id="group-cards" class="mode-cards"></div>
+      <div class="choice-footer"><button id="group-home" class="button secondary">返回首頁</button></div>
     </section>
     <section id="choose-view" class="choose-view" hidden aria-labelledby="choose-title">
       <h1 id="choose-title">你想先寫邊個字？</h1>
@@ -82,6 +87,6 @@
   <script src="quiz-results.js?v=6f36d387a7d2"></script>
   <script src="classroom.js?v=f252cb4b7a03"></script>
   <script src="writing.js?v=c68d756c7bb6"></script>
-  <script src="app.js?v=79578b77ab5b"></script>
+  <script src="app.js?v=9fd4e6ee75e4"></script>
 </body>
 </html>
