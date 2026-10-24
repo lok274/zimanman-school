@@ -6,6 +6,13 @@
   function allCharacterPositions(sourceEntries) { return new Set(sourceEntries.flatMap(entry => entry.characters.map((_, index) => entry.id + ':' + index))); }
   let entries = S.parseEntries(C.words.join('\n')), selected = allCharacterPositions(entries);
   let draftEntries = entries, draftSelected = new Set(selected);
+  let practiceLevel = 0;
+  const practicePages = [
+    { title: '揀年級', label: '二年級', back: '返回首頁' },
+    { title: '二年級', label: '2上1', back: '返回年級' },
+    { title: '2上1', label: '第一課《爸爸的鬍鬚》', back: '返回課本' },
+    { title: '第一課《爸爸的鬍鬚》', back: '返回課文' }
+  ];
   let state = null, localMode = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   let feedback = null, feedbackAnimation = null, tone = null;
   let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
@@ -119,11 +126,12 @@
     cancelDictation();
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
     else save();
-    stopEffects(); state = null; localMode = null; feedback = null; boardNavigationRun = null;
-    try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {}
+    stopEffects();
+    if (state) { try { sessionStorage.removeItem(prefix + 'current'); } catch (_) {} }
+    state = null; localMode = null; practiceLevel = 0; feedback = null; boardNavigationRun = null;
     render();
   }
-  function showGroups(mode) { goHome(); localMode = mode; render(); }
+  function showGroups(mode, level = 0) { goHome(); localMode = mode; practiceLevel = level; render(); }
   function stopEffects() { pendingDemoToken = null; checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
   function dispatch(event) {
     checkpoint();
@@ -146,7 +154,7 @@
     const make = (kind, icon, variants, celebrate = false) => ({ kind, icon, text: safeText(variants, next), celebrate });
     if (next.mode === 'quiz') {
       if (event.type === 'STROKE_MISSED') return make('quiz-miss', '', ['再試呢一畫。']);
-      if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '○', ['完成咗！準備好先行下一步。'], true);
+      if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '', ['測驗完成'], true);
       return null;
     }
     const n = next.active.currentStroke;
@@ -233,8 +241,17 @@
   }
   function renderGroups() {
     const label = localMode === 'quiz' ? '測驗' : '練習';
-    $('group-title').textContent = label;
+    const page = localMode === 'practice' ? practicePages[practiceLevel] : null;
+    $('group-title').textContent = page ? page.title : label;
+    $('group-home').textContent = page ? page.back : '返回首頁';
+    $('group-cards').classList.toggle('curriculum-cards', !!page?.label);
     const container = $('group-cards'); container.replaceChildren();
+    if (page?.label) {
+      const button = document.createElement('button'); button.className = 'mode-card';
+      button.append(textNode('strong', page.label));
+      button.addEventListener('click', () => { practiceLevel++; render(); });
+      container.append(button); return;
+    }
     localGroups().forEach((group, index) => {
       const button = document.createElement('button'); button.className = 'mode-card'; button.disabled = !group.length;
       button.append(textNode('strong', label + (index + 1)), textNode('span', group.map(word => word.text).join('、')));
@@ -263,6 +280,7 @@
     $('demo-navigation').hidden = true;
     $('practice-stars').hidden = true;
     restoreRecallText();
+    document.querySelector('.brand').setAttribute('aria-label', safeText(['寫字樂首頁', '返回主頁', '回到開始']));
     renderSound();
     renderWordVoiceLabel();
     renderClock();
@@ -289,6 +307,7 @@
     if ($('practice-stars').textContent !== starText) $('practice-stars').textContent = starText;
     if ($('practice-stars').getAttribute('aria-label') !== starLabel) $('practice-stars').setAttribute('aria-label', starLabel);
     const quiz = state.mode === 'quiz', recall = a.phase === 'recall', complete = a.phase === 'character-complete';
+    const quizComplete = quiz && complete && a.completedPhase === 'quiz';
     if (recall) $('word-title').textContent = '詞語收埋咗'; else renderWordLabel($('word-title'), word, currentOccurrence().index);
     $('word-title').classList.toggle('concealed', recall);
     $('semantic-cue').replaceChildren(visualCue(word.text));
@@ -326,7 +345,7 @@
     if (a.phase === 'recall') { title = safeText(['自己試', '試住記', '憑記憶']); instruction = safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? '再試一次，或者開提示幫手。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && attempt.help.length ? '有提示完成' : '自己完成';
-      title = quiz && a.completedPhase === 'quiz' ? '測驗完成' : label; instruction = a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
+      title = quizComplete ? '測驗完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
       if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
@@ -334,20 +353,21 @@
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
     const practiceCue = !quiz && ['guided', 'recall', 'character-complete'].includes(a.phase);
     const eventCue = practiceCue && !!feedback;
-    $('practice-instruction').hidden = eventCue || ['watch', 'quiz'].includes(a.phase);
+    $('practice-instruction').hidden = quizComplete || eventCue || ['watch', 'quiz'].includes(a.phase);
     $('feedback').hidden = practiceCue && !eventCue;
-    $('hear-instruction').setAttribute('aria-describedby', eventCue ? 'feedback-text' : 'practice-instruction');
-    const nextInstruction = eventCue ? feedback.text : instruction;
+    $('feedback').classList.toggle('sr-only', quizComplete);
+    $('hear-instruction').setAttribute('aria-describedby', quizComplete ? 'main-next' : eventCue ? 'feedback-text' : 'practice-instruction');
+    const nextInstruction = quizComplete ? $('main-next').textContent.replace(/ →$/, '') : eventCue ? feedback.text : instruction;
     const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction].join(':');
     if (nextSpeechKey !== speechKey || instructionStatus && instructionText !== nextInstruction) { stopSpeech(); speechKey = nextSpeechKey; }
     instructionText = nextInstruction;
     renderInstructionVoice();
-    const message = feedback ? feedback.text : defaultFeedback;
+    const message = quizComplete ? '測驗完成' : feedback ? feedback.text : defaultFeedback;
     if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;
-    const icon = feedback ? feedback.icon : '';
+    const icon = !quizComplete && feedback ? feedback.icon : '';
     if ($('feedback-icon').textContent !== icon) $('feedback-icon').textContent = icon;
     if ($('feedback-icon').hidden !== !icon) $('feedback-icon').hidden = !icon;
-    $('feedback').setAttribute('data-kind', feedback ? feedback.kind : 'instruction');
+    $('feedback').setAttribute('data-kind', quizComplete ? 'quiz-complete' : feedback ? feedback.kind : 'instruction');
     if (!quiz || a.completedPhase !== 'quiz') $('quiz-mark').setAttribute('hidden', '');
     else $('quiz-mark').removeAttribute('hidden');
     $('board-message').hidden = !['loading', 'unavailable'].includes(a.phase);
@@ -708,8 +728,10 @@
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
   $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
   $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
-  $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode) : goHome());
-  $('group-home').addEventListener('click', goHome);
+  $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode, localMode === 'practice' ? practicePages.length - 1 : 0) : goHome());
+  $('group-home').addEventListener('click', () => {
+    if (localMode === 'practice' && practiceLevel) { practiceLevel--; render(); } else goHome();
+  });
   $('new-session').addEventListener('click', goHome);
   for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => showGroups(mode));
   $('rest').addEventListener('click', () => { if (!state) return; dispatch({ type: 'REST' }); $('rest-dialog').showModal(); availabilityChanged(); });

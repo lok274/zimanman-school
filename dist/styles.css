@@ -62,3 +62,8 @@
 }
 
 #practice-stars{font-size:17px;white-space:nowrap;color:var(--green)}
+
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+#group-cards.curriculum-cards{grid-template-columns:minmax(0,1fr)}
+#group-cards.curriculum-cards .mode-card{min-height:220px;padding:24px}
+#group-cards.curriculum-cards strong{font-size:clamp(36px,6vw,64px);overflow-wrap:anywhere}
