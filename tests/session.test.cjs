@@ -362,3 +362,28 @@ test('historical v4 purpose states use route choices without overwriting purpose
     assert.equal(JSON.stringify(old), before);
   }
 });
+
+test('v4 undo removes one accepted stroke and preserves the live attempt evidence', () => {
+  for (const phase of ['recall', 'guided']) {
+    let state = currentSession.createSession({ id: 'undo', entries: assignedUndo(), startedAt: 1 });
+    state = send(state, 'CHOOSE_WORD', { wordId: 'w0', purpose: null });
+    state = send(state, 'DATA_READY', { strokeCount: 3 });
+    if (phase === 'guided') state = send(state, 'USE_GUIDANCE');
+    state = send(state, 'STROKE_MISSED', { strokeIndex: 0 });
+    state = send(state, 'STROKE_ACCEPTED', { strokeIndex: 0 });
+    state = send(state, 'STROKE_ACCEPTED', { strokeIndex: 1 });
+    state = send(state, 'STROKE_MISSED', { strokeIndex: 2 });
+    const before = state;
+    state = send(state, 'UNDO_STROKE', { strokeIndex: 1 });
+    assert.equal(state.active.currentStroke, 1);
+    assert.equal(state.active.attemptId, before.active.attemptId);
+    assert.equal(state.active.phase, phase); assert.equal(state.active.missesOnCurrentStroke, 0);
+    assert.deepEqual(state.attempts, before.attempts); assert.deepEqual(state.finished, before.finished);
+    assert.notEqual(state.active.token, before.active.token); assert(currentSession.validateSnapshot(state));
+    for (const extra of [{ token: before.active.token }, { strokeIndex: 1 }, { newToken: state.active.token }, { newToken: state.active.attemptId }, { newToken: '' }]) assert.equal(send(state, 'UNDO_STROKE', { strokeIndex: 0, ...extra }), state);
+    for (const changed of [{ version: 3 }, { resting: true }, { mode: 'quiz' }, { active: { ...state.active, writingDone: true } }, { active: { ...state.active, currentStroke: 3 } }]) { const refused = { ...state, ...changed }; assert.equal(send(refused, 'UNDO_STROKE', { strokeIndex: refused.active.currentStroke - 1 }), refused); }
+    state = send(state, 'UNDO_STROKE', { strokeIndex: 0 }); assert.equal(state.active.currentStroke, 0);
+    assert.equal(send(state, 'UNDO_STROKE', { strokeIndex: -1 }), state);
+  }
+});
+function assignedUndo() { return [{ text: '來', selectedIndexes: [0] }]; }

@@ -8,7 +8,7 @@
         const request = indexedDB.open('bishun-assessments-v2', 1);
         request.onupgradeneeded = () => request.result.createObjectStore('records', { keyPath: 'key' }).createIndex('expiry', 'expiresAt');
         request.onerror = () => { opening = null; reject(request.error); };
-        request.onblocked = () => { opening = null; reject(new Error('請關閉其他舊版測驗分頁後重試。')); };
+        request.onblocked = () => { opening = null; reject(new Error('請關閉其他舊版小挑戰分頁後重試。')); };
         request.onsuccess = () => resolve(request.result);
       });
       return opening;
@@ -36,7 +36,7 @@
         request.onsuccess = () => {
           try {
             guard();
-            if (snapshot.expiresAt <= Date.now()) throw new Error('測驗已到期。');
+            if (snapshot.expiresAt <= Date.now()) throw new Error('小挑戰已到期。');
             if (request.result?.run?.phase === 'sealed' && JSON.stringify(request.result.run) !== JSON.stringify(snapshot.run)) throw new Error('原卷已封存，請重新開啟原卷。');
             if ((request.result?.revision || 0) !== (snapshot.revision || 0)) throw new Error('另一分頁已更新原稿。眼前筆跡仍保留，請勿關頁，請老師協助。');
             snapshot.revision = (snapshot.revision || 0) + 1;
@@ -73,7 +73,7 @@
       return new Promise((resolve, reject) => {
         const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'); let saved, failure;
         const pointer = store.get(scope);
-        function valid() { try { guard(); if (snapshot.expiresAt <= Date.now()) throw new Error('測驗已到期。'); return true; } catch (problem) { failure = problem; tx.abort(); return false; } }
+        function valid() { try { guard(); if (snapshot.expiresAt <= Date.now()) throw new Error('小挑戰已到期。'); return true; } catch (problem) { failure = problem; tx.abort(); return false; } }
         function insert() { if (!valid()) return; saved = { ...snapshot, revision: 1 }; store.put(saved); store.put({ key: scope, runKey: saved.key, expiresAt: saved.expiresAt }); }
         pointer.onsuccess = () => {
           if (!valid()) return;

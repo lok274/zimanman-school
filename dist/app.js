@@ -14,10 +14,10 @@
     { title: '第一課《爸爸的鬍鬚》', back: '返回課文' }
   ];
   let state = null, localMode = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
-  let feedback = null, feedbackAnimation = null, tone = null;
-  let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
-  let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
+  let feedback = null, feedbackAnimation = null;
+  let speechKey = '', speechGeneration = 0;
   let readyMount = null, mountGeneration = 0, segment = null, leaving = false, pendingDemoToken = null;
+  let undoRestart = null;
   let clockTick = null;
   let boardNavigationRun = null;
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -31,7 +31,7 @@
   function refreshLocalResume() { if (assessment) assessment.hasLocal().then(found => { $('resume-assessment').hidden = !found; }).catch(() => {}); }
   if (assessment) {
     refreshLocalResume();
-    $('resume-assessment').addEventListener('click', () => { stopEffects(); assessment.resumeLocal().catch(error => { $('storage-notice').hidden = false; $('storage-notice').textContent = error.message; }); });
+    $('resume-assessment').addEventListener('click', () => { stopEffects(); assessment.resumeLocal().catch(error => { $('storage-notice').hidden = false; $('storage-notice').textContent = error.message.replaceAll('測驗', '小挑戰'); }); });
   }
   function startLocalAssessment(group) {
     const candidate = sessionCandidate('quiz', group, selected);
@@ -141,7 +141,7 @@
     try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
     save(); render();
   }
-  function stopSpeech() { speechGeneration++; instructionStatus = ''; $('instruction-voice-note').textContent = ''; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {} }
+  function stopSpeech() { speechGeneration++; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {} }
   function goHome() {
     cancelDictation();
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
@@ -155,16 +155,33 @@
   }
   function showGroups(mode, level = 0) { goHome(); localMode = mode; curriculumLevel = level; render(); }
   function stopEffects() { pendingDemoToken = null; checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
-  function dispatch(event) {
+  function dispatch(event, editInk) {
     checkpoint();
     const before = state;
     const next = S.transition(state, { at: Date.now(), ...event });
     if (next === state) { openSegment(); return false; }
-    state = next;
+    if (editInk) {
+      if (!editInk(() => { if (state !== before) return false; state = next; return true; })) return false;
+    } else state = next;
+    if (event.type === 'UNDO_STROKE') undoRestart = { token: state.active.token, phase: 'pending' };
+    else if (undoRestart && undoRestart.token !== state.active.token) undoRestart = null;
     if (pendingDemoToken !== state.active.token || !['loading', 'watch'].includes(state.active.phase)) pendingDemoToken = null;
     cancelFeedbackEffects(); feedback = feedbackFor(before, next, event); save(); render(); openSegment();
     if (feedback && feedback.celebrate) celebrateFeedback();
     return true;
+  }
+  function undoPracticeStroke() {
+    if (!available() || undoRestart || !readyMount || readyMount.token !== state.active.token || readyMount.generation !== mountGeneration || !handle) return;
+    const count = state.active.currentStroke;
+    dispatch({ type: 'UNDO_STROKE', token: state.active.token, newToken: id(), strokeIndex: count - 1 }, installNext => handle.editAcceptedInk('remove-last', count, installNext));
+  }
+  function renderUndo() {
+    const a = state.active;
+    $('undo-stroke').hidden = state.version !== 4 || state.mode !== 'practice' || !['recall', 'guided'].includes(a.phase) || a.writingDone;
+    $('undo-stroke').disabled = !available() || !!undoRestart || !readyMount || readyMount.token !== a.token || readyMount.generation !== mountGeneration || !(a.currentStroke > 0 && a.currentStroke < a.strokeCount);
+    $('reload-writer').hidden = undoRestart?.token !== a.token || undoRestart.phase !== 'failed';
+    $('use-guidance').disabled = !!undoRestart;
+    if (!$('reload-writer').hidden) { $('board-message').hidden = false; $('board-message').textContent = undoRestart.message; }
   }
   function concealedCharacter(snapshot) {
     if (!snapshot || snapshot.version === 4 || snapshot.active.phase !== 'recall') return '';
@@ -176,7 +193,7 @@
     const make = (kind, icon, variants, celebrate = false) => ({ kind, icon, text: safeText(variants, next), celebrate });
     if (next.mode === 'quiz') {
       if (event.type === 'STROKE_MISSED') return make('quiz-miss', '', ['再試呢一畫。']);
-      if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '', ['測驗完成'], true);
+      if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '', ['小挑戰完成'], true);
       return null;
     }
     const n = next.active.currentStroke;
@@ -186,8 +203,6 @@
         : make('step', '✓', [...(n === 1 ? ['你開始咗，第一畫完成！'] : []), '完成第 ' + n + ' 畫！', '呢筆已寫好，進度 ' + n + '。', '做到第 ' + n + ' 步。']);
       case 'STROKE_MISSED': return make('support', '↻', ['再試呢一畫。', '慢慢再試，需要提示都可以。', '由起點落筆，或者請老師幫手。', '停低諗吓，想求助就撳掣。']);
       case 'REQUEST_HELP': return make('support', '•', [...(event.kind === 'stroke' && next.active.missesOnCurrentStroke ? ['睇完呢一畫，再試。'] : []), '提示已開，可以繼續寫。', '睇住幫手，再試吓。', '有需要就求助，慢慢嚟。']);
-      case 'RETRY': return make('support', '↻', ['重新試，由起點開始。', '可以再寫，之前嘅紀錄會保留。', '今趟慢慢做，隨時求助。']);
-      case 'RESUME': return make('support', '•', ['休息完，可以接住寫。', '返嚟喇，由而家呢筆繼續。', '準備好就再試，隨時求助。']);
       case 'WRITING_COMPLETE': {
         const attempt = next.attempts.find(item => item.id === next.active.attemptId);
         if (before.active.phase === 'guided') return make('complete-guided', '✓', ['跟寫完成。下一步由你決定。'], true);
@@ -200,47 +215,12 @@
   }
   function cancelFeedbackEffects() {
     if (feedbackAnimation) feedbackAnimation.cancel(); feedbackAnimation = null;
-    if (tone) { const activeTone = tone; tone = null; activeTone.oscillator.onended = null; try { activeTone.oscillator.stop(); } catch (_) {} activeTone.oscillator.disconnect(); activeTone.gain.disconnect(); }
   }
-  function renderSound() {
-    const labels = soundEnabled ? ['完成提示聲：開', '音效已啟用', '有聲慶祝'] : ['完成提示聲：關', '靜音', '不播放聲效'];
-    const notes = audioStatus === 'blocked' ? ['裝置未能播放，畫面回饋照常。', '聲效暫時用唔到，仍可繼續寫。', '可以安靜練習，圖示會保留。']
-      : audioStatus === 'preparing' ? ['聲效準備中，畫面回饋照常。', '等裝置開啟音效，仍可繼續寫。', '暫時安靜練習，圖示會保留。']
-      : [''];
-    const label = safeText(labels), note = safeText(notes);
-    if ($('feedback-sound').textContent !== label) $('feedback-sound').textContent = label;
-    $('feedback-sound').setAttribute('aria-pressed', String(soundEnabled));
-    if ($('feedback-sound-note').textContent !== note) $('feedback-sound-note').textContent = note;
-  }
-  function updateSound() { restoreRecallText(); renderSound(); maskRecallText(); }
   function celebrateFeedback() {
     if (document.hidden || state.resting || $('teacher-dialog').open) return;
     const icon = $('feedback-icon');
     if (icon.animate && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) feedbackAnimation = icon.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 450, iterations: 1 });
-    if (!soundEnabled || audioStatus !== 'ready' || !audioContext || audioContext.state !== 'running') return;
-    try {
-      const oscillator = audioContext.createOscillator(), gain = audioContext.createGain(), now = audioContext.currentTime;
-      tone = { oscillator, gain }; oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(660, now);
-      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.035, now + 0.025); gain.gain.linearRampToValueAtTime(0, now + 0.2);
-      oscillator.connect(gain); gain.connect(audioContext.destination);
-      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); if (tone && tone.oscillator === oscillator) tone = null; };
-      oscillator.start(now); oscillator.stop(now + 0.21);
-    } catch (_) { cancelFeedbackEffects(); soundEnabled = false; audioStatus = 'blocked'; updateSound(); }
   }
-  $('feedback-sound').addEventListener('click', () => {
-    const version = ++soundVersion; soundEnabled = !soundEnabled; cancelFeedbackEffects();
-    if (!soundEnabled) { audioStatus = 'off'; updateSound(); return; }
-    audioStatus = 'preparing'; updateSound();
-    try {
-      const Audio = window.AudioContext || window.webkitAudioContext;
-      if (!Audio) throw new Error('Audio unavailable');
-      if (!audioContext) audioContext = new Audio();
-      Promise.resolve(audioContext.resume()).then(() => {
-        if (version !== soundVersion) return;
-        audioStatus = audioContext.state === 'running' ? 'ready' : 'blocked'; soundEnabled = audioStatus === 'ready'; updateSound();
-      }).catch(() => { if (version === soundVersion) { soundEnabled = false; audioStatus = 'blocked'; updateSound(); } });
-    } catch (_) { soundEnabled = false; audioStatus = 'blocked'; updateSound(); }
-  });
   function currentOccurrence() { return state && state.occurrences.find(item => item.id === state.active.occurrenceId); }
   function currentWord() { const wordId = state?.active.wordId || currentOccurrence()?.wordId; return state?.entries.find(item => item.id === wordId); }
   function event(type, extra) { if (!state) return false; return dispatch({ type, token: state.active.token, newToken: id(), ...extra }); }
@@ -262,7 +242,7 @@
     });
   }
   function renderGroups() {
-    const label = localMode === 'quiz' ? '測驗' : '練習';
+    const label = localMode === 'quiz' ? '小挑戰' : '練習';
     const page = curriculumPages[curriculumLevel];
     $('group-title').textContent = page ? page.title : label;
     $('group-title').classList.toggle('sr-only', curriculumLevel < curriculumPages.length - 1);
@@ -283,7 +263,7 @@
   }
   function defaultPurpose(word) { return C.purposes?.[word.text] ? 'label' : null; }
   function renderChoices() {
-    $('choose-title').textContent = state.mode === 'quiz' ? '測驗：想先寫邊個字？' : '練習：想先寫邊個字？';
+    $('choose-title').textContent = state.mode === 'quiz' ? '小挑戰：想先寫邊個字？' : '練習：想先寫邊個字？';
     const container = $('word-cards'); container.replaceChildren();
     const rows = S.summarize(state);
     state.entries.forEach(word => {
@@ -342,7 +322,6 @@
     $('task-view').hidden = true;
     restoreRecallText();
     document.querySelector('.brand').setAttribute('aria-label', safeText(['寫字樂首頁', '返回主頁', '回到開始']));
-    renderSound();
     renderWordVoiceLabel();
     renderClock();
     $('home-view').hidden = !!state || !!localMode;
@@ -358,14 +337,13 @@
     $('task-view').hidden = !task;
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary || task; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
-    $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回選字']);
+    $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回示範'] : ['← 返回選字']);
     if (state.version === 4) {
-      if (a.phase === 'guided') $('previous-step').textContent = attempt?.help.some(help => help.kind === 'guidance') ? '← 返回自己寫' : '← 返回睇筆順';
+      if (a.phase === 'guided') $('previous-step').textContent = attempt?.help.some(help => help.kind === 'guidance') ? '← 返回自己寫' : '← 返回示範';
       else $('previous-step').textContent = ['character-complete', 'word-complete'].includes(a.phase) ? '← 再寫一次' : '← 返回選字';
     }
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
-    $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
     if (choose || summary || task) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else if (task) renderTask(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
     const stars = state.mode === 'practice' ? S.summarize(state).filter(row => row.guided || row.independent || row.assisted).length : 0;
@@ -379,14 +357,14 @@
     $('word-title').classList.toggle('concealed', concealTask);
     $('semantic-cue').replaceChildren(visualCue(word.text)); $('semantic-cue').hidden = false;
     document.querySelector('.step-rail').hidden = quiz || state.version === 4;
-    $('writer').setAttribute('aria-label', quiz ? '測驗書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
+    $('writer').setAttribute('aria-label', quiz ? '小挑戰書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
     document.querySelectorAll('[data-stage]').forEach((element, index) => { element.classList.toggle('active', index === stageIndex); element.classList.toggle('done', index < stageIndex); if (index === stageIndex) element.setAttribute('aria-current', 'step'); else element.removeAttribute('aria-current'); });
-    $('demo-controls').hidden = a.phase !== 'watch'; $('extra-demo-controls').hidden = a.phase !== 'watch';
+    $('demo-controls').hidden = a.phase !== 'watch';
     const assigned = state.occurrences.filter(item => item.wordId === word.id);
     const position = assigned.findIndex(item => item.id === a.occurrenceId);
-    const browse = !quiz && a.phase === 'watch' && !state.resting && assigned.length > 1;
+    const browse = !quiz && a.phase === 'watch' && available() && assigned.length > 1;
     $('demo-navigation').hidden = !browse;
     document.body.classList.toggle('has-demo-navigation', browse);
     for (const [button, direction, label] of [['demo-previous', -1, '上一字：'], ['demo-next', 1, '下一字：']]) {
@@ -395,9 +373,6 @@
       $(button).textContent = target ? label + target.character : '';
     }
     $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) || a.writingDone;
-    $('extra-writing-controls').hidden = !['guided', 'recall', 'quiz'].includes(a.phase) && !(complete && ['recall', 'quiz', ...(state.version === 4 ? ['guided'] : [])].includes(a.completedPhase));
-    $('hint-stroke').textContent = safeText(a.missesOnCurrentStroke ? ['睇一畫再試', '看提示後重做', '求助'] : ['睇呢一畫', '看提示', '求助']);
-    $('hint-stroke').hidden = quiz || a.writingDone || complete || state.version === 4 && recall; $('hint-outline').hidden = quiz || a.writingDone || complete || state.version === 4 && recall;
     $('use-guidance').hidden = !(state.version === 4 && recall); $('use-guidance').classList.toggle('help-emphasis', recall && a.missesOnCurrentStroke >= 2);
     $('data-controls').hidden = a.phase !== 'unavailable';
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall', 'quiz'].includes(a.phase) && !a.writingDone);
@@ -406,17 +381,17 @@
     let title = '', instruction = '', defaultFeedback = '';
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
     if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = safeText(['可以再載入，或者請老師幫手。', '資料未準備好，稍後再試。', '想求助就撳老師工具。']); }
-    if (a.phase === 'watch') { title = safeText(['睇筆順', '看示範', '觀察']); instruction = safeText(['撳播放，睇筆順。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一畫。', '由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
-    if (a.phase === 'quiz') { title = '測驗'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
-    if (a.phase === 'recall') { title = state.version === 4 ? '自己寫' : safeText(['自己試', '試住記', '憑記憶']); instruction = state.version === 4 ? '照住詞語自己寫。需要時可揀跟住寫。' : safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? state.version === 4 ? '再試一次，或者揀跟住寫。' : '再試一次，或者開提示幫手。' : state.version === 4 ? '照住詞語慢慢寫。' : '用自己記住嘅筆順寫。'; }
+    if (a.phase === 'watch') { title = safeText(['示範', '看示範', '觀察']); instruction = safeText(['撳播放睇示範。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，再繼續播放。'; $('main-next').textContent = '到我跟住寫 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己寫。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一畫。', '由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己寫 →'; }
+    if (a.phase === 'quiz') { title = '小挑戰'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
+    if (a.phase === 'recall') { title = state.version === 4 ? '自己寫' : safeText(['自己寫', '試住記', '憑記憶']); instruction = state.version === 4 ? '照住詞語自己寫。需要時可揀跟住寫。' : safeText(['按記憶慢慢寫。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? state.version === 4 ? '再試一次，或者揀跟住寫。' : '再試一次，或者開提示幫手。' : state.version === 4 ? '照住詞語慢慢寫。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && (attempt.help.length || state.version === 4 && attempt.phase === 'guided') ? '有提示完成' : '自己完成';
-      title = quizComplete ? '測驗完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
+      title = quizComplete ? '小挑戰完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
       if (state.version === 4 && !remaining.some(item => item.wordId === word.id)) $('main-next').textContent = '睇作品 →';
-      if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
+      if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成小挑戰 →';
     }
     if (guide) { title += ' · ' + guide.label; instruction = guide.instruction; }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
@@ -425,13 +400,9 @@
     $('practice-instruction').hidden = !!guide || quizComplete || eventCue || ['watch', 'quiz'].includes(a.phase) || state.version === 4 && recall;
     $('feedback').hidden = practiceCue && !eventCue;
     $('feedback').classList.toggle('sr-only', quizComplete);
-    $('hear-instruction').setAttribute('aria-describedby', quizComplete ? 'main-next' : guide ? 'practice-instruction' : eventCue ? 'feedback-text' : 'practice-instruction');
-    const nextInstruction = independentTask() ? word.text + '。寫第' + (currentOccurrence().index + 1) + '個字。' : quizComplete ? $('main-next').textContent.replace(/ →$/, '') : guide ? guide.instruction : eventCue ? feedback.text : instruction;
     const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction, guide ? a.currentStroke : ''].join(':');
-    if (nextSpeechKey !== speechKey || instructionStatus && instructionText !== nextInstruction) { stopSpeech(); speechKey = nextSpeechKey; }
-    instructionText = nextInstruction;
-    renderInstructionVoice();
-    const message = quizComplete ? '測驗完成' : feedback ? feedback.text : defaultFeedback;
+    if (nextSpeechKey !== speechKey) { stopSpeech(); speechKey = nextSpeechKey; }
+    const message = quizComplete ? '小挑戰完成' : feedback ? feedback.text : defaultFeedback;
     if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;
     const icon = !quizComplete && !(a.phase === 'guided' && a.writingDone) && feedback ? feedback.icon : '';
     if ($('feedback-icon').textContent !== icon) $('feedback-icon').textContent = icon;
@@ -443,6 +414,7 @@
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
     $('pause').disabled = demoState !== 'playing';
     if (available()) syncWriter();
+    renderUndo();
     maskRecallText();
   }
   function renderCompletionMark() {
@@ -454,6 +426,7 @@
   function syncWriter() {
     const a = state.active;
     const key = a.token + ':' + a.phase;
+    if (undoRestart?.token === a.token && undoRestart.phase === 'failed') return;
     if (mountedKey === key) return;
     if (a.phase === 'character-complete' && handle && mountedKey.startsWith(a.token + ':')) { mountedKey = key; return; }
     if (handle) handle.dispose(); handle = null; readyMount = null;
@@ -472,15 +445,24 @@
     const completedPractice = state.version === 4 && a.phase === 'character-complete' && ['guided', 'recall'].includes(a.completedPhase);
     if (!completedPractice && (!['watch', 'guided', 'recall', 'quiz'].includes(a.phase) || a.writingDone && a.phase !== 'guided')) return;
     const occurrence = currentOccurrence(), data = dataCache.get(occurrence.character);
-    if (!data || !globalThis.HanziWriter) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); return; }
+    const mountFailed = () => {
+      if (!state || generation !== mountGeneration || state.active.token !== a.token) return;
+      if (undoRestart?.token !== a.token) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); return; }
+      handle?.suspend(); readyMount = null;
+      undoRestart = { token: a.token, phase: 'failed', message: '書寫格未能載入。已保留剩低嘅筆畫，請再載入書寫格。' };
+      $('writer').style.visibility = 'hidden'; $('board-message').hidden = false; $('board-message').textContent = undoRestart.message; renderUndo();
+    };
+    if (!data || !globalThis.HanziWriter) { mountFailed(); return; }
     try { handle = W.mount($('writer'), occurrence.character, data, { token: a.token, phase: completedPractice ? a.completedPhase : a.phase, complete: completedPractice, identity: state.version === 4 && a.attemptId ? { sessionId: state.id, occurrenceId: a.occurrenceId, attemptId: a.attemptId } : null, isCurrent: () => available() && generation === mountGeneration && state.active.token === a.token && state.active.attemptId === a.attemptId, currentStroke: a.currentStroke || 0, missesOnCurrentStroke: a.missesOnCurrentStroke, help: (state.attempts.find(item => item.id === a.attemptId) || { help: [] }).help,
       onReady: () => {
         if (!state || generation !== mountGeneration || state.active.token !== a.token || !available()) return;
         readyMount = { generation, token: a.token };
+        if (undoRestart?.token === a.token) undoRestart = null;
+        renderUndo();
         renderCompletionMark();
         if (pendingDemoToken === a.token) Promise.resolve().then(() => {
           if (pendingDemoToken !== a.token || !available() || generation !== mountGeneration || state.active.token !== a.token || state.active.phase !== 'watch') return;
-          pendingDemoToken = null; handle.play(false);
+          pendingDemoToken = null; handle.play();
         });
         if (state.mode === 'quiz') {
           const attempt = state.attempts.find(item => item.id === state.active.attemptId);
@@ -488,7 +470,7 @@
           save(); openSegment();
         }
       },
-      onError: () => { if (state && generation === mountGeneration && state.active.token === a.token) dispatch({ type: 'MOUNT_FAILED', token: a.token }); },
+      onError: mountFailed,
       onCharacterDemoComplete: () => {
         if (!available() || generation !== mountGeneration || state.active.token !== a.token || state.mode !== 'practice' || state.active.phase !== 'watch') return;
         const newToken = id();
@@ -496,15 +478,16 @@
         if (!event('BROWSE_DEMO', { direction: 1, newToken })) pendingDemoToken = null;
       },
       onDemoState: value => { if (!state || generation !== mountGeneration || state.active.token !== a.token) return; demoState = value; $('pause').disabled = value !== 'playing'; $('play').textContent = value === 'paused' ? '▶ 繼續播放' : '▶ 播放'; },
-      onEvent: incoming => {
-        if (!available() || generation !== mountGeneration || !state || state.active.token !== a.token) return;
-        if (!dispatch(incoming)) return;
+      onEvent: (incoming, editInk) => {
+        if (!available() || generation !== mountGeneration || !state || state.active.token !== a.token) return false;
+        if (!dispatch(incoming, editInk)) return false;
         if (state.mode !== 'quiz' && (state.version !== 4 || state.active.phase === 'guided') && incoming.type === 'STROKE_MISSED' && state.active.missesOnCurrentStroke >= 2) {
           const attempt = state.attempts.find(item => item.id === state.active.attemptId);
           if (!attempt.help.some(help => help.kind === 'stroke' && help.strokeIndex === state.active.currentStroke)) requestHelp('stroke');
         }
+        return true;
       }
-    }); } catch (_) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); }
+    }); } catch (_) { mountFailed(); }
   }
   function requestHelp(kind) {
     if (!state || state.mode === 'quiz') return false;
@@ -513,8 +496,8 @@
     return false;
   }
   function renderSummary(snapshot) {
-    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次測驗完成紀錄' : '每一步，都記低咗。';
-    const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = snapshot.version === 4 ? '自己寫' : '自己試'; stats.replaceChildren();
+    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次小挑戰完成紀錄' : '每一步，都記低咗。';
+    const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = '自己寫'; stats.replaceChildren();
     const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length], ['老師協助跳過', rows.filter(r => r.skipped && !r.independent && !r.assisted).length], ['待練字次', rows.filter(r => r.unfinished).length]];
     groups.forEach(([label, n]) => { const div = textNode('div', '', 'stat'); div.append(textNode('b', String(n)), textNode('span', label)); stats.append(div); });
     const list = $('summary-rows'); list.replaceChildren();
@@ -522,10 +505,10 @@
       const div = textNode('div', '', 'summary-row'), detail = document.createElement('div'); div.append(textNode('div', word.text, 'summary-word'), detail);
       rows.filter(row => row.wordId === word.id).forEach(row => {
         const line = textNode('div', '', 'char-record'), text = document.createElement('span');
-        const label = row.independent ? '自己完成' : row.assisted ? '有提示完成' : row.skipped ? '老師協助跳過' : row.guided ? '完成引導練習 · 自己試待練' : '待練';
+        const label = row.independent ? '自己完成' : row.assisted ? '有提示完成' : row.skipped ? '老師協助跳過' : row.guided ? '完成引導練習 · 自己寫待練' : '待練';
         text.append(textNode('span', '第 ' + (row.index + 1) + ' 字 · ' + label, 'record-label'));
         const attempts = row.attempts.map((attempt, index) => {
-          const phase = attempt.phase === 'quiz' ? '測驗' : attempt.phase === 'guided' ? '引導' : attempt.phase === 'recall' ? recallLabel : '老師';
+          const phase = attempt.phase === 'quiz' ? '小挑戰' : attempt.phase === 'guided' ? '引導' : attempt.phase === 'recall' ? recallLabel : '老師';
           const outcome = attempt.outcome === 'complete' ? attempt.phase === 'recall' && !attempt.help.length ? '無提示完成' : '完成' : attempt.outcome === 'skipped' ? '協助跳過' : attempt.outcome === 'abandoned' ? '未完成／重新試' : '未完成';
           return (index + 1) + '. ' + phase + outcome + (attempt.help.length ? '，提示 ' + attempt.help.length + ' 次' : '');
         }).join('；');
@@ -600,7 +583,7 @@
       if (member.assignment.version === 2 && assessment) { stopEffects(); localMode = null; $('class-dialog').close(); assessment.open(member.assignment, member); return; }
       const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
       classroom.bindRun(candidate.id); localMode = null; $('class-dialog').close(); startSession(candidate);
-    } catch (error) { $('class-status').textContent = error.message; }
+    } catch (error) { $('class-status').textContent = error.message.replaceAll('測驗', '小挑戰'); }
   }
   $('class-open').addEventListener('click', () => { renderClassroom(); $('class-dialog').showModal(); });
   $('class-close').addEventListener('click', () => $('class-dialog').close());
@@ -721,8 +704,8 @@
   function renderHistory() {
     const list = $('local-history'); list.replaceChildren(); const all = history();
     if (!all.length) { list.textContent = '暫時未有已儲存紀錄。'; return; }
-    all.slice(0, 15).forEach(snapshot => { const rows = S.summarize(snapshot), div = textNode('div', '', 'history-item'), recallLabel = snapshot.version === 4 ? '自己寫' : '自己試';
-      div.append(textNode('div', snapshot.mode === 'quiz' ? '測驗' : '練習'));
+    all.slice(0, 15).forEach(snapshot => { const rows = S.summarize(snapshot), div = textNode('div', '', 'history-item'), recallLabel = '自己寫';
+      div.append(textNode('div', snapshot.mode === 'quiz' ? '小挑戰' : '練習'));
       if (snapshot.mode === 'quiz') {
         const completeTiming = rows.every(row => row.timingComplete);
         div.append(textNode('div', (completeTiming ? '書寫總時間：' : '已記錄書寫時間：') + durationLabel(snapshot.attempts)));
@@ -730,27 +713,19 @@
       div.append(textNode('strong', new Date(snapshot.startedAt).toLocaleString('zh-HK')), textNode('div', snapshot.entries.map(word => word.text).join('、')),
         textNode('div', '自己完成 ' + rows.filter(r => r.independent).length + ' · 有提示完成 ' + rows.filter(r => r.assisted && !r.independent).length + ' · 跳過 ' + rows.filter(r => r.skipped && !r.independent && !r.assisted).length + ' · 待練 ' + rows.filter(r => r.unfinished).length));
       const details = document.createElement('details'); details.append(textNode('summary', '睇每次嘗試'));
-      rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'quiz' ? '測驗' : a.phase === 'guided' ? '引導' : a.phase === 'recall' ? recallLabel : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + (snapshot.mode === 'quiz' ? '，' + durationLabel([a]) : '，提示 ' + a.help.length + ' 次')).join('；') : '待練'))));
+      rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'quiz' ? '小挑戰' : a.phase === 'guided' ? '引導' : a.phase === 'recall' ? recallLabel : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + (snapshot.mode === 'quiz' ? '，' + durationLabel([a]) : '，提示 ' + a.help.length + ' 次')).join('；') : '待練'))));
       if (snapshot.mode === 'quiz') rows.forEach(row => details.append(textNode('p', '第 ' + (row.index + 1) + ' 字「' + row.character + '」書寫時間：' + durationLabel(row.attempts, true))));
       div.append(details); list.append(div);
     });
   }
   let cantoneseVoice = null;
   function renderPresentation() {
-    document.body.classList.toggle('simplified-practice', simplified);
+    document.body.classList.toggle('simplified-practice', true);
+    document.body.classList.toggle('v4-practice', state?.version === 4 && state.mode === 'practice');
     document.body.classList.toggle('menu-view', !$('group-view').hidden || !$('choose-view').hidden || !$('task-view').hidden);
     document.body.classList.toggle('writing-view', !$('practice-view').hidden);
-    $('simplify').textContent = safeText(simplified ? ['精簡畫面：開', '只顯示重點', '少啲內容'] : ['精簡畫面：關', '顯示全部內容', '完整模式']);
-    $('simplify').setAttribute('aria-pressed', String(simplified));
   }
-  function renderInstructionVoice() {
-    $('hear-instruction').textContent = safeText(['聽指令', '操作語音', '播放說明']);
-    $('instruction-voice-note').textContent = instructionStatus ? safeText(instructionStatus) : '';
-  }
-  const speechUnavailable = ['暫時冇粵語聲音，請老師讀畫面指令。', '裝置未提供合適語音，可搵大人幫手。', '未能朗讀，文字仍然保留。'];
-  const speechFailed = ['裝置未能朗讀，請老師讀畫面指令。', '語音暫時用唔到，可搵大人幫手。', '聲音有問題，文字仍然保留。'];
-  function refreshSpeechNotice() { restoreRecallText(); renderInstructionVoice(); maskRecallText(); }
-  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); $('speak-label').textContent = safeText(['聽詞語', '播放讀音', '請老師朗讀']); }
+  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); }
   function updateVoices() {
     restoreRecallText();
     try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
@@ -758,20 +733,15 @@
     renderWordVoiceLabel();
     maskRecallText();
   }
-  function speakText(text, operation) {
-    cancelDictation();
-    stopSpeech(); const generation = speechGeneration;
-    if (!cantoneseVoice) { if (operation) instructionStatus = speechUnavailable; else $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; refreshSpeechNotice(); return; }
+  function speakText(text) {
+    cancelDictation(); stopSpeech(); const generation = speechGeneration;
+    if (!cantoneseVoice) { $('voice-note').textContent = safeText(['請老師讀一次，再試吓自己讀。暫時冇粵語聲音。', '裝置未提供合適發音，請老師幫手。']); return; }
+    const failed = () => { if (generation === speechGeneration) $('voice-note').textContent = safeText(['裝置未能朗讀，可以請老師讀一次。', '聲音未能播放，可以請大人幫手。']); };
     try {
       const u = new SpeechSynthesisUtterance(text); u.voice = cantoneseVoice; u.lang = cantoneseVoice.lang; u.rate = 0.72;
-      u.onend = () => { if (generation === speechGeneration && operation) { instructionStatus = ''; refreshSpeechNotice(); } };
-      u.onerror = () => { if (generation !== speechGeneration) return; if (operation) instructionStatus = speechFailed; else $('voice-note').textContent = '裝置未能朗讀，可以請老師讀一次。'; refreshSpeechNotice(); };
-      if (operation) instructionStatus = ['正在播放指令。', '語音已送到裝置。', '聲音準備中。'];
-      speechSynthesis.speak(u); refreshSpeechNotice();
-    } catch (_) { if (operation) instructionStatus = speechFailed; else $('voice-note').textContent = '裝置未能朗讀，可以請老師讀一次。'; refreshSpeechNotice(); }
+      u.onerror = failed; speechSynthesis.speak(u);
+    } catch (_) { failed(); }
   }
-  $('hear-instruction').addEventListener('click', () => { updateVoices(); speakText(instructionText, true); });
-  $('simplify').addEventListener('click', () => { restoreRecallText(); simplified = !simplified; renderPresentation(); maskRecallText(); });
   $('speak').addEventListener('click', () => {
     updateVoices();
     const word = currentWord(), occurrence = currentOccurrence(); if (!word || !occurrence) return;
@@ -803,34 +773,32 @@
   });
   $('teacher-skip').addEventListener('click', () => { cancelDictation(); if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
   $('teacher-end').addEventListener('click', () => { cancelDictation(); dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
-  $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
-  $('demo-previous').addEventListener('click', () => { pendingDemoToken = null; event('BROWSE_DEMO', { direction: -1 }); });
-  $('demo-next').addEventListener('click', () => { pendingDemoToken = null; event('BROWSE_DEMO', { direction: 1 }); });
-  $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
+  $('play').addEventListener('click', () => handle && handle.play()); $('pause').addEventListener('click', () => handle && handle.pause());
+  $('demo-previous').addEventListener('click', () => { if (!available()) return; pendingDemoToken = null; event('BROWSE_DEMO', { direction: -1 }); });
+  $('demo-next').addEventListener('click', () => { if (!available()) return; pendingDemoToken = null; event('BROWSE_DEMO', { direction: 1 }); });
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
   $('task-next').addEventListener('click', () => event('NEXT'));
   $('use-guidance').addEventListener('click', () => event('USE_GUIDANCE'));
+  $('undo-stroke').addEventListener('click', undoPracticeStroke);
+  $('reload-writer').addEventListener('click', () => {
+    if (!available() || undoRestart?.token !== state.active.token || undoRestart.phase !== 'failed') return;
+    undoRestart = { token: state.active.token, phase: 'pending' }; mountedKey = ''; render();
+  });
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
-  $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
-  $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
+  $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
   $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode, curriculumPages.length - 1) : goHome());
   $('group-home').addEventListener('click', () => {
     if (curriculumLevel) { curriculumLevel--; render(); } else goHome();
   });
   $('new-session').addEventListener('click', goHome);
   for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => showGroups(mode));
-  $('rest').addEventListener('click', () => { if (!state) return; dispatch({ type: 'REST' }); $('rest-dialog').showModal(); availabilityChanged(); });
-  $('resume').addEventListener('click', () => { $('rest-dialog').close(); dispatch({ type: 'RESUME' }); availabilityChanged(); });
-  $('rest-dialog').addEventListener('cancel', event => event.preventDefault());
   $('writer').addEventListener('pointerdown', () => { if (feedback && feedback.kind === 'quiz-miss') { feedback = null; $('feedback-text').textContent = ''; $('feedback-icon').hidden = true; } });
   document.querySelector('.brand').addEventListener('click', click => { click.preventDefault(); goHome(); });
   document.addEventListener('visibilitychange', availabilityChanged);
   window.addEventListener('pageshow', () => { leaving = false; availabilityChanged(); });
   for (const name of ['beforeunload', 'popstate', 'hashchange']) window.addEventListener(name, () => cancelDictation());
   window.addEventListener('pagehide', () => {
-    leaving = true; availabilityChanged(); soundVersion++; soundEnabled = false; audioStatus = 'off';
-    updateSound();
-    if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
+    leaving = true; availabilityChanged();
   });
   try {
     const previousId = sessionStorage.getItem(prefix + 'current');

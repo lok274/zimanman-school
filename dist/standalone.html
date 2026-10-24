@@ -6,15 +6,10 @@
   <meta name="theme-color" content="#214b3b">
   <title>寫字樂 · 一筆一筆，慢慢學</title>
   <style>
-@charset "UTF-8";
-.practice-actions{gap:12px;flex-wrap:wrap;align-items:center}.simplified-practice .practice-view{display:block;max-width:760px;margin-inline:auto}.simplified-practice .word-panel{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:0 0 14px;margin-bottom:18px;border:0;border-bottom:1px solid var(--line)}.simplified-practice .word-panel h1{margin:0;font-size:64px;line-height:1}.simplified-practice .word-panel h1.concealed{font-size:20px;padding:0}.simplified-practice .speech-button{width:auto;margin:0;margin-left:auto;min-height:44px}.simplified-practice #voice-note{flex-basis:100%;margin:0}.simplified-practice .semantic-cue,.simplified-practice .oral-prompt{display:none}.simplified-practice .step-rail{margin-bottom:16px}.simplified-practice .grid-shell{width:min(100%,420px)}#teacher-word-options{display:block}.character-options{border:1px solid var(--line);border-radius:9px;padding:10px;display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}.character-options legend{font-size:18px;padding:0 6px}.character-options .word-option{font-size:14px}.teacher-selection #teacher-selection-total{font-weight:700;color:var(--green)}
-.practice-actions{display:flex;justify-content:flex-end;margin:0 0 16px}.practice-actions .rest-button{font-size:22px;width:calc(4em + 48px);flex-shrink:0;min-height:60px;padding:10px 22px;border:2px solid #77977c;background:var(--soft);color:var(--green)}.practice-actions .rest-button:hover{background:#dce5d2}@media(max-width:570px){.practice-actions .rest-button{font-size:20px}}
-.feedback-line #feedback{display:flex;align-items:center;gap:8px}.feedback-line #feedback-text{font-size:16px}.feedback-line #feedback-icon{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;border-radius:50%;background:var(--soft);font-size:17px;font-weight:700}.feedback-line [data-kind^="complete-"] #feedback-icon{background:var(--green);color:#fff}.feedback-sound-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}.feedback-sound-row .button{min-width:44px;min-height:44px;font-size:12px;padding:7px 10px;border:1px solid var(--line)}.feedback-sound-row [aria-pressed="true"]{background:var(--soft);border-color:#77977c}.feedback-sound-row .small{font-size:11px}
-:root{--paper:#f6f3e9;--card:#fffdf6;--ink:#243d32;--green:#214b3b;--muted:#677568;--line:#d9dece;--soft:#e9eddf;--warm:#ba642d;--sans:"PingFang HK","Noto Sans TC","Microsoft JhengHei",sans-serif;--serif:"Noto Serif TC","Songti TC","PMingLiU",serif;color:var(--ink);background:var(--paper);font-family:var(--sans);font-size:17px;line-height:1.65;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button,textarea,input{font:inherit}button,a,input,summary{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:disabled{cursor:default;opacity:.45}button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--warm);outline-offset:4px}button svg,svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}.app-header{gap:12px;flex-wrap:wrap;max-width:1280px;margin:auto;padding:26px 42px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.brand{color:var(--green);display:flex;gap:13px;text-decoration:none;align-items:center;font-size:25px;letter-spacing:3px;font-weight:800;line-height:1.15}.brand svg{width:41px;height:41px;stroke-width:2}.brand small{display:block;font-size:10px;font-weight:500;letter-spacing:2px;margin-top:9px}.header-actions{display:flex;gap:22px;align-items:center}.device-tag,.eyebrow{font-size:12px;letter-spacing:2px;font-weight:700}.device-tag{border:1px solid var(--line);padding:5px 12px;border-radius:5px;color:var(--muted)}main{max-width:1160px;margin:auto;padding:46px 34px 32px}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(28px,3.2vw,40px);line-height:1.45;letter-spacing:1px;margin-bottom:13px}h2{font-size:24px;line-height:1.5;margin-bottom:7px}h3{font-size:19px}.eyebrow{color:var(--muted);margin-bottom:12px}.intro-line{display:flex;align-items:center;justify-content:space-between;gap:20px}.paper-seal{border:1.5px solid #98a78c;color:#688461;line-height:1.55;padding:13px 18px;border-radius:50%;font-size:15px;letter-spacing:3px;transform:rotate(8deg);flex:none}.word-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.word-card{appearance:none;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:center;gap:12px;color:var(--ink);position:relative;box-shadow:0 4px 0 #e4e6d944;transition:border-color .15s,transform .15s}.word-card:hover{border-color:#77977c;transform:translateY(-2px)}.word-card .word-name{display:block;font-family:var(--serif);font-size:clamp(80px,14vw,200px);font-weight:700;letter-spacing:0;line-height:1;text-align:center}.word-card svg{width:min(100%,280px);height:auto;aspect-ratio:1;justify-self:center;stroke-width:2;stroke:#728765;background:#eff1e5;border-radius:50%;padding:10px}.word-card .word-photo,.semantic-cue .word-photo{display:block;background:#fff;object-fit:contain;border-radius:10px}.word-card .word-photo{width:min(100%,280px);height:auto;aspect-ratio:1;justify-self:center}.word-card:only-child{grid-column:1/-1;width:100%;max-width:640px;justify-self:center}.word-card:only-child .word-name{font-size:clamp(96px,26vw,200px)}.word-card:disabled{opacity:.75}.word-card .stamp{grid-column:1/-1;justify-self:center;font-family:var(--sans);color:#536d4c;border:1px solid #8a9c7c;padding:2px 10px;font-size:12px;border-radius:5px}.journey-preview{display:flex;align-items:center;gap:17px;flex-wrap:wrap;padding:27px 0 21px;border-bottom:1px solid var(--line);font-size:14px;color:var(--muted)}.journey-preview span{display:flex;align-items:center;gap:8px}.journey-preview b{display:inline-grid;place-items:center;background:var(--soft);border-radius:50%;width:27px;height:27px;font-size:12px;color:var(--green)}.journey-preview i{font-style:normal;color:#9aab97}.journey-note{margin-left:auto;font-size:13px}.choice-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:22px}.choice-footer p{margin:0;color:var(--muted);font-size:14px}.button{min-height:48px;border-radius:9px;border:1px solid transparent;padding:10px 19px;font-size:15px;line-height:1.5;font-weight:650;display:inline-flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;white-space:nowrap}.primary{background:var(--green);color:#fffdf6;box-shadow:0 3px 0 #102f25}.primary:hover{background:#163e2e}.secondary{background:#fbfaf3;border-color:#c6cfbd;color:var(--green)}.secondary:hover{background:#e9eddf}.quiet{background:transparent;color:var(--green)}.quiet:hover{background:#e9eddf}.large{font-size:17px;min-height:54px;padding-inline:25px}.button svg{width:23px;height:23px;stroke-width:1.8}.practice-view{display:grid;grid-template-columns:235px minmax(0,1fr);gap:46px}.word-panel{padding:8px 27px 0 0;border-right:1px solid var(--line)}.semantic-cue svg{width:min(100%,260px);height:auto;aspect-ratio:1;stroke-width:1.8;stroke:#728765;background:var(--soft);padding:14px;border-radius:50%;margin:8px 0 20px}.semantic-cue .word-photo{width:min(100%,260px);aspect-ratio:1;margin:8px 0 20px}.word-panel h1{font-family:var(--serif);font-size:64px;line-height:1;letter-spacing:0;overflow-wrap:anywhere;margin-bottom:13px}.word-panel h1.concealed{font-family:var(--sans);font-size:20px;letter-spacing:1px;padding:9px 0}.speech-button{width:100%;margin-bottom:10px}.small{font-size:12px;line-height:1.8}.muted{color:var(--muted)}.oral-prompt{display:flex;align-items:flex-start;gap:9px;margin-top:28px;padding-top:23px;border-top:1px solid var(--line);font-size:15px}.oral-prompt>span{font-size:25px;line-height:1.2;color:#a27042}.oral-prompt p{margin-bottom:8px}.step-rail{display:flex;list-style:none;padding:0;margin:0 0 25px;gap:0;justify-content:space-between;font-size:13px;color:#778571}.step-rail li{border-bottom:2px solid var(--line);padding-bottom:12px;flex:1;text-align:center}.step-rail b{display:inline-grid;place-items:center;border-radius:50%;height:25px;width:25px;background:#e7ebdf;margin-right:6px;font-size:12px}.step-rail li.active{color:var(--green);border-color:var(--green);font-weight:700}.step-rail li.active b{color:var(--card);background:var(--green)}.step-rail li.done{border-color:#9fb08f}.practice-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.practice-heading h2{font-size:24px}.practice-heading p{font-size:14px;color:var(--muted);margin-bottom:20px}.board-row{display:flex;justify-content:center}.grid-shell{width:min(100%,388px);aspect-ratio:1;background:#fffdf8;border:1.5px solid #aebba4;position:relative;border-radius:6px;overflow:hidden;box-shadow:0 3px 0 #e1e3d8}.grid-lines{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right,transparent calc(50% - .5px),#d7dcca calc(50% - .5px),#d7dcca calc(50% + .5px),transparent calc(50% + .5px)),linear-gradient(to bottom,transparent calc(50% - .5px),#d7dcca calc(50% - .5px),#d7dcca calc(50% + .5px),transparent calc(50% + .5px))}.grid-lines:before,.grid-lines:after{content:"";position:absolute;top:50%;left:-21%;width:142%;border-top:1px dashed #e2e5d8;transform:rotate(45deg)}.grid-lines:after{transform:rotate(-45deg)}.writer{position:absolute;inset:0;touch-action:none;user-select:none;-webkit-user-select:none}.writer>svg{position:absolute;inset:0}.start-overlay{pointer-events:none;width:100%;height:100%}.board-message{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;background:#fffdf5ed;z-index:2;font-size:17px;white-space:pre-line}.demo-controls,.writing-controls{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:20px}.demo-controls .button,.writing-controls .button{min-height:46px;padding:9px 13px;font-size:14px}.feedback-line{display:flex;align-items:start;justify-content:space-between;gap:12px;margin-top:16px;min-height:45px;font-size:13px;color:var(--muted)}.feedback-line p{margin:0;color:var(--green)}.next-row{border-top:1px solid var(--line);padding-top:18px;display:flex;align-items:center;justify-content:flex-end;gap:14px}.app-footer{max-width:1160px;margin:auto;padding:21px 34px 25px;color:#7e8a78;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:11px;letter-spacing:1px}.summary-view{max-width:920px;margin:0 auto}.summary-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0}.stat{padding:19px 15px;background:var(--soft);border-radius:10px}.stat b{font-family:var(--serif);display:block;font-size:30px}.stat span{font-size:12px}.summary-row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin-bottom:12px;display:grid;grid-template-columns:130px 1fr;gap:18px}.summary-word{font-family:var(--serif);font-size:24px;letter-spacing:2px}.char-record{display:flex;gap:12px;align-items:start;font-size:14px;padding:5px 0}.char-record strong{font-family:var(--serif);font-size:22px;line-height:1.4;min-width:25px}.record-label{color:var(--green)}.attempt-detail{font-size:11px;color:var(--muted);display:block;margin-top:3px}.summary-footer{display:flex;gap:20px;justify-content:space-between;align-items:center}dialog{border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--ink);padding:30px;max-width:640px;width:calc(100% - 34px);max-height:90dvh;overflow:auto;box-shadow:0 24px 100px #1633242b;font-size:14px}dialog::backdrop{background:#20372db3;backdrop-filter:blur(3px)}.dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}.dialog-heading .eyebrow{margin-bottom:4px}.icon-button{width:44px;height:44px;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);font-size:28px;line-height:1}.field-label{display:block;font-size:15px;font-weight:700;margin-top:22px}.field-label span{display:block;font-size:12px;font-weight:400;color:var(--muted);margin:4px 0 8px}textarea{display:block;width:100%;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:13px 16px;resize:vertical;line-height:1.9;min-height:130px}.field-error{color:#9d4424;font-size:13px;min-height:20px;margin:6px 0}.teacher-selection{border:0;border-top:1px solid var(--line);padding:15px 0;margin-top:24px}.teacher-selection legend{font-size:16px;font-weight:700;padding:0 8px 0 0}#teacher-word-options{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}.word-option{display:flex;align-items:center;gap:9px;min-height:48px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.word-option:has(input:checked){background:var(--soft);border-color:#77977c}.word-option input{width:19px;height:19px;accent-color:var(--green)}.teacher-active{border-top:1px solid var(--line);margin-top:26px;padding-top:20px}.teacher-active .button{font-size:13px;margin-bottom:8px}details{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}summary{cursor:pointer;font-weight:700;min-height:36px}details p{font-size:12px;color:var(--muted);margin:12px 0}details a{font-size:12px;color:var(--green)}.history-item{border-bottom:1px solid var(--line);padding:11px 0;font-size:12px}.history-item button{margin-top:8px}.notice{font-size:13px;padding:12px 25px;background:#f0dfc4;color:#6a451f;text-align:center}.storage-notice{max-width:1280px;margin:auto}#rest-dialog{text-align:center;max-width:470px;padding:35px}#rest-dialog h2{font-size:23px}#rest-dialog p{color:var(--muted)}.rest-illustration{color:#78906a}.rest-illustration svg{width:140px;height:120px;stroke-width:2}.rest-illustration+p{margin-top:16px}.rest-illustration~.button{margin-top:10px}[hidden]{display:none!important}@media(min-width:1150px){.practice-view{gap:60px;grid-template-columns:260px 1fr}.grid-shell{width:390px}}@media(max-width:800px){.app-header{padding:20px 24px}main{padding:30px 24px}.practice-view{grid-template-columns:170px 1fr;gap:23px}.word-panel{padding-right:18px}.step-rail{font-size:11px}.step-rail b{width:21px;height:21px;margin-right:3px}.practice-heading h2{font-size:21px}.button{padding-inline:13px}.demo-controls{gap:2px}.demo-controls .button{font-size:12px}.journey-note{display:none}.app-footer{padding-inline:24px}.header-actions{gap:9px}.device-tag{display:none}}@media(max-width:570px){.app-header{padding:17px 18px}.brand{font-size:23px;gap:8px}.brand svg{width:32px}.brand small{font-size:9px;letter-spacing:1px}.header-actions .button{font-size:12px;padding:7px 9px;min-height:42px}main{padding:28px 18px 20px}h1{font-size:27px}.paper-seal{font-size:11px;padding:12px;letter-spacing:2px}.intro-line{gap:10px}.word-cards{gap:12px;grid-template-columns:1fr}.word-card{padding:12px;gap:8px}.word-card .word-name,.word-card:only-child .word-name{font-size:clamp(96px,28vw,160px)}.journey-preview{gap:9px;font-size:12px;padding-top:22px}.journey-preview i{font-size:10px}.journey-preview b{width:23px;height:23px}.choice-footer .button{font-size:12px}.choice-footer p{font-size:12px}.practice-view{display:block}.word-panel{border:0;padding:0 0 17px;display:grid;grid-template-columns:1fr auto;column-gap:10px}.semantic-cue{display:none}.word-panel h1{grid-column:1;margin:0}.speech-button{grid-column:2;grid-row:1;width:auto;align-self:center;margin:0;font-size:12px;min-height:44px}.word-panel .small{font-size:10px;grid-column:1/-1;margin:3px 0}.oral-prompt{display:none}.step-rail{margin-bottom:17px;padding-top:12px;border-top:1px solid var(--line);font-size:12px}.practice-heading h2{font-size:22px}.practice-heading p{font-size:12px;min-height:20px;margin-bottom:14px}.grid-shell{width:min(100%,360px)}.demo-controls .button{font-size:12px;min-height:44px;padding:8px 10px}.writing-controls .button{font-size:12px;padding:8px 11px}.feedback-line{font-size:12px;min-height:43px}.next-row .large{font-size:15px}.app-footer{padding:17px 18px;font-size:9px;letter-spacing:.4px}.summary-stats{gap:7px;grid-template-columns:repeat(2,1fr)}.stat{padding:13px}.stat b{font-size:25px}.summary-row{padding:15px;grid-template-columns:1fr;gap:6px}.summary-word{font-size:25px}.summary-footer{align-items:start;flex-direction:column}dialog{padding:23px}.dialog-heading h2{font-size:23px}.button{min-height:46px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}@media print{.app-header,.app-footer,.header-actions,.summary-footer,dialog,.notice{display:none!important}body{background:white}.summary-view{display:block!important}.choose-view,.practice-view{display:none!important}main{padding:0}.summary-row{break-inside:avoid}}
-.app-header{padding-block:12px}.brand{letter-spacing:1px}.choice-footer{justify-content:flex-end}.app-footer{justify-content:flex-start}.practice-heading h2{margin-bottom:6px}#practice-tools{margin-top:16px;padding-top:10px}#practice-tools summary{min-height:44px;display:list-item;line-height:44px;color:var(--green)}#practice-tools .demo-controls,#practice-tools .writing-controls{justify-content:flex-start;margin:8px 0 12px}#practice-tools .feedback-sound-row{margin:8px 0 12px}.simplified-practice .step-rail{display:none}.simplified-practice .word-panel{margin-bottom:12px;padding-bottom:10px}.simplified-practice #feedback[data-kind="instruction"]{display:none}#voice-note:empty{display:none}@media(max-width:570px){.practice-heading{flex-wrap:wrap}}
-
-.word-panel .practice-actions{grid-column:1/-1;justify-content:flex-start;margin:12px 0 0}
-#instruction-voice-note:empty{display:none}
+.simplified-practice .practice-view{display:block;max-width:760px;margin-inline:auto}.simplified-practice .word-panel{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:0 0 14px;margin-bottom:18px;border:0;border-bottom:1px solid var(--line)}.simplified-practice .word-panel h1{margin:0;font-size:64px;line-height:1}.simplified-practice .word-panel h1.concealed{font-size:20px;padding:0}.simplified-practice .speech-button{width:auto;margin:0;margin-left:auto;min-height:44px}.simplified-practice #voice-note{flex-basis:100%;margin:0}.simplified-practice .semantic-cue,.simplified-practice .oral-prompt{display:none}.simplified-practice .step-rail{margin-bottom:16px}.simplified-practice .grid-shell{width:min(100%,420px)}#teacher-word-options{display:block}.character-options{border:1px solid var(--line);border-radius:9px;padding:10px;display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}.character-options legend{font-size:18px;padding:0 6px}.character-options .word-option{font-size:14px}.teacher-selection #teacher-selection-total{font-weight:700;color:var(--green)}
+.feedback-line #feedback{display:flex;align-items:center;gap:8px}.feedback-line #feedback-text{font-size:16px}.feedback-line #feedback-icon{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;border-radius:50%;background:var(--soft);font-size:17px;font-weight:700}.feedback-line [data-kind^="complete-"] #feedback-icon{background:var(--green);color:#fff}
+:root{--paper:#f6f3e9;--card:#fffdf6;--ink:#243d32;--green:#214b3b;--muted:#677568;--line:#d9dece;--soft:#e9eddf;--warm:#ba642d;--sans:"PingFang HK","Noto Sans TC","Microsoft JhengHei",sans-serif;--serif:"Noto Serif TC","Songti TC","PMingLiU",serif;color:var(--ink);background:var(--paper);font-family:var(--sans);font-size:17px;line-height:1.65;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button,textarea,input{font:inherit}button,a,input,summary{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:disabled{cursor:default;opacity:.45}button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--warm);outline-offset:4px}button svg,svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}.app-header{gap:12px;flex-wrap:wrap;max-width:1280px;margin:auto;padding:26px 42px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.brand{color:var(--green);display:flex;gap:13px;text-decoration:none;align-items:center;font-size:25px;letter-spacing:3px;font-weight:800;line-height:1.15}.brand svg{width:41px;height:41px;stroke-width:2}.brand small{display:block;font-size:10px;font-weight:500;letter-spacing:2px;margin-top:9px}.header-actions{display:flex;gap:22px;align-items:center}.device-tag,.eyebrow{font-size:12px;letter-spacing:2px;font-weight:700}.device-tag{border:1px solid var(--line);padding:5px 12px;border-radius:5px;color:var(--muted)}main{max-width:1160px;margin:auto;padding:46px 34px 32px}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(28px,3.2vw,40px);line-height:1.45;letter-spacing:1px;margin-bottom:13px}h2{font-size:24px;line-height:1.5;margin-bottom:7px}h3{font-size:19px}.eyebrow{color:var(--muted);margin-bottom:12px}.intro-line{display:flex;align-items:center;justify-content:space-between;gap:20px}.paper-seal{border:1.5px solid #98a78c;color:#688461;line-height:1.55;padding:13px 18px;border-radius:50%;font-size:15px;letter-spacing:3px;transform:rotate(8deg);flex:none}.word-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.word-card{appearance:none;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:center;gap:12px;color:var(--ink);position:relative;box-shadow:0 4px 0 #e4e6d944;transition:border-color .15s,transform .15s}.word-card:hover{border-color:#77977c;transform:translateY(-2px)}.word-card .word-name{display:block;font-family:var(--serif);font-size:clamp(80px,14vw,200px);font-weight:700;letter-spacing:0;line-height:1;text-align:center}.word-card svg{width:min(100%,280px);height:auto;aspect-ratio:1;justify-self:center;stroke-width:2;stroke:#728765;background:#eff1e5;border-radius:50%;padding:10px}.word-card .word-photo,.semantic-cue .word-photo{display:block;background:#fff;object-fit:contain;border-radius:10px}.word-card .word-photo{width:min(100%,280px);height:auto;aspect-ratio:1;justify-self:center}.word-card:only-child{grid-column:1/-1;width:100%;max-width:640px;justify-self:center}.word-card:only-child .word-name{font-size:clamp(96px,26vw,200px)}.word-card:disabled{opacity:.75}.word-card .stamp{grid-column:1/-1;justify-self:center;font-family:var(--sans);color:#536d4c;border:1px solid #8a9c7c;padding:2px 10px;font-size:12px;border-radius:5px}.journey-preview{display:flex;align-items:center;gap:17px;flex-wrap:wrap;padding:27px 0 21px;border-bottom:1px solid var(--line);font-size:14px;color:var(--muted)}.journey-preview span{display:flex;align-items:center;gap:8px}.journey-preview b{display:inline-grid;place-items:center;background:var(--soft);border-radius:50%;width:27px;height:27px;font-size:12px;color:var(--green)}.journey-preview i{font-style:normal;color:#9aab97}.journey-note{margin-left:auto;font-size:13px}.choice-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:22px}.choice-footer p{margin:0;color:var(--muted);font-size:14px}.button{min-height:48px;border-radius:9px;border:1px solid transparent;padding:10px 19px;font-size:15px;line-height:1.5;font-weight:650;display:inline-flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;white-space:nowrap}.primary{background:var(--green);color:#fffdf6;box-shadow:0 3px 0 #102f25}.primary:hover{background:#163e2e}.secondary{background:#fbfaf3;border-color:#c6cfbd;color:var(--green)}.secondary:hover{background:#e9eddf}.quiet{background:transparent;color:var(--green)}.quiet:hover{background:#e9eddf}.large{font-size:17px;min-height:54px;padding-inline:25px}.button svg{width:23px;height:23px;stroke-width:1.8}.practice-view{display:grid;grid-template-columns:235px minmax(0,1fr);gap:46px}.word-panel{padding:8px 27px 0 0;border-right:1px solid var(--line)}.semantic-cue svg{width:min(100%,260px);height:auto;aspect-ratio:1;stroke-width:1.8;stroke:#728765;background:var(--soft);padding:14px;border-radius:50%;margin:8px 0 20px}.semantic-cue .word-photo{width:min(100%,260px);aspect-ratio:1;margin:8px 0 20px}.word-panel h1{font-family:var(--serif);font-size:64px;line-height:1;letter-spacing:0;overflow-wrap:anywhere;margin-bottom:13px}.word-panel h1.concealed{font-family:var(--sans);font-size:20px;letter-spacing:1px;padding:9px 0}.speech-button{width:100%;margin-bottom:10px}.small{font-size:12px;line-height:1.8}.muted{color:var(--muted)}.oral-prompt{display:flex;align-items:flex-start;gap:9px;margin-top:28px;padding-top:23px;border-top:1px solid var(--line);font-size:15px}.oral-prompt>span{font-size:25px;line-height:1.2;color:#a27042}.oral-prompt p{margin-bottom:8px}.step-rail{display:flex;list-style:none;padding:0;margin:0 0 25px;gap:0;justify-content:space-between;font-size:13px;color:#778571}.step-rail li{border-bottom:2px solid var(--line);padding-bottom:12px;flex:1;text-align:center}.step-rail b{display:inline-grid;place-items:center;border-radius:50%;height:25px;width:25px;background:#e7ebdf;margin-right:6px;font-size:12px}.step-rail li.active{color:var(--green);border-color:var(--green);font-weight:700}.step-rail li.active b{color:var(--card);background:var(--green)}.step-rail li.done{border-color:#9fb08f}.practice-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}.practice-heading h2{font-size:24px}.practice-heading p{font-size:14px;color:var(--muted);margin-bottom:20px}.board-row{display:flex;justify-content:center}.grid-shell{width:min(100%,388px);aspect-ratio:1;background:#fffdf8;border:1.5px solid #aebba4;position:relative;border-radius:6px;overflow:hidden;box-shadow:0 3px 0 #e1e3d8}.grid-lines{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right,transparent calc(50% - .5px),#d7dcca calc(50% - .5px),#d7dcca calc(50% + .5px),transparent calc(50% + .5px)),linear-gradient(to bottom,transparent calc(50% - .5px),#d7dcca calc(50% - .5px),#d7dcca calc(50% + .5px),transparent calc(50% + .5px))}.grid-lines:before,.grid-lines:after{content:"";position:absolute;top:50%;left:-21%;width:142%;border-top:1px dashed #e2e5d8;transform:rotate(45deg)}.grid-lines:after{transform:rotate(-45deg)}.writer{position:absolute;inset:0;touch-action:none;user-select:none;-webkit-user-select:none}.writer>svg{position:absolute;inset:0}.start-overlay{pointer-events:none;width:100%;height:100%}.board-message{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px;background:#fffdf5ed;z-index:2;font-size:17px;white-space:pre-line}.demo-controls,.writing-controls{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:20px}.demo-controls .button,.writing-controls .button{min-height:46px;padding:9px 13px;font-size:14px}.feedback-line{display:flex;align-items:start;justify-content:space-between;gap:12px;margin-top:16px;min-height:45px;font-size:13px;color:var(--muted)}.feedback-line p{margin:0;color:var(--green)}.next-row{border-top:1px solid var(--line);padding-top:18px;display:flex;align-items:center;justify-content:flex-end;gap:14px}.app-footer{max-width:1160px;margin:auto;padding:21px 34px 25px;color:#7e8a78;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:11px;letter-spacing:1px}.summary-view{max-width:920px;margin:0 auto}.summary-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0}.stat{padding:19px 15px;background:var(--soft);border-radius:10px}.stat b{font-family:var(--serif);display:block;font-size:30px}.stat span{font-size:12px}.summary-row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin-bottom:12px;display:grid;grid-template-columns:130px 1fr;gap:18px}.summary-word{font-family:var(--serif);font-size:24px;letter-spacing:2px}.char-record{display:flex;gap:12px;align-items:start;font-size:14px;padding:5px 0}.char-record strong{font-family:var(--serif);font-size:22px;line-height:1.4;min-width:25px}.record-label{color:var(--green)}.attempt-detail{font-size:11px;color:var(--muted);display:block;margin-top:3px}.summary-footer{display:flex;gap:20px;justify-content:space-between;align-items:center}dialog{border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--ink);padding:30px;max-width:640px;width:calc(100% - 34px);max-height:90dvh;overflow:auto;box-shadow:0 24px 100px #1633242b;font-size:14px}dialog::backdrop{background:#20372db3;backdrop-filter:blur(3px)}.dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}.dialog-heading .eyebrow{margin-bottom:4px}.icon-button{width:44px;height:44px;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);font-size:28px;line-height:1}.field-label{display:block;font-size:15px;font-weight:700;margin-top:22px}.field-label span{display:block;font-size:12px;font-weight:400;color:var(--muted);margin:4px 0 8px}textarea{display:block;width:100%;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:13px 16px;resize:vertical;line-height:1.9;min-height:130px}.field-error{color:#9d4424;font-size:13px;min-height:20px;margin:6px 0}.teacher-selection{border:0;border-top:1px solid var(--line);padding:15px 0;margin-top:24px}.teacher-selection legend{font-size:16px;font-weight:700;padding:0 8px 0 0}#teacher-word-options{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}.word-option{display:flex;align-items:center;gap:9px;min-height:48px;padding:8px 13px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.word-option:has(input:checked){background:var(--soft);border-color:#77977c}.word-option input{width:19px;height:19px;accent-color:var(--green)}.teacher-active{border-top:1px solid var(--line);margin-top:26px;padding-top:20px}.teacher-active .button{font-size:13px;margin-bottom:8px}details{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}summary{cursor:pointer;font-weight:700;min-height:36px}details p{font-size:12px;color:var(--muted);margin:12px 0}details a{font-size:12px;color:var(--green)}.history-item{border-bottom:1px solid var(--line);padding:11px 0;font-size:12px}.history-item button{margin-top:8px}.notice{font-size:13px;padding:12px 25px;background:#f0dfc4;color:#6a451f;text-align:center}.storage-notice{max-width:1280px;margin:auto}[hidden]{display:none!important}@media(min-width:1150px){.practice-view{gap:60px;grid-template-columns:260px 1fr}.grid-shell{width:390px}}@media(max-width:800px){.app-header{padding:20px 24px}main{padding:30px 24px}.practice-view{grid-template-columns:170px 1fr;gap:23px}.word-panel{padding-right:18px}.step-rail{font-size:11px}.step-rail b{width:21px;height:21px;margin-right:3px}.practice-heading h2{font-size:21px}.button{padding-inline:13px}.demo-controls{gap:2px}.demo-controls .button{font-size:12px}.journey-note{display:none}.app-footer{padding-inline:24px}.header-actions{gap:9px}.device-tag{display:none}}@media(max-width:570px){.app-header{padding:17px 18px}.brand{font-size:23px;gap:8px}.brand svg{width:32px}.brand small{font-size:9px;letter-spacing:1px}.header-actions .button{font-size:12px;padding:7px 9px;min-height:42px}main{padding:28px 18px 20px}h1{font-size:27px}.paper-seal{font-size:11px;padding:12px;letter-spacing:2px}.intro-line{gap:10px}.word-cards{gap:12px;grid-template-columns:1fr}.word-card{padding:12px;gap:8px}.word-card .word-name,.word-card:only-child .word-name{font-size:clamp(96px,28vw,160px)}.journey-preview{gap:9px;font-size:12px;padding-top:22px}.journey-preview i{font-size:10px}.journey-preview b{width:23px;height:23px}.choice-footer .button{font-size:12px}.choice-footer p{font-size:12px}.practice-view{display:block}.word-panel{border:0;padding:0 0 17px;display:grid;grid-template-columns:1fr auto;column-gap:10px}.semantic-cue{display:none}.word-panel h1{grid-column:1;margin:0}.speech-button{grid-column:2;grid-row:1;width:auto;align-self:center;margin:0;font-size:12px;min-height:44px}.word-panel .small{font-size:10px;grid-column:1/-1;margin:3px 0}.oral-prompt{display:none}.step-rail{margin-bottom:17px;padding-top:12px;border-top:1px solid var(--line);font-size:12px}.practice-heading h2{font-size:22px}.practice-heading p{font-size:12px;min-height:20px;margin-bottom:14px}.grid-shell{width:min(100%,360px)}.demo-controls .button{font-size:12px;min-height:44px;padding:8px 10px}.writing-controls .button{font-size:12px;padding:8px 11px}.feedback-line{font-size:12px;min-height:43px}.next-row .large{font-size:15px}.app-footer{padding:17px 18px;font-size:9px;letter-spacing:.4px}.summary-stats{gap:7px;grid-template-columns:repeat(2,1fr)}.stat{padding:13px}.stat b{font-size:25px}.summary-row{padding:15px;grid-template-columns:1fr;gap:6px}.summary-word{font-size:25px}.summary-footer{align-items:start;flex-direction:column}dialog{padding:23px}.dialog-heading h2{font-size:23px}.button{min-height:46px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}@media print{.app-header,.app-footer,.header-actions,.summary-footer,dialog,.notice{display:none!important}body{background:white}.summary-view{display:block!important}.choose-view,.practice-view{display:none!important}main{padding:0}.summary-row{break-inside:avoid}}
+.app-header{padding-block:12px}.brand{letter-spacing:1px}.choice-footer{justify-content:flex-end}.app-footer{justify-content:flex-start}.practice-heading h2{margin-bottom:6px}.simplified-practice .step-rail{display:none}.simplified-practice .word-panel{margin-bottom:12px;padding-bottom:10px}.simplified-practice #feedback[data-kind="instruction"]{display:none}#voice-note:empty{display:none}@media(max-width:570px){.practice-heading{flex-wrap:wrap}}
 .practice-heading{display:block;text-align:center}
 .practice-heading h2{font-size:calc(24px + 10pt);line-height:1.2;margin:0 0 4px}
 .practice-heading #practice-instruction{font-size:calc(16px + 10pt);line-height:1.3;color:var(--ink);margin:0 0 6px}
@@ -25,16 +20,12 @@
 .simplified-practice .word-panel{gap:6px 10px;padding:0 0 2px;margin:0 0 2px;min-height:60px}
 
 .simplified-practice .speech-button{margin-left:0}
-.simplified-practice .word-panel .practice-actions{margin:0 0 0 auto;gap:8px}
 .simplified-practice .grid-shell{width:min(100%,max(300px,calc(100svh - 490px)))}
 .simplified-practice .demo-controls,.simplified-practice .writing-controls{margin-top:6px}
 .simplified-practice #demo-controls{gap:8px}
-.simplified-practice #play,.simplified-practice #pause,.simplified-practice #hint-stroke{min-height:64px;font-size:22px}
+.simplified-practice #play,.simplified-practice #pause{min-height:64px;font-size:22px}
 .simplified-practice #play,.simplified-practice #pause{flex:1}
-.simplified-practice #hint-stroke{width:100%}
 .simplified-practice .feedback-line{margin-top:6px;min-height:0}
-.simplified-practice #practice-tools{margin-top:4px;padding-top:0}
-.simplified-practice #practice-tools summary{min-height:56px;font-size:20px;line-height:56px}
 .simplified-practice .next-row{padding-top:6px}
 .simplified-practice #main-next{width:100%;min-height:72px;font-size:22px}
 .simplified-practice .app-footer{padding-block:3px 4px}
@@ -50,9 +41,9 @@
   .simplified-practice .practice-side .demo-controls,.simplified-practice .practice-side .writing-controls,.simplified-practice .next-row{justify-content:flex-start}
 }
 
-.home-view{max-width:1000px;margin:28px auto;text-align:center}.mode-cards{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}.mode-card{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;min-height:300px;padding:30px;border:2px solid #9eaf94;border-radius:24px;background:var(--card);color:var(--green)}.mode-card strong{font-size:clamp(58px,8vw,100px);line-height:1.3}.mode-card span{font-size:20px}.mode-card:hover{background:var(--soft)}.quiz-mark{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}.quiz-circle{stroke:#248044;stroke-width:2}.quiz-mode #feedback[data-kind="quiz-complete"]{color:#186b35}.quiz-mode .semantic-cue,.quiz-mode.simplified-practice .semantic-cue{display:block;width:64px;flex:none}.quiz-mode .semantic-cue .word-photo,.quiz-mode .semantic-cue svg{width:64px;height:64px;margin:0;padding:0}.quiz-mode .step-rail{display:none}.quiz-mode #speak,.quiz-mode #voice-note{display:none}.quiz-mode .word-panel{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.quiz-mode .word-panel h1{margin:0}.quiz-mode .practice-actions{margin-left:auto}
+.home-view{max-width:1000px;margin:28px auto;text-align:center}.mode-cards{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}.mode-card{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;min-height:300px;padding:30px;border:2px solid #9eaf94;border-radius:24px;background:var(--card);color:var(--green)}.mode-card strong{font-size:clamp(58px,8vw,100px);line-height:1.3}.mode-card span{font-size:20px}.mode-card:hover{background:var(--soft)}.quiz-mark{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}.quiz-circle{stroke:#248044;stroke-width:2}.quiz-mode #feedback[data-kind="quiz-complete"]{color:#186b35}.quiz-mode .semantic-cue,.quiz-mode.simplified-practice .semantic-cue{display:block;width:64px;flex:none}.quiz-mode .semantic-cue .word-photo,.quiz-mode .semantic-cue svg{width:64px;height:64px;margin:0;padding:0}.quiz-mode .step-rail{display:none}.quiz-mode #speak,.quiz-mode #voice-note{display:none}.quiz-mode .word-panel{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.quiz-mode .word-panel h1{margin:0}
 .quiz-mode .semantic-cue svg{display:block}
-@media(max-width:570px){.mode-cards{grid-template-columns:1fr;gap:16px}.mode-card{min-height:200px;padding:20px}.mode-card span{font-size:17px}.home-view{margin:14px auto}.quiz-mode .practice-actions{flex-basis:100%;margin:0}.quiz-mode.simplified-practice .grid-shell{width:min(100%,360px)}}
+@media(max-width:570px){.mode-cards{grid-template-columns:1fr;gap:16px}.mode-card{min-height:200px;padding:20px}.mode-card span{font-size:17px}.home-view{margin:14px auto}.quiz-mode.simplified-practice .grid-shell{width:min(100%,360px)}}
 .quiz-clock{margin:10px 0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);text-align:right;width:fit-content;max-width:100%;font-variant-numeric:tabular-nums;line-height:1.4}.quiz-clock span{display:block;font-size:12px}.quiz-clock strong{font-size:22px}.quiz-mode .practice-side{display:flex;flex-direction:column;align-self:stretch}.quiz-mode .quiz-clock{margin-top:auto}.quiz-mode .next-row{margin-bottom:10px}.class-entry{margin-top:22px}#class-join-fields input{display:block;width:100%;padding:10px;border:1px solid #acb8a2;border-radius:8px;margin:8px 0 16px;background:#fffefb}#class-code{text-transform:uppercase;letter-spacing:3px}#class-dialog .button{margin:4px 4px 4px 0;white-space:normal}.quiz-results{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.class-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.podium-place{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:14px 8px;border-radius:10px;background:var(--soft);overflow-wrap:anywhere}.podium-place strong{color:var(--green)}.podium-place small{font-size:12px}.quiz-results table,#class-dialog table{width:100%;border-collapse:collapse;font-size:14px}.quiz-results th,.quiz-results td,#class-dialog th,#class-dialog td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.quiz-results caption,#class-dialog caption{font-size:12px;text-align:left}.is-me{background:var(--soft)}#class-again{margin-top:20px}@media(max-width:570px){.class-podium{grid-template-columns:1fr}.quiz-results{padding:12px}.quiz-clock strong{font-size:20px}}
 .leaderboard-page{max-width:980px}.leaderboard-page table{width:100%;border-collapse:collapse;font-size:17px}.leaderboard-page td,.leaderboard-page th{text-align:left;padding:12px 8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.leaderboard-page caption{text-align:left;font-size:14px}#board-best{margin:22px 0;font-weight:700}.leaderboard-page .podium-place{padding:24px 12px;font-size:22px}.leaderboard-page .podium-place small{font-size:15px}.leaderboard-page .podium-place strong{font-size:28px}.standalone-class-note{display:none}body[data-standalone] #class-open,body[data-standalone] #teacher-class{display:none}body[data-standalone] .standalone-class-note{display:block}
 .teacher-words-heading,.dictation-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.teacher-words-heading{margin:18px 0 10px}.teacher-words-heading .field-label{margin:0 auto 0 0}.teacher-words-heading .button,.dictation-actions .button{min-height:64px;font-size:22px}#dictation-pending{display:block;width:100%;min-height:64px;border:1px solid #acb8a2;border-radius:8px;background:#fffefb;padding:10px 14px;font-size:22px;margin:8px 0}#dictation-review{margin-bottom:16px}#dictation-status{margin:8px 0}
@@ -115,6 +106,8 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 @media(max-height:650px){.task-view{gap:10px}.task-view h1{font-size:30px}.task-option{min-height:130px;padding:14px}.task-option strong{font-size:34px}.work-card{padding:12px}.work-card h2{margin-bottom:8px}}
 
 @media(orientation:portrait){.work-card-body{grid-template-columns:minmax(0,1fr);gap:8px}.work-card-body>.word-photo,.work-card-body>svg{width:min(220px,25svh);justify-self:center}}
+
+.v4-practice.simplified-practice .semantic-cue{display:block;width:60px;flex:none}.v4-practice .semantic-cue .word-photo,.v4-practice .semantic-cue svg{display:block;width:60px;height:60px;margin:0;padding:0}.simplified-practice .speech-button{width:60px;min-width:60px;height:60px;min-height:60px;padding:12px;justify-content:center}.speech-button:focus-visible{outline:3px solid #bf6c36;outline-offset:3px}#undo-stroke,#reload-writer{min-height:64px;width:100%;font-size:22px}
 
 </style>
   <style>
@@ -180,10 +173,10 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
   <div id="storage-notice" class="notice storage-notice" role="status" hidden></div>
   <main>
     <section id="home-view" class="home-view" aria-label="首頁">
-      <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong></button><button id="start-quiz" class="mode-card"><strong>測驗</strong></button></div>
-      <button id="class-open" class="button secondary class-entry">加入班級測驗</button>
-      <button id="resume-assessment" class="button secondary" hidden>繼續本機小測</button>
-      <p class="standalone-class-note small">單檔版保留本機測驗。跨平板班級測驗請開 <a href="https://lok274.github.io/zimanman-school/">網上學生頁面</a>。</p>
+      <div class="mode-cards"><button id="start-practice" class="mode-card"><strong>練習</strong></button><button id="start-quiz" class="mode-card"><strong>小挑戰</strong></button></div>
+      <button id="class-open" class="button secondary class-entry">加入班級小挑戰</button>
+      <button id="resume-assessment" class="button secondary" hidden>繼續本機小挑戰</button>
+      <p class="standalone-class-note small">單檔版保留本機小挑戰。跨平板班級小挑戰請開 <a href="https://lok274.github.io/zimanman-school/">網上學生頁面</a>。</p>
     </section>
     <section id="group-view" class="home-view" hidden aria-labelledby="group-title">
       <h1 id="group-title">練習</h1>
@@ -203,23 +196,22 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
       <aside class="word-panel">
         <div id="semantic-cue" class="semantic-cue" aria-hidden="true"></div>
         <h1 id="word-title"></h1>
-        <button id="speak" class="button secondary speech-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8q5 4 0 8M20 5q8 7 0 14"/></svg><span id="speak-label">聽詞語</span></button>
+        <button id="speak" class="button secondary speech-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8q5 4 0 8M20 5q8 7 0 14"/></svg></button>
         <p id="voice-note" class="small muted"></p>
-        <div class="practice-actions"><button id="hear-instruction" class="button secondary rest-button" aria-describedby="practice-instruction">聽指令</button><span id="instruction-voice-note" class="small muted" role="status" aria-live="polite"></span><button id="rest" class="button secondary rest-button">休息一下</button></div>
       </aside>
       <div class="work-panel">
-        <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 睇筆順</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己試</li></ol>
-        <div class="practice-heading"><h2 id="practice-title">睇筆順</h2><p id="practice-instruction" hidden>撳播放，睇筆順。</p></div>
+        <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 示範</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己寫</li></ol>
+        <div class="practice-heading"><h2 id="practice-title">示範</h2><p id="practice-instruction" hidden>撳播放，示範。</p></div>
         <div class="practice-body"><div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><svg id="quiz-mark" class="quiz-mark" viewBox="0 0 100 100" aria-hidden="true" hidden><circle class="quiz-circle" cx="50" cy="50" r="46"/></svg><div id="board-message" class="board-message" hidden></div></div></div>
           <div class="practice-side">
             <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
             <div id="demo-navigation" class="demo-navigation" hidden><button id="demo-previous" class="button secondary" hidden></button><button id="demo-next" class="button secondary" hidden></button></div>
-            <div id="writing-controls" class="writing-controls" hidden><button id="use-guidance" class="button primary" hidden>跟住寫</button><button id="hint-stroke" class="button secondary">睇呢一畫</button></div>
+            <div id="writing-controls" class="writing-controls" hidden><button id="use-guidance" class="button primary" hidden>跟住寫</button><button id="undo-stroke" class="button secondary" disabled>擦掉前一筆</button></div>
+            <button id="reload-writer" class="button primary" hidden>再載入書寫格</button>
             <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個字</button></div>
             <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="practice-stars" role="img" hidden></span></div>
-            <details id="practice-tools"><summary id="practice-tools-label">更多工具</summary><div id="extra-demo-controls" class="demo-controls"><button id="replay" class="button quiet">再睇一次</button><button id="one-stroke" class="button quiet">只睇一畫</button></div><div id="extra-writing-controls" class="writing-controls" hidden><button id="hint-outline" class="button quiet">顯示字形</button><button id="retry-writing" class="button quiet">重新試一次</button></div><div class="feedback-sound-row"><button id="feedback-sound" class="button quiet" aria-pressed="false" aria-describedby="feedback-sound-note">完成提示聲：關</button><span id="feedback-sound-note" class="small muted" role="status"></span></div><button id="simplify" class="button secondary" aria-pressed="true">精簡畫面：開</button></details>
             <div id="next-row" class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
-            <div id="quiz-clock" class="quiz-clock" hidden><span>本次測驗書寫時間</span><strong id="quiz-clock-value">未開始</strong></div>
+            <div id="quiz-clock" class="quiz-clock" hidden><span>本次小挑戰書寫時間</span><strong id="quiz-clock-value">未開始</strong></div>
           </div>
         </div>
       </div>
@@ -227,7 +219,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
     <section id="summary-view" class="summary-view" hidden aria-labelledby="summary-title">
       <h1 id="summary-title">每一步，都記低咗。</h1>
       <div id="summary-stats" class="summary-stats"></div><div id="summary-rows" class="summary-rows"></div>
-      <section id="quiz-results" class="quiz-results" hidden aria-labelledby="quiz-results-title"><h2 id="quiz-results-title">全份測驗成績</h2><p id="quiz-result-score"></p><p id="personal-best"></p><p id="class-result-status" role="status"></p><button id="class-retry" class="button secondary" hidden>重試交卷</button><a id="class-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><button id="class-again" class="button primary" hidden>再做同一份測驗</button></section>
+      <section id="quiz-results" class="quiz-results" hidden aria-labelledby="quiz-results-title"><h2 id="quiz-results-title">全份小挑戰成績</h2><p id="quiz-result-score"></p><p id="personal-best"></p><p id="class-result-status" role="status"></p><button id="class-retry" class="button secondary" hidden>重試交卷</button><a id="class-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><button id="class-again" class="button primary" hidden>再做同一份小挑戰</button></section>
       <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">返回首頁 <span aria-hidden="true">→</span></button></div>
     </section>
   </main>
@@ -341,8 +333,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 </pre></details></p></details>
     <details id="history-details"><summary>呢部裝置嘅練習紀錄</summary><div id="local-history"></div></details>
   </dialog>
-  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級測驗</h2><button id="class-close" class="icon-button" aria-label="關閉班級測驗">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（唔好用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級測驗</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次測驗</button><button id="class-leave" class="button secondary" hidden>換下一位同學</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><p id="class-switch-note" class="small" hidden>換人會清除參加身份和未交紀錄。請先交卷。</p></dialog>
-  <dialog id="rest-dialog" aria-labelledby="rest-title"><div class="rest-illustration" aria-hidden="true"><svg viewBox="0 0 120 100"><path d="M58 88V37M58 58C24 60 18 26 28 23C52 21 58 58 58 58ZM58 45C92 45 105 9 92 10C66 10 58 45 58 45ZM35 88H82"/></svg></div><h2 id="rest-title">休息一下</h2><p>伸一伸手指，望一望遠處。</p><button id="resume" class="button primary large">我準備好喇</button></dialog>
+  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級小挑戰</h2><button id="class-close" class="icon-button" aria-label="關閉班級小挑戰">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（唔好用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級小挑戰</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次小挑戰</button><button id="class-leave" class="button secondary" hidden>換下一位同學</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><p id="class-switch-note" class="small" hidden>換人會清除參加身份和未交紀錄。請先交卷。</p></dialog>
   <script>
 /**
  * Hanzi Writer v3.5.0 | https://chanind.github.io/hanzi-writer
@@ -527,6 +518,9 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
           s.active = { phase: 'watch', occurrenceId: a.occurrenceId, token: event.newToken, strokeCount: a.strokeCount };
         } else s.active = { phase: 'choose-word' };
         return s;
+      case 'UNDO_STROKE':
+        if (!purposePractice || !['recall', 'guided'].includes(a.phase) || a.writingDone || !attempt || attempt.outcome !== 'active' || attempt.occurrenceId !== a.occurrenceId || a.currentStroke <= 0 || a.currentStroke >= a.strokeCount || event.strokeIndex !== a.currentStroke - 1 || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || s.attempts.some(item => item.id === event.newToken)) return state;
+        active.currentStroke--; active.missesOnCurrentStroke = 0; active.token = event.newToken; return s;
       case 'STROKE_ACCEPTED':
         if (!writing || a.writingDone || event.strokeIndex !== a.currentStroke || a.currentStroke >= a.strokeCount) return state;
         active.currentStroke++; active.missesOnCurrentStroke = 0; return s;
@@ -783,7 +777,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         const request = indexedDB.open('bishun-assessments-v2', 1);
         request.onupgradeneeded = () => request.result.createObjectStore('records', { keyPath: 'key' }).createIndex('expiry', 'expiresAt');
         request.onerror = () => { opening = null; reject(request.error); };
-        request.onblocked = () => { opening = null; reject(new Error('請關閉其他舊版測驗分頁後重試。')); };
+        request.onblocked = () => { opening = null; reject(new Error('請關閉其他舊版小挑戰分頁後重試。')); };
         request.onsuccess = () => resolve(request.result);
       });
       return opening;
@@ -811,7 +805,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         request.onsuccess = () => {
           try {
             guard();
-            if (snapshot.expiresAt <= Date.now()) throw new Error('測驗已到期。');
+            if (snapshot.expiresAt <= Date.now()) throw new Error('小挑戰已到期。');
             if (request.result?.run?.phase === 'sealed' && JSON.stringify(request.result.run) !== JSON.stringify(snapshot.run)) throw new Error('原卷已封存，請重新開啟原卷。');
             if ((request.result?.revision || 0) !== (snapshot.revision || 0)) throw new Error('另一分頁已更新原稿。眼前筆跡仍保留，請勿關頁，請老師協助。');
             snapshot.revision = (snapshot.revision || 0) + 1;
@@ -848,7 +842,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       return new Promise((resolve, reject) => {
         const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'); let saved, failure;
         const pointer = store.get(scope);
-        function valid() { try { guard(); if (snapshot.expiresAt <= Date.now()) throw new Error('測驗已到期。'); return true; } catch (problem) { failure = problem; tx.abort(); return false; } }
+        function valid() { try { guard(); if (snapshot.expiresAt <= Date.now()) throw new Error('小挑戰已到期。'); return true; } catch (problem) { failure = problem; tx.abort(); return false; } }
         function insert() { if (!valid()) return; saved = { ...snapshot, revision: 1 }; store.put(saved); store.put({ key: scope, runKey: saved.key, expiresAt: saved.expiresAt }); }
         pointer.onsuccess = () => {
           if (!valid()) return;
@@ -1005,7 +999,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       }
     } catch { storageOkay = false; }
     function persist() { try { storage.setItem(storageKey, JSON.stringify(saved)); storageOkay = true; } catch { storageOkay = false; } return storageOkay; }
-    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message, pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
+    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message: message.replaceAll('測驗', '小挑戰'), pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
     function notify() { changed(view()); }
     function invalidate() { generation++; controller?.abort(); controller = null; busy = false; }
     async function request(path, method = 'GET', value, token) {
@@ -1035,29 +1029,29 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         const token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join('');
         saved = { join: { code, body: { requestId: crypto.randomUUID(), alias, memberToken: token } } };
       }
-      if (!persist()) { message = '此瀏覽器未能保存參加身份，暫時不能加入班級。可以返回首頁做本機測驗。'; notify(); return; }
+      if (!persist()) { message = '此瀏覽器未能保存參加身份，暫時不能加入班級。可以返回首頁做本機小挑戰。'; notify(); return; }
       const pending = saved.join; message = '加入中…';
       try {
         const member = await request('/' + pending.code + '/members', 'POST', pending.body);
         if (!member || member.code !== pending.code || typeof member.memberId !== 'string' || typeof member.alias !== 'string' || !Number.isFinite(member.expiresAt)) throw new Error('班級回應無效，請重試。');
         validateAssignment(member.assignment);
-        saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始測驗。'; persist();
+        saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始小挑戰。'; persist();
       } catch (error) { if (error.stale) return; message = error.message || '班級服務未能連線。'; }
       notify();
     }
-    function continueMember() { if (saved.member) { accepted = true; message = saved.pending ? '上次測驗尚未交到班級榜，請重試交卷。' : '已確認參加身份。'; notify(); } }
+    function continueMember() { if (saved.member) { accepted = true; message = saved.pending ? '上次小挑戰尚未交到班級榜，請重試交卷。' : '已確認參加身份。'; notify(); } }
     function leave() { invalidate(); saved = {}; accepted = false; board = null; message = ''; persist(); notify(); }
     function bindRun(runId) {
-      if (!accepted || !saved.member || saved.pending || busy) throw new Error('請先確認身份，並交回上次測驗。');
+      if (!accepted || !saved.member || saved.pending || busy) throw new Error('請先確認身份，並交回上次小挑戰。');
       saved.boundRunId = runId; saved.receipt = null; board = null; message = '';
-      if (!persist()) throw new Error('此頁未能保存參加身份，請恢復瀏覽器儲存後再試，或返回首頁做本機測驗。');
+      if (!persist()) throw new Error('此頁未能保存參加身份，請恢復瀏覽器儲存後再試，或返回首頁做本機小挑戰。');
       notify();
     }
     async function retry() {
       if (!accepted || !saved.member || !saved.pending || busy) return;
       const member = saved.member, evidence = saved.pending;
-      if (!persist()) { message = '測驗已完成，但待交紀錄未能保存。請保持頁面開啟，恢復瀏覽器儲存後再重試。'; notify(); return; }
-      message = '交緊測驗紀錄…';
+      if (!persist()) { message = '小挑戰已完成，但待交紀錄未能保存。請保持頁面開啟，恢復瀏覽器儲存後再重試。'; notify(); return; }
+      message = '交緊小挑戰紀錄…';
       try {
         const receipt = await request('/' + member.code + '/runs/' + evidence.runId, 'PUT', evidence, member.token);
         if (receipt.runId !== evidence.runId || typeof receipt.ranked !== 'boolean') throw new Error('交卷回應無效，請重試。');
@@ -1113,20 +1107,20 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const A = root.BishunAssessment, F = root.BishunFreehand, C = root.BishunContent;
     const node = (tag, text = '', className = '') => { const el = document.createElement(tag); el.textContent = text; if (className) el.className = className; return el; };
     const panel = node('section', '', 'assessment-panel'); panel.id = 'assessment-view'; panel.hidden = true;
-    panel.setAttribute('aria-label', '自由書寫測驗'); document.body.append(panel);
+    panel.setAttribute('aria-label', '自由書寫小挑戰'); document.body.append(panel);
     let context = null, activeLocal = null, record = null, official = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0, segmentStart = null, pad = null, stopReplay = null, stopReview = null, expiryTimer = null, visible = false;
     const siblings = [...document.body.children].filter(el => el !== panel && el.tagName !== 'SCRIPT');
     function conceal(value) { for (const el of siblings) { el.inert = value; if (value) el.setAttribute('aria-hidden', 'true'); else el.removeAttribute('aria-hidden'); } }
-    function status(text) { const el = panel.querySelector('[data-status]'); if (el) el.textContent = text; }
+    function status(text) { const el = panel.querySelector('[data-status]'); if (el) el.textContent = text.replaceAll('測驗', '小挑戰'); }
     function current(owner, value) {
-      if (!owner || owner !== context || !visible) throw Object.assign(new Error('此測驗已關閉。'), { stale: true });
-      if (owner.expiresAt <= Date.now() || value?.expiresAt <= Date.now()) throw Object.assign(new Error('測驗已到期，請老師開新一班。'), { stale: true });
+      if (!owner || owner !== context || !visible) throw Object.assign(new Error('此小挑戰已關閉。'), { stale: true });
+      if (owner.expiresAt <= Date.now() || value?.expiresAt <= Date.now()) throw Object.assign(new Error('小挑戰已到期，請老師開新一班。'), { stale: true });
     }
     function armExpiry() {
       clearTimeout(expiryTimer); const owner = context;
       expiryTimer = setTimeout(async () => {
         if (owner !== context) return;
-        clock(false); context = null; busy = false; dispose(); record = null; official = null; shell('測驗已到期'); panel.append(message('請老師開新一班。')); footer(close);
+        clock(false); context = null; busy = false; dispose(); record = null; official = null; shell('小挑戰已到期'); panel.append(message('請老師開新一班。')); footer(close);
         try { await store.purge(Date.now()); } catch { if (!context && visible) status('原稿已停止顯示。裝置未能清理，恢復儲存後會再試。'); }
       }, Math.max(0, Math.min(owner.expiresAt, record?.expiresAt || owner.expiresAt) - Date.now()));
     }
@@ -1162,7 +1156,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         const submit = controls.querySelector('[data-submit]'); if (submit) submit.hidden = true;
       }
     }
-    function message(text) { const el = node('p', text, 'assessment-status'); el.setAttribute('role', 'status'); el.setAttribute('data-status', ''); return el; }
+    function message(text) { const el = node('p', text.replaceAll('測驗', '小挑戰'), 'assessment-status'); el.setAttribute('role', 'status'); el.setAttribute('data-status', ''); return el; }
     function shell(title) {
       dispose(); panel.replaceChildren();
       const heading = node('header', '', 'assessment-heading'); heading.append(node('h1', title));
@@ -1181,7 +1175,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
     async function close() { visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; official = null; activeLocal = null; onClose(); }
     function drawList() {
-      page = 'list'; shell(isChallenge() ? '情境小挑戰' : '測驗');
+      page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
       const list = node('div', '', 'assessment-choices');
       A.positions(record.run.assignment).forEach((position, index) => {
         const answer = record.run.answers[index], label = answer.status === 'draft' ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交';
@@ -1190,7 +1184,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         }));
       });
       panel.append(list, message(error));
-      if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份測驗', seal, 'primary large'));
+      if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
       footer(isChallenge() ? async () => { record = official; drawSummary(); } : close, isChallenge() ? '← 返回原卷' : '← 返回課程');
     }
     function drawWriting() {
@@ -1201,7 +1195,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (isChallenge()) {
         const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = '情境圖片'; photo.className = 'assessment-context'; controls.append(photo);
       }
-      controls.append(button('聽題目', () => speak(position, isChallenge())), button('休息一下', pause));
+      controls.append(button('聽題目', () => speak(position, isChallenge())));
       if (answer.status === 'draft') {
         pad = F.capture(paper, answer.strokes, stroke => {
           clock(!busy);
@@ -1216,7 +1210,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         };
         const submit = button('交答案', () => answerWith('submitted'), 'primary large'); submit.setAttribute('data-submit', '');
         controls.append(submit, button('暫時跳過', () => answerWith('skipped')),
-          button('撤回一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }));
+          button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }));
       } else {
         F.render(paper, answer.strokes); controls.append(node('p', answer.status === 'skipped' ? '已跳過，原筆跡保留。' : '已提交，等老師批改。'));
         controls.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }));
@@ -1224,11 +1218,6 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       controls.append(message(error)); showSaveRetry();
       footer(drawList, '← 返回選題');
       clock(true);
-    }
-    async function pause() {
-      page = 'paused'; shell('休息一下'); root.speechSynthesis?.cancel();
-      panel.append(button('繼續寫字', drawWriting, 'primary large'), message(error)); footer(drawList, '← 返回選題');
-      await persist();
     }
     async function seal() {
       const run = A.transition(record.run, { type: 'SEAL', elapsedMs: record.run.elapsedMs });
@@ -1350,7 +1339,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const assignment = A.assignment(assigned.entries, assigned.mode), scope = joined ? 'class:' + joined.code + ':' + joined.memberId : 'local:' + JSON.stringify(assignment);
       const owner = Object.freeze({ scope, member: joined ? Object.freeze({ ...joined }) : null, expiresAt: joined?.expiresAt || Date.now() + 86400000, revisions: new Map() });
       visible = true; context = owner; activeLocal = null; busy = false; error = ''; record = null; official = null; pending = Promise.resolve(); segmentStart = null;
-      panel.hidden = false; conceal(true); shell('測驗'); panel.append(message('載入原稿…')); footer(close, '← 返回課程');
+      panel.hidden = false; conceal(true); shell('小挑戰'); panel.append(message('載入原稿…')); footer(close, '← 返回課程');
       armExpiry();
       try {
         await store.purge(); current(owner);
@@ -1507,7 +1496,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const practice = !!identity && ['guided', 'recall'].includes(options.phase);
     const componentGuided = options.phase === 'guided' && !!activePart(character, data, options.currentStroke || 0);
     const guidedComplete = options.complete || options.phase === 'guided' && options.currentStroke === data.strokes.length;
-    let alive = true, suspended = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
+    let alive = true, suspended = false, mounted = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, demoRun = 0;
     const size = Math.round(element.getBoundingClientRect().width) || 360;
     let engine = engines.get(element);
     if (!engine) {
@@ -1540,6 +1529,22 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const dot = document.createElementNS(ns, 'circle'); dot.setAttribute('r', '16'); dot.setAttribute('fill', '#bf6c36'); dot.setAttribute('stroke', '#fffaf0'); dot.setAttribute('stroke-width', '7'); group.append(dot); element.append(overlay);
     const inkGroup = document.createElementNS(ns, 'g'); group.append(inkGroup);
     function drawInk() { drawOriginal(inkGroup, ink); }
+    function editAcceptedInk(operation, expectedCount, installNext) {
+      const remove = operation === 'remove-last';
+      if (!practice || !mounted || !current() || guidedComplete || currentStroke !== expectedCount || ink.length !== expectedCount || currentStroke >= data.strokes.length || remove && expectedCount <= 0) return false;
+      const path = remove ? ink.pop() : operation.path;
+      if (remove) { currentStroke--; suspended = true; }
+      else { ink.push(path); currentStroke++; }
+      let accepted = false;
+      try { accepted = installNext() === true; } catch (_) { accepted = false; }
+      finally {
+        if (!accepted) {
+          if (remove) { ink.push(path); currentStroke++; suspended = false; }
+          else { ink.pop(); currentStroke--; }
+        }
+      }
+      return accepted;
+    }
     drawInk();
     if (componentGuided) element.insertBefore(overlay, element.firstChild);
     const direction = componentGuided ? document.createElementNS(ns, 'path') : null;
@@ -1595,9 +1600,13 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
           if (quiz || practice) {
             const points = event.drawnPath && event.drawnPath.points;
             if (event.strokeNum !== currentStroke || !Array.isArray(points) || points.length < 2 || points.length > 16384 || points.some(point => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 8192 || Math.abs(point.y) > 8192)) { fail(new Error('筆跡資料無效，請重新試一次。')); return; }
-            ink.push(practice ? boundedStroke(points) : points.map(point => ({ x: point.x, y: point.y }))); drawInk();
+            if (practice) {
+              const accepted = options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }, installNext => editAcceptedInk({ path: boundedStroke(points) }, event.strokeNum, installNext));
+              if (!accepted) { suspended = true; writer.cancelQuiz(); return; }
+            } else ink.push(points.map(point => ({ x: point.x, y: point.y })));
+            drawInk();
           }
-          currentStroke = event.strokeNum + 1; directionVisible = false; drawFocus(); placeStart(); options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
+          currentStroke = event.strokeNum + 1; directionVisible = false; drawFocus(); placeStart(); if (!practice) options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
         onMistake: event => { if (current()) { if (componentGuided) { directionVisible = true; placeStart(); } options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); } },
         onComplete: () => {
           if (!current()) return;
@@ -1608,7 +1617,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
           options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() });
         }
       });
-      if (alive && !suspended) { element.style.visibility = ''; if (options.onReady) options.onReady(); }
+      if (alive && !suspended) { mounted = true; element.style.visibility = ''; if (options.onReady) options.onReady(); }
     }).catch(fail);
     function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }).catch(fail); }
     const observer = new ResizeObserver(() => {
@@ -1616,27 +1625,20 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const n = Math.round(element.getBoundingClientRect().width);
       if (n > 0) { writer.updateDimensions({ width: n, height: n, padding: 24 }); placeStart(); }
     }); observer.observe(element);
-    function demoDone(run, result, fullCharacter = false) {
+    function demoDone(run, result) {
       if (!alive || suspended || run !== demoRun) return;
       playing = false; paused = false; options.onDemoState && options.onDemoState('stopped');
-      if (fullCharacter && result && result.canceled === false && options.onCharacterDemoComplete) options.onCharacterDemoComplete();
+      if (result && result.canceled === false && options.onCharacterDemoComplete) options.onCharacterDemoComplete();
     }
     return {
-      play(replay) {
+      editAcceptedInk,
+      play() {
         if (!alive || options.phase !== 'watch') return;
-        if (paused && !replay) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
-        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; ready(() => writer.animateCharacter().then(result => demoDone(run, result, true))); }
+        if (paused) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
+        else { const run = ++demoRun; playing = true; paused = false; ready(() => writer.animateCharacter().then(result => demoDone(run, result))); }
         options.onDemoState && options.onDemoState('playing');
       },
       pause() { if (!alive) return; ready(() => writer.pauseAnimation()); if (playing) { paused = true; options.onDemoState && options.onDemoState('paused'); } },
-      nextStroke() {
-        if (!alive || options.phase !== 'watch') return;
-        paused = false; playing = true;
-        const run = ++demoRun;
-        const index = nextIndex; nextIndex = (nextIndex + 1) % data.strokes.length;
-        ready(() => { writer.resumeAnimation(); writer.animateStroke(index).then(() => demoDone(run)); });
-        options.onDemoState && options.onDemoState('playing');
-      },
       showHelp(kind) {
         if (quiz || practice && options.phase === 'recall' || guidedComplete || !alive) return;
         const expectedStroke = currentStroke;
@@ -1675,10 +1677,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     { title: '第一課《爸爸的鬍鬚》', back: '返回課文' }
   ];
   let state = null, localMode = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
-  let feedback = null, feedbackAnimation = null, tone = null;
-  let soundEnabled = false, audioContext = null, soundVersion = 0, audioStatus = 'off';
-  let simplified = true, instructionText = '', instructionStatus = '', speechKey = '', speechGeneration = 0;
+  let feedback = null, feedbackAnimation = null;
+  let speechKey = '', speechGeneration = 0;
   let readyMount = null, mountGeneration = 0, segment = null, leaving = false, pendingDemoToken = null;
+  let undoRestart = null;
   let clockTick = null;
   let boardNavigationRun = null;
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1692,7 +1694,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function refreshLocalResume() { if (assessment) assessment.hasLocal().then(found => { $('resume-assessment').hidden = !found; }).catch(() => {}); }
   if (assessment) {
     refreshLocalResume();
-    $('resume-assessment').addEventListener('click', () => { stopEffects(); assessment.resumeLocal().catch(error => { $('storage-notice').hidden = false; $('storage-notice').textContent = error.message; }); });
+    $('resume-assessment').addEventListener('click', () => { stopEffects(); assessment.resumeLocal().catch(error => { $('storage-notice').hidden = false; $('storage-notice').textContent = error.message.replaceAll('測驗', '小挑戰'); }); });
   }
   function startLocalAssessment(group) {
     const candidate = sessionCandidate('quiz', group, selected);
@@ -1802,7 +1804,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     try { sessionStorage.setItem(prefix + 'current', state.id); } catch (_) {}
     save(); render();
   }
-  function stopSpeech() { speechGeneration++; instructionStatus = ''; $('instruction-voice-note').textContent = ''; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {} }
+  function stopSpeech() { speechGeneration++; try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (_) {} }
   function goHome() {
     cancelDictation();
     if (state && state.active.phase !== 'summary') dispatch({ type: 'END_SESSION' });
@@ -1816,16 +1818,33 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function showGroups(mode, level = 0) { goHome(); localMode = mode; curriculumLevel = level; render(); }
   function stopEffects() { pendingDemoToken = null; checkpoint(); readyMount = null; mountGeneration++; if (handle) handle.dispose(); handle = null; mountedKey = ''; if (loadingController) loadingController.abort(); loadingController = null; stopSpeech(); cancelFeedbackEffects(); }
-  function dispatch(event) {
+  function dispatch(event, editInk) {
     checkpoint();
     const before = state;
     const next = S.transition(state, { at: Date.now(), ...event });
     if (next === state) { openSegment(); return false; }
-    state = next;
+    if (editInk) {
+      if (!editInk(() => { if (state !== before) return false; state = next; return true; })) return false;
+    } else state = next;
+    if (event.type === 'UNDO_STROKE') undoRestart = { token: state.active.token, phase: 'pending' };
+    else if (undoRestart && undoRestart.token !== state.active.token) undoRestart = null;
     if (pendingDemoToken !== state.active.token || !['loading', 'watch'].includes(state.active.phase)) pendingDemoToken = null;
     cancelFeedbackEffects(); feedback = feedbackFor(before, next, event); save(); render(); openSegment();
     if (feedback && feedback.celebrate) celebrateFeedback();
     return true;
+  }
+  function undoPracticeStroke() {
+    if (!available() || undoRestart || !readyMount || readyMount.token !== state.active.token || readyMount.generation !== mountGeneration || !handle) return;
+    const count = state.active.currentStroke;
+    dispatch({ type: 'UNDO_STROKE', token: state.active.token, newToken: id(), strokeIndex: count - 1 }, installNext => handle.editAcceptedInk('remove-last', count, installNext));
+  }
+  function renderUndo() {
+    const a = state.active;
+    $('undo-stroke').hidden = state.version !== 4 || state.mode !== 'practice' || !['recall', 'guided'].includes(a.phase) || a.writingDone;
+    $('undo-stroke').disabled = !available() || !!undoRestart || !readyMount || readyMount.token !== a.token || readyMount.generation !== mountGeneration || !(a.currentStroke > 0 && a.currentStroke < a.strokeCount);
+    $('reload-writer').hidden = undoRestart?.token !== a.token || undoRestart.phase !== 'failed';
+    $('use-guidance').disabled = !!undoRestart;
+    if (!$('reload-writer').hidden) { $('board-message').hidden = false; $('board-message').textContent = undoRestart.message; }
   }
   function concealedCharacter(snapshot) {
     if (!snapshot || snapshot.version === 4 || snapshot.active.phase !== 'recall') return '';
@@ -1837,7 +1856,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const make = (kind, icon, variants, celebrate = false) => ({ kind, icon, text: safeText(variants, next), celebrate });
     if (next.mode === 'quiz') {
       if (event.type === 'STROKE_MISSED') return make('quiz-miss', '', ['再試呢一畫。']);
-      if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '', ['測驗完成'], true);
+      if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '', ['小挑戰完成'], true);
       return null;
     }
     const n = next.active.currentStroke;
@@ -1847,8 +1866,6 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         : make('step', '✓', [...(n === 1 ? ['你開始咗，第一畫完成！'] : []), '完成第 ' + n + ' 畫！', '呢筆已寫好，進度 ' + n + '。', '做到第 ' + n + ' 步。']);
       case 'STROKE_MISSED': return make('support', '↻', ['再試呢一畫。', '慢慢再試，需要提示都可以。', '由起點落筆，或者請老師幫手。', '停低諗吓，想求助就撳掣。']);
       case 'REQUEST_HELP': return make('support', '•', [...(event.kind === 'stroke' && next.active.missesOnCurrentStroke ? ['睇完呢一畫，再試。'] : []), '提示已開，可以繼續寫。', '睇住幫手，再試吓。', '有需要就求助，慢慢嚟。']);
-      case 'RETRY': return make('support', '↻', ['重新試，由起點開始。', '可以再寫，之前嘅紀錄會保留。', '今趟慢慢做，隨時求助。']);
-      case 'RESUME': return make('support', '•', ['休息完，可以接住寫。', '返嚟喇，由而家呢筆繼續。', '準備好就再試，隨時求助。']);
       case 'WRITING_COMPLETE': {
         const attempt = next.attempts.find(item => item.id === next.active.attemptId);
         if (before.active.phase === 'guided') return make('complete-guided', '✓', ['跟寫完成。下一步由你決定。'], true);
@@ -1861,47 +1878,12 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function cancelFeedbackEffects() {
     if (feedbackAnimation) feedbackAnimation.cancel(); feedbackAnimation = null;
-    if (tone) { const activeTone = tone; tone = null; activeTone.oscillator.onended = null; try { activeTone.oscillator.stop(); } catch (_) {} activeTone.oscillator.disconnect(); activeTone.gain.disconnect(); }
   }
-  function renderSound() {
-    const labels = soundEnabled ? ['完成提示聲：開', '音效已啟用', '有聲慶祝'] : ['完成提示聲：關', '靜音', '不播放聲效'];
-    const notes = audioStatus === 'blocked' ? ['裝置未能播放，畫面回饋照常。', '聲效暫時用唔到，仍可繼續寫。', '可以安靜練習，圖示會保留。']
-      : audioStatus === 'preparing' ? ['聲效準備中，畫面回饋照常。', '等裝置開啟音效，仍可繼續寫。', '暫時安靜練習，圖示會保留。']
-      : [''];
-    const label = safeText(labels), note = safeText(notes);
-    if ($('feedback-sound').textContent !== label) $('feedback-sound').textContent = label;
-    $('feedback-sound').setAttribute('aria-pressed', String(soundEnabled));
-    if ($('feedback-sound-note').textContent !== note) $('feedback-sound-note').textContent = note;
-  }
-  function updateSound() { restoreRecallText(); renderSound(); maskRecallText(); }
   function celebrateFeedback() {
     if (document.hidden || state.resting || $('teacher-dialog').open) return;
     const icon = $('feedback-icon');
     if (icon.animate && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) feedbackAnimation = icon.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 450, iterations: 1 });
-    if (!soundEnabled || audioStatus !== 'ready' || !audioContext || audioContext.state !== 'running') return;
-    try {
-      const oscillator = audioContext.createOscillator(), gain = audioContext.createGain(), now = audioContext.currentTime;
-      tone = { oscillator, gain }; oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(660, now);
-      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.035, now + 0.025); gain.gain.linearRampToValueAtTime(0, now + 0.2);
-      oscillator.connect(gain); gain.connect(audioContext.destination);
-      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); if (tone && tone.oscillator === oscillator) tone = null; };
-      oscillator.start(now); oscillator.stop(now + 0.21);
-    } catch (_) { cancelFeedbackEffects(); soundEnabled = false; audioStatus = 'blocked'; updateSound(); }
   }
-  $('feedback-sound').addEventListener('click', () => {
-    const version = ++soundVersion; soundEnabled = !soundEnabled; cancelFeedbackEffects();
-    if (!soundEnabled) { audioStatus = 'off'; updateSound(); return; }
-    audioStatus = 'preparing'; updateSound();
-    try {
-      const Audio = window.AudioContext || window.webkitAudioContext;
-      if (!Audio) throw new Error('Audio unavailable');
-      if (!audioContext) audioContext = new Audio();
-      Promise.resolve(audioContext.resume()).then(() => {
-        if (version !== soundVersion) return;
-        audioStatus = audioContext.state === 'running' ? 'ready' : 'blocked'; soundEnabled = audioStatus === 'ready'; updateSound();
-      }).catch(() => { if (version === soundVersion) { soundEnabled = false; audioStatus = 'blocked'; updateSound(); } });
-    } catch (_) { soundEnabled = false; audioStatus = 'blocked'; updateSound(); }
-  });
   function currentOccurrence() { return state && state.occurrences.find(item => item.id === state.active.occurrenceId); }
   function currentWord() { const wordId = state?.active.wordId || currentOccurrence()?.wordId; return state?.entries.find(item => item.id === wordId); }
   function event(type, extra) { if (!state) return false; return dispatch({ type, token: state.active.token, newToken: id(), ...extra }); }
@@ -1923,7 +1905,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     });
   }
   function renderGroups() {
-    const label = localMode === 'quiz' ? '測驗' : '練習';
+    const label = localMode === 'quiz' ? '小挑戰' : '練習';
     const page = curriculumPages[curriculumLevel];
     $('group-title').textContent = page ? page.title : label;
     $('group-title').classList.toggle('sr-only', curriculumLevel < curriculumPages.length - 1);
@@ -1944,7 +1926,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function defaultPurpose(word) { return C.purposes?.[word.text] ? 'label' : null; }
   function renderChoices() {
-    $('choose-title').textContent = state.mode === 'quiz' ? '測驗：想先寫邊個字？' : '練習：想先寫邊個字？';
+    $('choose-title').textContent = state.mode === 'quiz' ? '小挑戰：想先寫邊個字？' : '練習：想先寫邊個字？';
     const container = $('word-cards'); container.replaceChildren();
     const rows = S.summarize(state);
     state.entries.forEach(word => {
@@ -2003,7 +1985,6 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('task-view').hidden = true;
     restoreRecallText();
     document.querySelector('.brand').setAttribute('aria-label', safeText(['寫字樂首頁', '返回主頁', '回到開始']));
-    renderSound();
     renderWordVoiceLabel();
     renderClock();
     $('home-view').hidden = !!state || !!localMode;
@@ -2019,14 +2000,13 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('task-view').hidden = !task;
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary || task; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
-    $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回選字']);
+    $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回示範'] : ['← 返回選字']);
     if (state.version === 4) {
-      if (a.phase === 'guided') $('previous-step').textContent = attempt?.help.some(help => help.kind === 'guidance') ? '← 返回自己寫' : '← 返回睇筆順';
+      if (a.phase === 'guided') $('previous-step').textContent = attempt?.help.some(help => help.kind === 'guidance') ? '← 返回自己寫' : '← 返回示範';
       else $('previous-step').textContent = ['character-complete', 'word-complete'].includes(a.phase) ? '← 再寫一次' : '← 返回選字';
     }
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
-    $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
     if (choose || summary || task) { if (handle || loadingController) stopEffects(); else stopSpeech(); speechKey = ''; if (choose) renderChoices(); else if (task) renderTask(); else { renderSummary(state); renderQuizResults(); } return; }
     const word = currentWord();
     const stars = state.mode === 'practice' ? S.summarize(state).filter(row => row.guided || row.independent || row.assisted).length : 0;
@@ -2040,14 +2020,14 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('word-title').classList.toggle('concealed', concealTask);
     $('semantic-cue').replaceChildren(visualCue(word.text)); $('semantic-cue').hidden = false;
     document.querySelector('.step-rail').hidden = quiz || state.version === 4;
-    $('writer').setAttribute('aria-label', quiz ? '測驗書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
+    $('writer').setAttribute('aria-label', quiz ? '小挑戰書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
     document.querySelectorAll('[data-stage]').forEach((element, index) => { element.classList.toggle('active', index === stageIndex); element.classList.toggle('done', index < stageIndex); if (index === stageIndex) element.setAttribute('aria-current', 'step'); else element.removeAttribute('aria-current'); });
-    $('demo-controls').hidden = a.phase !== 'watch'; $('extra-demo-controls').hidden = a.phase !== 'watch';
+    $('demo-controls').hidden = a.phase !== 'watch';
     const assigned = state.occurrences.filter(item => item.wordId === word.id);
     const position = assigned.findIndex(item => item.id === a.occurrenceId);
-    const browse = !quiz && a.phase === 'watch' && !state.resting && assigned.length > 1;
+    const browse = !quiz && a.phase === 'watch' && available() && assigned.length > 1;
     $('demo-navigation').hidden = !browse;
     document.body.classList.toggle('has-demo-navigation', browse);
     for (const [button, direction, label] of [['demo-previous', -1, '上一字：'], ['demo-next', 1, '下一字：']]) {
@@ -2056,9 +2036,6 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       $(button).textContent = target ? label + target.character : '';
     }
     $('writing-controls').hidden = !['guided', 'recall'].includes(a.phase) || a.writingDone;
-    $('extra-writing-controls').hidden = !['guided', 'recall', 'quiz'].includes(a.phase) && !(complete && ['recall', 'quiz', ...(state.version === 4 ? ['guided'] : [])].includes(a.completedPhase));
-    $('hint-stroke').textContent = safeText(a.missesOnCurrentStroke ? ['睇一畫再試', '看提示後重做', '求助'] : ['睇呢一畫', '看提示', '求助']);
-    $('hint-stroke').hidden = quiz || a.writingDone || complete || state.version === 4 && recall; $('hint-outline').hidden = quiz || a.writingDone || complete || state.version === 4 && recall;
     $('use-guidance').hidden = !(state.version === 4 && recall); $('use-guidance').classList.toggle('help-emphasis', recall && a.missesOnCurrentStroke >= 2);
     $('data-controls').hidden = a.phase !== 'unavailable';
     $('main-next').hidden = ['loading', 'unavailable'].includes(a.phase) || (['guided', 'recall', 'quiz'].includes(a.phase) && !a.writingDone);
@@ -2067,17 +2044,17 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     let title = '', instruction = '', defaultFeedback = '';
     if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
     if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = safeText(['可以再載入，或者請老師幫手。', '資料未準備好，稍後再試。', '想求助就撳老師工具。']); }
-    if (a.phase === 'watch') { title = safeText(['睇筆順', '看示範', '觀察']); instruction = safeText(['撳播放，睇筆順。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，亦可以一畫一畫睇。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己試。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一畫。', '由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己試 →'; }
-    if (a.phase === 'quiz') { title = '測驗'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
-    if (a.phase === 'recall') { title = state.version === 4 ? '自己寫' : safeText(['自己試', '試住記', '憑記憶']); instruction = state.version === 4 ? '照住詞語自己寫。需要時可揀跟住寫。' : safeText(['先想一想，再落筆。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? state.version === 4 ? '再試一次，或者揀跟住寫。' : '再試一次，或者開提示幫手。' : state.version === 4 ? '照住詞語慢慢寫。' : '用自己記住嘅筆順寫。'; }
+    if (a.phase === 'watch') { title = safeText(['示範', '看示範', '觀察']); instruction = safeText(['撳播放睇示範。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，再繼續播放。'; $('main-next').textContent = '到我跟住寫 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己寫。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一畫。', '由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己寫 →'; }
+    if (a.phase === 'quiz') { title = '小挑戰'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
+    if (a.phase === 'recall') { title = state.version === 4 ? '自己寫' : safeText(['自己寫', '試住記', '憑記憶']); instruction = state.version === 4 ? '照住詞語自己寫。需要時可揀跟住寫。' : safeText(['按記憶慢慢寫。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? state.version === 4 ? '再試一次，或者揀跟住寫。' : '再試一次，或者開提示幫手。' : state.version === 4 ? '照住詞語慢慢寫。' : '用自己記住嘅筆順寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && (attempt.help.length || state.version === 4 && attempt.phase === 'guided') ? '有提示完成' : '自己完成';
-      title = quizComplete ? '測驗完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
+      title = quizComplete ? '小挑戰完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
       $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
       if (state.version === 4 && !remaining.some(item => item.wordId === word.id)) $('main-next').textContent = '睇作品 →';
-      if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成測驗 →';
+      if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成小挑戰 →';
     }
     if (guide) { title += ' · ' + guide.label; instruction = guide.instruction; }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
@@ -2086,13 +2063,9 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('practice-instruction').hidden = !!guide || quizComplete || eventCue || ['watch', 'quiz'].includes(a.phase) || state.version === 4 && recall;
     $('feedback').hidden = practiceCue && !eventCue;
     $('feedback').classList.toggle('sr-only', quizComplete);
-    $('hear-instruction').setAttribute('aria-describedby', quizComplete ? 'main-next' : guide ? 'practice-instruction' : eventCue ? 'feedback-text' : 'practice-instruction');
-    const nextInstruction = independentTask() ? word.text + '。寫第' + (currentOccurrence().index + 1) + '個字。' : quizComplete ? $('main-next').textContent.replace(/ →$/, '') : guide ? guide.instruction : eventCue ? feedback.text : instruction;
     const nextSpeechKey = [state.id, a.token, a.phase, a.writingDone, state.resting, instruction, guide ? a.currentStroke : ''].join(':');
-    if (nextSpeechKey !== speechKey || instructionStatus && instructionText !== nextInstruction) { stopSpeech(); speechKey = nextSpeechKey; }
-    instructionText = nextInstruction;
-    renderInstructionVoice();
-    const message = quizComplete ? '測驗完成' : feedback ? feedback.text : defaultFeedback;
+    if (nextSpeechKey !== speechKey) { stopSpeech(); speechKey = nextSpeechKey; }
+    const message = quizComplete ? '小挑戰完成' : feedback ? feedback.text : defaultFeedback;
     if ($('feedback-text').textContent !== message) $('feedback-text').textContent = message;
     const icon = !quizComplete && !(a.phase === 'guided' && a.writingDone) && feedback ? feedback.icon : '';
     if ($('feedback-icon').textContent !== icon) $('feedback-icon').textContent = icon;
@@ -2104,6 +2077,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
     $('pause').disabled = demoState !== 'playing';
     if (available()) syncWriter();
+    renderUndo();
     maskRecallText();
   }
   function renderCompletionMark() {
@@ -2115,6 +2089,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function syncWriter() {
     const a = state.active;
     const key = a.token + ':' + a.phase;
+    if (undoRestart?.token === a.token && undoRestart.phase === 'failed') return;
     if (mountedKey === key) return;
     if (a.phase === 'character-complete' && handle && mountedKey.startsWith(a.token + ':')) { mountedKey = key; return; }
     if (handle) handle.dispose(); handle = null; readyMount = null;
@@ -2133,15 +2108,24 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const completedPractice = state.version === 4 && a.phase === 'character-complete' && ['guided', 'recall'].includes(a.completedPhase);
     if (!completedPractice && (!['watch', 'guided', 'recall', 'quiz'].includes(a.phase) || a.writingDone && a.phase !== 'guided')) return;
     const occurrence = currentOccurrence(), data = dataCache.get(occurrence.character);
-    if (!data || !globalThis.HanziWriter) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); return; }
+    const mountFailed = () => {
+      if (!state || generation !== mountGeneration || state.active.token !== a.token) return;
+      if (undoRestart?.token !== a.token) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); return; }
+      handle?.suspend(); readyMount = null;
+      undoRestart = { token: a.token, phase: 'failed', message: '書寫格未能載入。已保留剩低嘅筆畫，請再載入書寫格。' };
+      $('writer').style.visibility = 'hidden'; $('board-message').hidden = false; $('board-message').textContent = undoRestart.message; renderUndo();
+    };
+    if (!data || !globalThis.HanziWriter) { mountFailed(); return; }
     try { handle = W.mount($('writer'), occurrence.character, data, { token: a.token, phase: completedPractice ? a.completedPhase : a.phase, complete: completedPractice, identity: state.version === 4 && a.attemptId ? { sessionId: state.id, occurrenceId: a.occurrenceId, attemptId: a.attemptId } : null, isCurrent: () => available() && generation === mountGeneration && state.active.token === a.token && state.active.attemptId === a.attemptId, currentStroke: a.currentStroke || 0, missesOnCurrentStroke: a.missesOnCurrentStroke, help: (state.attempts.find(item => item.id === a.attemptId) || { help: [] }).help,
       onReady: () => {
         if (!state || generation !== mountGeneration || state.active.token !== a.token || !available()) return;
         readyMount = { generation, token: a.token };
+        if (undoRestart?.token === a.token) undoRestart = null;
+        renderUndo();
         renderCompletionMark();
         if (pendingDemoToken === a.token) Promise.resolve().then(() => {
           if (pendingDemoToken !== a.token || !available() || generation !== mountGeneration || state.active.token !== a.token || state.active.phase !== 'watch') return;
-          pendingDemoToken = null; handle.play(false);
+          pendingDemoToken = null; handle.play();
         });
         if (state.mode === 'quiz') {
           const attempt = state.attempts.find(item => item.id === state.active.attemptId);
@@ -2149,7 +2133,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
           save(); openSegment();
         }
       },
-      onError: () => { if (state && generation === mountGeneration && state.active.token === a.token) dispatch({ type: 'MOUNT_FAILED', token: a.token }); },
+      onError: mountFailed,
       onCharacterDemoComplete: () => {
         if (!available() || generation !== mountGeneration || state.active.token !== a.token || state.mode !== 'practice' || state.active.phase !== 'watch') return;
         const newToken = id();
@@ -2157,15 +2141,16 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         if (!event('BROWSE_DEMO', { direction: 1, newToken })) pendingDemoToken = null;
       },
       onDemoState: value => { if (!state || generation !== mountGeneration || state.active.token !== a.token) return; demoState = value; $('pause').disabled = value !== 'playing'; $('play').textContent = value === 'paused' ? '▶ 繼續播放' : '▶ 播放'; },
-      onEvent: incoming => {
-        if (!available() || generation !== mountGeneration || !state || state.active.token !== a.token) return;
-        if (!dispatch(incoming)) return;
+      onEvent: (incoming, editInk) => {
+        if (!available() || generation !== mountGeneration || !state || state.active.token !== a.token) return false;
+        if (!dispatch(incoming, editInk)) return false;
         if (state.mode !== 'quiz' && (state.version !== 4 || state.active.phase === 'guided') && incoming.type === 'STROKE_MISSED' && state.active.missesOnCurrentStroke >= 2) {
           const attempt = state.attempts.find(item => item.id === state.active.attemptId);
           if (!attempt.help.some(help => help.kind === 'stroke' && help.strokeIndex === state.active.currentStroke)) requestHelp('stroke');
         }
+        return true;
       }
-    }); } catch (_) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); }
+    }); } catch (_) { mountFailed(); }
   }
   function requestHelp(kind) {
     if (!state || state.mode === 'quiz') return false;
@@ -2174,8 +2159,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     return false;
   }
   function renderSummary(snapshot) {
-    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次測驗完成紀錄' : '每一步，都記低咗。';
-    const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = snapshot.version === 4 ? '自己寫' : '自己試'; stats.replaceChildren();
+    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次小挑戰完成紀錄' : '每一步，都記低咗。';
+    const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = '自己寫'; stats.replaceChildren();
     const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length], ['老師協助跳過', rows.filter(r => r.skipped && !r.independent && !r.assisted).length], ['待練字次', rows.filter(r => r.unfinished).length]];
     groups.forEach(([label, n]) => { const div = textNode('div', '', 'stat'); div.append(textNode('b', String(n)), textNode('span', label)); stats.append(div); });
     const list = $('summary-rows'); list.replaceChildren();
@@ -2183,10 +2168,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const div = textNode('div', '', 'summary-row'), detail = document.createElement('div'); div.append(textNode('div', word.text, 'summary-word'), detail);
       rows.filter(row => row.wordId === word.id).forEach(row => {
         const line = textNode('div', '', 'char-record'), text = document.createElement('span');
-        const label = row.independent ? '自己完成' : row.assisted ? '有提示完成' : row.skipped ? '老師協助跳過' : row.guided ? '完成引導練習 · 自己試待練' : '待練';
+        const label = row.independent ? '自己完成' : row.assisted ? '有提示完成' : row.skipped ? '老師協助跳過' : row.guided ? '完成引導練習 · 自己寫待練' : '待練';
         text.append(textNode('span', '第 ' + (row.index + 1) + ' 字 · ' + label, 'record-label'));
         const attempts = row.attempts.map((attempt, index) => {
-          const phase = attempt.phase === 'quiz' ? '測驗' : attempt.phase === 'guided' ? '引導' : attempt.phase === 'recall' ? recallLabel : '老師';
+          const phase = attempt.phase === 'quiz' ? '小挑戰' : attempt.phase === 'guided' ? '引導' : attempt.phase === 'recall' ? recallLabel : '老師';
           const outcome = attempt.outcome === 'complete' ? attempt.phase === 'recall' && !attempt.help.length ? '無提示完成' : '完成' : attempt.outcome === 'skipped' ? '協助跳過' : attempt.outcome === 'abandoned' ? '未完成／重新試' : '未完成';
           return (index + 1) + '. ' + phase + outcome + (attempt.help.length ? '，提示 ' + attempt.help.length + ' 次' : '');
         }).join('；');
@@ -2261,7 +2246,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (member.assignment.version === 2 && assessment) { stopEffects(); localMode = null; $('class-dialog').close(); assessment.open(member.assignment, member); return; }
       const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
       classroom.bindRun(candidate.id); localMode = null; $('class-dialog').close(); startSession(candidate);
-    } catch (error) { $('class-status').textContent = error.message; }
+    } catch (error) { $('class-status').textContent = error.message.replaceAll('測驗', '小挑戰'); }
   }
   $('class-open').addEventListener('click', () => { renderClassroom(); $('class-dialog').showModal(); });
   $('class-close').addEventListener('click', () => $('class-dialog').close());
@@ -2382,8 +2367,8 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function renderHistory() {
     const list = $('local-history'); list.replaceChildren(); const all = history();
     if (!all.length) { list.textContent = '暫時未有已儲存紀錄。'; return; }
-    all.slice(0, 15).forEach(snapshot => { const rows = S.summarize(snapshot), div = textNode('div', '', 'history-item'), recallLabel = snapshot.version === 4 ? '自己寫' : '自己試';
-      div.append(textNode('div', snapshot.mode === 'quiz' ? '測驗' : '練習'));
+    all.slice(0, 15).forEach(snapshot => { const rows = S.summarize(snapshot), div = textNode('div', '', 'history-item'), recallLabel = '自己寫';
+      div.append(textNode('div', snapshot.mode === 'quiz' ? '小挑戰' : '練習'));
       if (snapshot.mode === 'quiz') {
         const completeTiming = rows.every(row => row.timingComplete);
         div.append(textNode('div', (completeTiming ? '書寫總時間：' : '已記錄書寫時間：') + durationLabel(snapshot.attempts)));
@@ -2391,27 +2376,19 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       div.append(textNode('strong', new Date(snapshot.startedAt).toLocaleString('zh-HK')), textNode('div', snapshot.entries.map(word => word.text).join('、')),
         textNode('div', '自己完成 ' + rows.filter(r => r.independent).length + ' · 有提示完成 ' + rows.filter(r => r.assisted && !r.independent).length + ' · 跳過 ' + rows.filter(r => r.skipped && !r.independent && !r.assisted).length + ' · 待練 ' + rows.filter(r => r.unfinished).length));
       const details = document.createElement('details'); details.append(textNode('summary', '睇每次嘗試'));
-      rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'quiz' ? '測驗' : a.phase === 'guided' ? '引導' : a.phase === 'recall' ? recallLabel : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + (snapshot.mode === 'quiz' ? '，' + durationLabel([a]) : '，提示 ' + a.help.length + ' 次')).join('；') : '待練'))));
+      rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'quiz' ? '小挑戰' : a.phase === 'guided' ? '引導' : a.phase === 'recall' ? recallLabel : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + (snapshot.mode === 'quiz' ? '，' + durationLabel([a]) : '，提示 ' + a.help.length + ' 次')).join('；') : '待練'))));
       if (snapshot.mode === 'quiz') rows.forEach(row => details.append(textNode('p', '第 ' + (row.index + 1) + ' 字「' + row.character + '」書寫時間：' + durationLabel(row.attempts, true))));
       div.append(details); list.append(div);
     });
   }
   let cantoneseVoice = null;
   function renderPresentation() {
-    document.body.classList.toggle('simplified-practice', simplified);
+    document.body.classList.toggle('simplified-practice', true);
+    document.body.classList.toggle('v4-practice', state?.version === 4 && state.mode === 'practice');
     document.body.classList.toggle('menu-view', !$('group-view').hidden || !$('choose-view').hidden || !$('task-view').hidden);
     document.body.classList.toggle('writing-view', !$('practice-view').hidden);
-    $('simplify').textContent = safeText(simplified ? ['精簡畫面：開', '只顯示重點', '少啲內容'] : ['精簡畫面：關', '顯示全部內容', '完整模式']);
-    $('simplify').setAttribute('aria-pressed', String(simplified));
   }
-  function renderInstructionVoice() {
-    $('hear-instruction').textContent = safeText(['聽指令', '操作語音', '播放說明']);
-    $('instruction-voice-note').textContent = instructionStatus ? safeText(instructionStatus) : '';
-  }
-  const speechUnavailable = ['暫時冇粵語聲音，請老師讀畫面指令。', '裝置未提供合適語音，可搵大人幫手。', '未能朗讀，文字仍然保留。'];
-  const speechFailed = ['裝置未能朗讀，請老師讀畫面指令。', '語音暫時用唔到，可搵大人幫手。', '聲音有問題，文字仍然保留。'];
-  function refreshSpeechNotice() { restoreRecallText(); renderInstructionVoice(); maskRecallText(); }
-  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); $('speak-label').textContent = safeText(['聽詞語', '播放讀音', '請老師朗讀']); }
+  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); }
   function updateVoices() {
     restoreRecallText();
     try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
@@ -2419,20 +2396,15 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     renderWordVoiceLabel();
     maskRecallText();
   }
-  function speakText(text, operation) {
-    cancelDictation();
-    stopSpeech(); const generation = speechGeneration;
-    if (!cantoneseVoice) { if (operation) instructionStatus = speechUnavailable; else $('voice-note').textContent = '請老師讀一次，再試吓自己讀。暫時冇粵語聲音。'; refreshSpeechNotice(); return; }
+  function speakText(text) {
+    cancelDictation(); stopSpeech(); const generation = speechGeneration;
+    if (!cantoneseVoice) { $('voice-note').textContent = safeText(['請老師讀一次，再試吓自己讀。暫時冇粵語聲音。', '裝置未提供合適發音，請老師幫手。']); return; }
+    const failed = () => { if (generation === speechGeneration) $('voice-note').textContent = safeText(['裝置未能朗讀，可以請老師讀一次。', '聲音未能播放，可以請大人幫手。']); };
     try {
       const u = new SpeechSynthesisUtterance(text); u.voice = cantoneseVoice; u.lang = cantoneseVoice.lang; u.rate = 0.72;
-      u.onend = () => { if (generation === speechGeneration && operation) { instructionStatus = ''; refreshSpeechNotice(); } };
-      u.onerror = () => { if (generation !== speechGeneration) return; if (operation) instructionStatus = speechFailed; else $('voice-note').textContent = '裝置未能朗讀，可以請老師讀一次。'; refreshSpeechNotice(); };
-      if (operation) instructionStatus = ['正在播放指令。', '語音已送到裝置。', '聲音準備中。'];
-      speechSynthesis.speak(u); refreshSpeechNotice();
-    } catch (_) { if (operation) instructionStatus = speechFailed; else $('voice-note').textContent = '裝置未能朗讀，可以請老師讀一次。'; refreshSpeechNotice(); }
+      u.onerror = failed; speechSynthesis.speak(u);
+    } catch (_) { failed(); }
   }
-  $('hear-instruction').addEventListener('click', () => { updateVoices(); speakText(instructionText, true); });
-  $('simplify').addEventListener('click', () => { restoreRecallText(); simplified = !simplified; renderPresentation(); maskRecallText(); });
   $('speak').addEventListener('click', () => {
     updateVoices();
     const word = currentWord(), occurrence = currentOccurrence(); if (!word || !occurrence) return;
@@ -2464,34 +2436,32 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   });
   $('teacher-skip').addEventListener('click', () => { cancelDictation(); if (event('TEACHER_SKIP')) $('teacher-dialog').close(); });
   $('teacher-end').addEventListener('click', () => { cancelDictation(); dispatch({ type: 'END_SESSION' }); $('teacher-dialog').close(); });
-  $('play').addEventListener('click', () => handle && handle.play(false)); $('pause').addEventListener('click', () => handle && handle.pause());
-  $('demo-previous').addEventListener('click', () => { pendingDemoToken = null; event('BROWSE_DEMO', { direction: -1 }); });
-  $('demo-next').addEventListener('click', () => { pendingDemoToken = null; event('BROWSE_DEMO', { direction: 1 }); });
-  $('replay').addEventListener('click', () => handle && handle.play(true)); $('one-stroke').addEventListener('click', () => handle && handle.nextStroke());
+  $('play').addEventListener('click', () => handle && handle.play()); $('pause').addEventListener('click', () => handle && handle.pause());
+  $('demo-previous').addEventListener('click', () => { if (!available()) return; pendingDemoToken = null; event('BROWSE_DEMO', { direction: -1 }); });
+  $('demo-next').addEventListener('click', () => { if (!available()) return; pendingDemoToken = null; event('BROWSE_DEMO', { direction: 1 }); });
   $('main-next').addEventListener('click', () => { if (!state) return; const phase = state.active.phase; if (phase === 'watch') event('START_GUIDED'); else if (phase === 'guided') event('START_RECALL'); else if (phase === 'character-complete') event('NEXT'); });
   $('task-next').addEventListener('click', () => event('NEXT'));
   $('use-guidance').addEventListener('click', () => event('USE_GUIDANCE'));
+  $('undo-stroke').addEventListener('click', undoPracticeStroke);
+  $('reload-writer').addEventListener('click', () => {
+    if (!available() || undoRestart?.token !== state.active.token || undoRestart.phase !== 'failed') return;
+    undoRestart = { token: state.active.token, phase: 'pending' }; mountedKey = ''; render();
+  });
   $('previous-step').addEventListener('click', () => { if (event('PREVIOUS_STEP')) stopSpeech(); });
-  $('hint-stroke').addEventListener('click', () => requestHelp('stroke')); $('hint-outline').addEventListener('click', () => requestHelp('outline'));
-  $('retry-writing').addEventListener('click', () => event('RETRY')); $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
+  $('retry-data').addEventListener('click', () => event('RETRY_DATA')); $('different-word').addEventListener('click', () => event('RETURN_TO_WORDS'));
   $('choice-summary').addEventListener('click', () => localMode ? showGroups(localMode, curriculumPages.length - 1) : goHome());
   $('group-home').addEventListener('click', () => {
     if (curriculumLevel) { curriculumLevel--; render(); } else goHome();
   });
   $('new-session').addEventListener('click', goHome);
   for (const mode of ['practice', 'quiz']) $('start-' + mode).addEventListener('click', () => showGroups(mode));
-  $('rest').addEventListener('click', () => { if (!state) return; dispatch({ type: 'REST' }); $('rest-dialog').showModal(); availabilityChanged(); });
-  $('resume').addEventListener('click', () => { $('rest-dialog').close(); dispatch({ type: 'RESUME' }); availabilityChanged(); });
-  $('rest-dialog').addEventListener('cancel', event => event.preventDefault());
   $('writer').addEventListener('pointerdown', () => { if (feedback && feedback.kind === 'quiz-miss') { feedback = null; $('feedback-text').textContent = ''; $('feedback-icon').hidden = true; } });
   document.querySelector('.brand').addEventListener('click', click => { click.preventDefault(); goHome(); });
   document.addEventListener('visibilitychange', availabilityChanged);
   window.addEventListener('pageshow', () => { leaving = false; availabilityChanged(); });
   for (const name of ['beforeunload', 'popstate', 'hashchange']) window.addEventListener(name, () => cancelDictation());
   window.addEventListener('pagehide', () => {
-    leaving = true; availabilityChanged(); soundVersion++; soundEnabled = false; audioStatus = 'off';
-    updateSound();
-    if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
+    leaving = true; availabilityChanged();
   });
   try {
     const previousId = sessionStorage.getItem(prefix + 'current');

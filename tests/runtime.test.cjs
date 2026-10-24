@@ -78,6 +78,9 @@ function environment(html = '<html><body><div id="writer"></div></body></html>')
   context.window = context; context.location = { href: 'http://localhost/' };
   return { context, document, voices, store, observers, motion, emitWindow: name => (windowListeners[name] || []).forEach(fn => fn()), $: document.getElementById };
 }
+
+let actionId = 0;
+function sendApp(e, type, extra = {}) { const mount = e.mounts.at(-1); return mount.onEvent({ type, token: e.snapshot().active.token, newToken: 'test-action-' + ++actionId, ...extra }); }
 function recallSnapshot(character) {
   let state = S.createSession({ id: 'recall-test', entries: assigned(character), startedAt: 1 });
   for (const event of [{ type: 'CHOOSE_WORD', wordId: 'w0' }, { type: 'DATA_READY', strokeCount: 1 }, { type: 'START_GUIDED' }, { type: 'STROKE_ACCEPTED', strokeIndex: 0 }, { type: 'WRITING_COMPLETE' }, { type: 'START_RECALL' }]) state = S.transition(state, { at: 2, token: state.active.token, newToken: event.type, ...event });
@@ -250,7 +253,7 @@ test('recognition failures and unsupported browsers retain typing and keyboard d
 });
 
 test('teacher actions and deliberate playback stop dictation without changing the active session', () => {
-  for (const action of ['teacher-skip', 'teacher-end', 'hear-instruction', 'speak']) {
+  for (const action of ['teacher-skip', 'teacher-end', 'speak']) {
     const e = dictationApp(); startLocal(e); e.$('word-cards').childNodes[0].click(); e.$('teacher-open').click(); const recognition = e.begin();
     e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.voices.changed(); e.$(action).click();
     assert.equal(recognition.active, false, action); recognition.result('遲到'); assert.equal(e.$('dictation-review').hidden, true);
@@ -267,7 +270,7 @@ test('both modes open two groups whose sessions cover all twelve default positio
     vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context); openLocalGroups(e, mode);
     assert.equal(e.store.size, 0, 'choosing a mode does not create a session');
     assert.equal(e.$('home-view').hidden, true); assert.equal(e.$('group-view').hidden, false);
-    assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), [(mode === 'quiz' ? '測驗1' : '練習1') + '粗、濃、鬍鬚', (mode === 'quiz' ? '測驗2' : '練習2') + '密、剪草機、推來推去']);
+    assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), [(mode === 'quiz' ? '小挑戰1' : '練習1') + '粗、濃、鬍鬚', (mode === 'quiz' ? '小挑戰2' : '練習2') + '密、剪草機、推來推去']);
     e.$('teacher-open').click();
     const inputs = walk(e.$('teacher-word-options')).filter(node => node.nodeName === 'input');
     assert.equal(inputs.length, 12); assert(inputs.every(input => input.checked)); e.$('teacher-close').click();
@@ -344,8 +347,8 @@ test('history counts each character once while retaining assisted and independen
   e.$('teacher-open').click();
   const history = e.$('local-history').textContent;
   assert(history.includes('自己完成 1 · 有提示完成 0 · 跳過 0 · 待練 0'));
-  assert(history.includes('自己試 完成，提示 1 次'));
-  assert(history.includes('自己試 完成，提示 0 次'));
+  assert(history.includes('自己寫 完成，提示 1 次'));
+  assert(history.includes('自己寫 完成，提示 0 次'));
 });
 test('recent history remains discoverable after more than 500 existing storage keys', () => {
   const e = environment(source('index.html'));
@@ -377,21 +380,6 @@ async function feedbackApp(character = '粗', strokeCount = 2, startGuided = tru
   if (startGuided) { e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'guided'); }
   return e;
 }
-function audioMock(e, { pending = false, fail = false } = {}) {
-  const contexts = [], resumes = [], oscillators = [];
-  e.context.AudioContext = class {
-    constructor() { this.state = 'suspended'; this.currentTime = 0; this.destination = {}; this.closed = false; contexts.push(this); }
-    resume() {
-      if (pending) return new Promise((resolve, reject) => resumes.push({ resolve: () => { this.state = 'running'; resolve(); }, reject }));
-      if (fail) return Promise.reject(new Error('blocked'));
-      this.state = 'running'; return Promise.resolve();
-    }
-    createOscillator() { const oscillator = { frequency: { setValueAtTime() {} }, connect() {}, disconnect() { this.disconnected = true; }, start() { this.started = true; }, stop(at) { if (at === undefined) this.cancelled = true; } }; oscillators.push(oscillator); return oscillator; }
-    createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
-    close() { this.closed = true; this.state = 'closed'; return Promise.resolve(); }
-  };
-  return { contexts, resumes, oscillators };
-}
 test('feedback follows accepted strokes, changes progress and recognizes only observed recovery', async () => {
   const e = await feedbackApp('粗', 3), icon = e.$('feedback-icon');
   assert.equal(e.$('feedback-text').textContent, '由起點開始，慢慢寫。');
@@ -413,29 +401,29 @@ test('three completion labels celebrate once, while premature callbacks and voic
   e.send('WRITING_COMPLETE'); assert.equal(icon.animations.length, 0);
   e.complete(); assert.equal(e.$('feedback').attributes['data-kind'], 'complete-guided'); assert(e.$('feedback-text').textContent.includes('跟寫完成')); assert.equal(icon.animations.length, 1);
   e.send('WRITING_COMPLETE'); e.voices.changed(); assert.equal(icon.animations.length, 1);
-  e.$('main-next').click(); e.$('hint-outline').click(); e.complete();
+  e.$('main-next').click(); sendApp(e, 'REQUEST_HELP', { kind: 'outline' }); e.complete();
   assert.equal(e.$('feedback').attributes['data-kind'], 'complete-assisted'); assert(e.$('feedback-text').textContent.includes('有提示完成')); assert.equal(icon.animations.length, 2);
-  e.$('retry-writing').click(); e.complete();
+  sendApp(e, 'RETRY'); e.complete();
   assert.equal(e.$('feedback').attributes['data-kind'], 'complete-independent'); assert(e.$('feedback-text').textContent.includes('自己完成')); assert.equal(icon.animations.length, 3);
   e.send('WRITING_COMPLETE'); e.voices.changed(); assert.equal(icon.animations.length, 3);
   const row = S.summarize(e.snapshot())[0]; assert(row.assisted && row.independent); assert.equal(row.attempts.length, 3);
 });
 test('help, restart, rest, teacher skip and rejected callbacks never manufacture completion', async () => {
   const e = await feedbackApp(), icon = e.$('feedback-icon');
-  e.send('STROKE_MISSED', { strokeIndex: 0 }); e.$('hint-stroke').click();
+  e.send('STROKE_MISSED', { strokeIndex: 0 }); sendApp(e, 'REQUEST_HELP', { kind: 'stroke' });
   assert.equal(icon.animations.length, 0); assert.equal(e.snapshot().attempts.at(-1).help.length, 1);
-  const old = e.mounts.at(-1); e.$('retry-writing').click();
+  const old = e.mounts.at(-1); sendApp(e, 'RETRY');
   assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(e.snapshot().attempts[0].mistakes, 1);
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback').attributes['data-kind'], 'step', 'new attempt does not invent a recovered miss');
-  e.$('rest').click(); const saved = JSON.stringify(e.snapshot());
+  e.$('teacher-open').click(); const saved = JSON.stringify(e.snapshot());
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   assert.equal(JSON.stringify(e.snapshot()), saved); assert.equal(icon.animations.length, 0);
-  e.$('resume').click(); e.send('WRITING_COMPLETE', {}, old); assert.equal(icon.animations.length, 0);
-  assert(e.$('feedback-text').textContent.includes('休息完')); assert.equal(e.snapshot().attempts.at(-1).outcome, 'active');
+  e.$('teacher-close').click(); e.send('WRITING_COMPLETE', {}, old); assert.equal(icon.animations.length, 0);
+  assert.equal(e.snapshot().attempts.at(-1).outcome, 'active');
   e.$('teacher-open').click(); e.$('teacher-skip').click();
   assert.equal(e.$('feedback').attributes['data-kind'], 'instruction'); assert.equal(icon.animations.length, 0); assert.equal(e.snapshot().attempts.at(-1).outcome, 'skipped');
 });
-test('recall chooses readable feedback and sound labels without leaking arbitrary target characters', async () => {
+test('recall chooses readable feedback labels without leaking arbitrary target characters', async () => {
   for (const character of ['一', '字', '完', '音', '聲', '再', '寫', '返', '跟', '睇', '上', '步']) {
     const e = await feedbackApp(character, 3); e.complete(); e.$('main-next').click();
     e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
@@ -443,8 +431,8 @@ test('recall chooses readable feedback and sound labels without leaking arbitrar
     assert(!initialText.includes(character)); assert(!initialText.includes('□')); assert(initialText.length > 0);
     e.send('STROKE_MISSED', { strokeIndex: 1 }); assert(!e.$('feedback-text').textContent.includes('□'));
     e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); assert(!e.$('feedback-text').textContent.includes('□')); assert(e.$('feedback-text').textContent.length > 0);
-    e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
-    for (const id of ['feedback-text', 'feedback-sound', 'feedback-sound-note', 'previous-step']) {
+
+    for (const id of ['feedback-text', 'previous-step']) {
       assert(!e.$(id).textContent.includes(character), character + ' hidden in ' + id);
       assert(!e.$(id).textContent.includes('□'), id + ' uses readable alternative text');
       assert(!Object.values(e.$(id).attributes).some(value => value.includes(character)), 'no new attribute answer');
@@ -454,10 +442,10 @@ test('recall chooses readable feedback and sound labels without leaking arbitrar
   }
 });
 test('previous button returns practice steps, retains results and stops completion effects without a reward', async () => {
-  const e = await feedbackApp(), audio = audioMock(e), icon = e.$('feedback-icon');
+  const e = await feedbackApp(), icon = e.$('feedback-icon');
   assert(e.document.body.className.includes('writing-view'));
-  assert.equal(e.$('previous-step').hidden, false); assert.equal(e.$('previous-step').textContent, '← 返回睇筆順');
-  e.send('STROKE_MISSED', { strokeIndex: 0 }); e.$('hint-stroke').click();
+  assert.equal(e.$('previous-step').hidden, false); assert.equal(e.$('previous-step').textContent, '← 返回示範');
+  e.send('STROKE_MISSED', { strokeIndex: 0 }); sendApp(e, 'REQUEST_HELP', { kind: 'stroke' });
   const oldGuidance = e.mounts.at(-1); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'watch'); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(e.snapshot().attempts[0].help.length, 1);
   assert.equal(e.$('feedback').attributes['data-kind'], 'instruction'); assert.equal(e.$('previous-step').textContent, '← 返回選字');
@@ -465,16 +453,16 @@ test('previous button returns practice steps, retains results and stops completi
   e.$('main-next').click(); e.complete(); e.$('main-next').click();
   assert.equal(e.$('previous-step').textContent, '← 返回跟寫');
   assert(e.document.body.className.includes('writing-view'));
-  e.$('hint-outline').click(); e.$('previous-step').click();
+  sendApp(e, 'REQUEST_HELP', { kind: 'outline' }); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'guided'); assert.equal(e.snapshot().attempts.at(-2).outcome, 'abandoned'); assert.equal(e.snapshot().attempts.at(-2).help.length, 1);
   assert.equal(e.$('main-next').hidden, true); assert.equal(S.summarize(e.snapshot())[0].independent, false);
-  e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
+
   e.complete(); e.$('main-next').click(); e.complete();
-  const savedResult = S.summarize(e.snapshot())[0], completed = e.mounts.at(-1), motions = icon.animations.length, tones = audio.oscillators.length;
+  const savedResult = S.summarize(e.snapshot())[0], completed = e.mounts.at(-1), motions = icon.animations.length;
   assert(e.document.body.className.includes('writing-view'));
   assert.equal(savedResult.independent, true); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'guided'); assert.equal(S.summarize(e.snapshot())[0].independent, true); assert.equal(e.snapshot().finished.length, 1);
-  assert.equal(icon.animations.length, motions); assert(icon.animations.at(-1).cancelled); assert.equal(audio.oscillators.length, tones); assert(audio.oscillators.at(-1).cancelled);
+  assert.equal(icon.animations.length, motions); assert(icon.animations.at(-1).cancelled);
   assert.equal(e.$('feedback').attributes['data-kind'], 'instruction');
   const saved = JSON.stringify(e.snapshot()); e.send('WRITING_COMPLETE', {}, completed); assert.equal(JSON.stringify(e.snapshot()), saved);
   e.$('previous-step').click(); e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word'); assert.equal(e.$('previous-step').hidden, true);
@@ -496,48 +484,11 @@ test('returning during loading aborts the request and ignores its late result', 
   const snapshot = [...e.store.values()].map(value => { try { return JSON.parse(value); } catch { return null; } }).find(value => value && value.active);
   assert.equal(snapshot.active.phase, 'choose-word'); assert.equal(snapshot.attempts.length, 0); assert.equal(e.$('feedback-icon').animations.length, 0);
 });
-test('sound stays off until a gesture and only completion plays a cancellable short chime', async () => {
-  const e = await feedbackApp(), audio = audioMock(e), icon = e.$('feedback-icon');
-  assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false'); assert.equal(audio.contexts.length, 0);
-  assert.equal(e.$('feedback-sound-note').textContent, ''); assert.equal(e.$('feedback-sound-note').getAttribute('role'), 'status');
-  assert.equal(e.$('feedback-sound').getAttribute('aria-describedby'), 'feedback-sound-note');
-  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(audio.contexts.length, 0);
-  e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
-  assert.equal(audio.contexts.length, 1); assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'true'); assert.equal(audio.oscillators.length, 0);
-  e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); assert.equal(audio.oscillators.length, 0);
-  e.send('WRITING_COMPLETE'); assert.equal(audio.oscillators.length, 1); assert(audio.oscillators[0].started);
-  e.voices.changed(); e.send('WRITING_COMPLETE'); assert.equal(audio.oscillators.length, 1);
-  e.$('rest').click(); assert(audio.oscillators[0].cancelled); assert(icon.animations.at(-1).cancelled);
-  e.$('resume').click(); e.$('main-next').click(); e.complete(); assert.equal(audio.oscillators.length, 2);
-  e.document.hidden = true; e.document.emit('visibilitychange'); assert(audio.oscillators[1].cancelled);
-  e.document.hidden = false; e.$('retry-writing').click(); e.complete(); e.$('teacher-open').click(); assert(audio.oscillators.at(-1).cancelled);
-  e.$('teacher-close').click(); e.$('retry-writing').click(); e.motion.reduced = true; const motions = icon.animations.length; e.complete(); assert.equal(icon.animations.length, motions);
-  e.$('feedback-sound').click(); assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false'); assert(audio.oscillators.at(-1).cancelled);
-  e.emitWindow('pagehide'); assert(audio.contexts[0].closed); assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false');
-  e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve)); assert.equal(audio.contexts.length, 2, 'returning page creates a fresh context only after another gesture');
-  e.$('retry-writing').click(); e.complete(); const lastTone = audio.oscillators.at(-1); e.$('new-session').click(); assert(lastTone.cancelled);
-});
-test('pending or failed audio never queues a chime or overrides a newer sound choice', async () => {
-  const e = await feedbackApp(), audio = audioMock(e, { pending: true });
-  e.$('feedback-sound').click(); assert(e.$('feedback-sound-note').textContent.includes('準備中')); e.complete(); assert.equal(audio.oscillators.length, 0);
-  e.$('feedback-sound').click(); audio.resumes[0].resolve(); await new Promise(resolve => setImmediate(resolve));
-  assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false'); assert.equal(audio.oscillators.length, 0);
-  e.$('feedback-sound').click(); e.$('feedback-sound').click(); e.$('feedback-sound').click();
-  audio.resumes[1].reject(new Error('old request blocked')); await new Promise(resolve => setImmediate(resolve)); assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'true');
-  audio.resumes[2].resolve(); await new Promise(resolve => setImmediate(resolve)); assert.equal(audio.oscillators.length, 0);
-  e.$('main-next').click(); e.complete(); assert.equal(audio.oscillators.length, 1);
-  const failed = await feedbackApp(); audioMock(failed, { fail: true }); failed.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
-  assert.equal(failed.$('feedback-sound').attributes['aria-pressed'], 'false'); assert(failed.$('feedback-sound-note').textContent.includes('未能播放'));
-  failed.complete(); assert.equal(failed.$('feedback').attributes['data-kind'], 'complete-guided');
-});
-test('automatic help remains recorded and audio playback failure keeps visual completion', async () => {
+test('automatic help remains recorded and visual completion stays assisted', async () => {
   const e = await feedbackApp(); e.complete(); e.$('main-next').click();
   e.send('STROKE_MISSED', { strokeIndex: 0 }); e.send('STROKE_MISSED', { strokeIndex: 0 });
   assert.equal(e.snapshot().attempts.at(-1).help.length, 1); assert.equal(e.$('feedback').attributes['data-kind'], 'support');
-  const audio = audioMock(e); e.$('feedback-sound').click(); await new Promise(resolve => setImmediate(resolve));
-  audio.contexts[0].createOscillator = () => { throw new Error('device interrupted'); };
   e.complete(); assert.equal(e.$('feedback').attributes['data-kind'], 'complete-assisted');
-  assert.equal(e.$('feedback-sound').attributes['aria-pressed'], 'false'); assert(e.$('feedback-sound-note').textContent.includes('未能播放'));
   assert.equal(S.summarize(e.snapshot())[0].independent, false);
 });
 function chooseCharacters(e, values) {
@@ -563,7 +514,7 @@ test('local groups balance only eligible applied words and keep their original s
   chooseCharacters(e, ['w0:0', 'w2:0', 'w4:0', 'w5:0', 'w6:2']); e.$('apply-words').click();
   assert.equal(e.$('home-view').hidden, false); assert.equal(e.store.size, 0);
   openLocalGroups(e, 'quiz');
-  assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), ['測驗1一、三、五', '測驗2六、推來推去']);
+  assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), ['小挑戰1一、三、五', '小挑戰2六、推來推去']);
   assert.equal(e.store.size, 0);
   e.$('group-cards').childNodes[1].click();
   assert.deepEqual(e.snapshot().entries.map(word => word.text), ['六', '推來推去']);
@@ -574,7 +525,7 @@ test('local groups balance only eligible applied words and keep their original s
   assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
   for (const mode of ['practice', 'quiz']) {
     openLocalGroups(e, mode);
-    const label = mode === 'quiz' ? '測驗' : '練習';
+    const label = mode === 'quiz' ? '小挑戰' : '練習';
     assert.deepEqual(e.$('group-cards').childNodes.map(card => [card.textContent, card.disabled]), [[label + '1推來推去', false], [label + '2', true]]);
     const before = new Map(e.store); e.$('group-cards').childNodes[1].click(); assert.deepEqual(e.store, before); assert.equal(e.$('group-view').hidden, false);
     e.document.querySelector('.brand').click(); assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
@@ -617,7 +568,7 @@ test('a fourth-only assignment displays the full word and marks its position whi
   assert.equal(snapshot().occurrences[0].index, 3); assert.equal(snapshot().occurrences[0].character, '去');
   assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, content.BishunContent.photos['推來推去']);
   assert.equal(e.$('word-example'), undefined);
-  e.$('simplify').click(); assert(visibleText(e.document).includes('推來推去'));
+  assert(visibleText(e.document).includes('推來推去'));
   e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.voices.changed(); e.$('speak').click();
   assert.equal(e.voices.spoken.at(-1).text, '推來推去。第4個字，去。');
   e.$('main-next').click();
@@ -664,97 +615,27 @@ test('zero selection or changed words cannot end the current valid lesson', asyn
   e.$('teacher-words').value = '濃'; e.$('apply-words').click();
   assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-error').textContent.includes('詞語有改動'));
 });
-test('simplified mode defaults on and toggles partial writing without replacing the writer or assessment', async () => {
-  const e = await feedbackApp(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'true'); assert(e.document.body.className.includes('simplified-practice'));
-  assert(!e.document.body.className.includes('menu-view'));
-  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); const before = JSON.stringify(e.snapshot()), mount = e.mounts.at(-1), mounts = e.mounts.length;
-  e.$('simplify').click(); assert.equal(e.$('simplify').attributes['aria-pressed'], 'false'); assert(!e.document.body.className.includes('simplified-practice')); assert.equal(e.mounts.length, mounts);
-  e.$('simplify').click(); assert.equal(JSON.stringify(e.snapshot()), before); assert.equal(e.mounts.at(-1), mount); assert.doesNotMatch(visibleText(e.document), /已寫\s*\d+\s*\/\s*\d+\s*畫|共\s*\d+\s*畫/);
-  e.send('STROKE_ACCEPTED', { strokeIndex: 1 }, mount); e.send('WRITING_COMPLETE', {}, mount); assert.equal(e.snapshot().active.writingDone, true);
-  assert.equal(e.snapshot().attempts[0].help.length, 0);
-});
-test('one native tools disclosure preserves writing state and keeps phase-specific actions available', async () => {
-  const e = await feedbackApp();
-  const tools = e.$('practice-tools');
-  assert.equal(e.$('extra-demo-controls').hidden, true);
-  assert.equal(e.$('writing-controls').hidden, false);
-  assert.equal(e.$('extra-writing-controls').hidden, false);
-  assert.equal(e.$('next-row').hidden, true);
-  e.$('previous-step').click();
-  assert.equal(e.snapshot().active.phase, 'watch');
-  assert.equal(e.$('demo-controls').hidden, false);
-  assert.equal(e.$('extra-demo-controls').hidden, false);
-  assert.equal(e.$('writing-controls').hidden, true);
-  e.$('main-next').click();
-  e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
-  const before = JSON.stringify(e.snapshot()), mounts = e.mounts.length, mount = e.mounts.at(-1);
-  tools.open = true;
-  e.$('simplify').click();
-  assert(tools.open);
-  assert.equal(JSON.stringify(e.snapshot()), before);
-  assert.equal(e.mounts.length, mounts);
-  assert.equal(e.mounts.at(-1), mount);
-  assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
-  e.complete();
-  assert.equal(e.$('writing-controls').hidden, true);
-  assert.equal(e.$('extra-writing-controls').hidden, false, 'guided retry remains available after writing');
-  assert.equal(e.$('next-row').hidden, false);
-  e.$('main-next').click();
-  assert.equal(e.$('writing-controls').hidden, false);
-  e.complete();
-  assert.equal(e.$('writing-controls').hidden, true);
-  assert.equal(e.$('extra-writing-controls').hidden, false, 'completed recall can still retry');
-  assert(tools.open);
-  e.$('retry-writing').click();
-  assert.equal(e.snapshot().active.phase, 'recall');
-});
-test('instruction speech keeps the current sentence when watch copy is hidden and never records help', async () => {
-  const e = await feedbackApp(); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }, { lang: 'zh-CN', name: 'Mandarin' }]; e.voices.changed();
-  assert.equal(e.$('practice-instruction').hidden, false);
-  assert.equal(e.$('voice-note').textContent, '');
-  assert.equal(e.voices.spoken.length, 0); const snapshot = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
-  const utterance = e.voices.spoken.at(-1); assert.equal(utterance.text, e.$('practice-instruction').textContent); assert.equal(utterance.lang, 'yue-HK'); assert.equal(JSON.stringify(e.snapshot()), snapshot);
-  const cancels = e.voices.cancels; e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert(e.voices.cancels > cancels, 'changed visible cue cancels the old instruction');
-  const changedCancels = e.voices.cancels; e.$('simplify').click(); assert.equal(e.voices.cancels, changedCancels); e.$('hear-instruction').click(); assert.equal(e.voices.spoken.length, 2); assert(e.voices.cancels > cancels);
-  utterance.onerror(); assert(!e.$('instruction-voice-note').textContent.includes('未能朗讀'), 'stale error cannot replace a new request');
-  e.voices.spoken.at(-1).onerror(); assert(e.$('instruction-voice-note').textContent.includes('未能朗讀'));
-  assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
-  e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'watch');
-  assert.equal(e.$('practice-instruction').hidden, true); assert(!visibleText(e.document).includes('撳播放，睇筆順。'));
-  e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, '撳播放，睇筆順。');
-  e.$('main-next').click(); assert.equal(e.$('practice-instruction').hidden, false);
-  e.complete(); e.$('main-next').click(); assert.equal(e.$('practice-instruction').hidden, false);
-});
-test('instruction speech cancels on navigation, rest, teacher, hidden page and page exit with stale callbacks ignored', async () => {
-  const e = await feedbackApp(); e.voices.current = [{ lang: 'zh-HK', name: 'Cantonese' }];
-  const actions = [() => e.$('previous-step').click(), () => e.$('rest').click(), () => e.$('teacher-open').click(), () => { e.document.hidden = true; e.document.emit('visibilitychange'); }, () => e.emitWindow('pagehide')];
-  for (const action of actions) {
-    e.$('hear-instruction').click(); const u = e.voices.spoken.at(-1), before = e.voices.cancels; action(); assert(e.voices.cancels > before); u.onerror(); u.onend(); assert.equal(e.$('instruction-voice-note').textContent, '');
-    if (e.$('rest-dialog').open) e.$('resume').click(); if (e.$('teacher-dialog').open) e.$('teacher-close').click(); e.document.hidden = false;
-  }
-});
-test('instruction speech falls back honestly for missing APIs, absent Cantonese, synchronous failure and utterance errors', async () => {
+test('word audio falls back honestly for missing APIs, absent Cantonese, synchronous failure and utterance errors', async () => {
   for (const mode of ['no-api', 'no-utterance', 'mandarin-only', 'throws', 'utterance-error']) {
     const e = await feedbackApp(); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
     if (mode === 'no-api') delete e.context.speechSynthesis;
     if (mode === 'no-utterance') delete e.context.SpeechSynthesisUtterance;
     if (mode === 'mandarin-only') e.voices.current = [{ lang: 'zh-CN', name: 'Mandarin' }];
     if (mode === 'throws') e.voices.fail = true;
-    const saved = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
+    const saved = JSON.stringify(e.snapshot()); e.$('speak').click();
     if (mode === 'utterance-error') e.voices.spoken.at(-1).onerror();
-    assert(/冇粵語|未能朗讀/.test(e.$('instruction-voice-note').textContent), mode); assert.equal(JSON.stringify(e.snapshot()), saved);
+    assert(/冇粵語|未能朗讀/.test(e.$('voice-note').textContent), mode); assert.equal(JSON.stringify(e.snapshot()), saved);
     assert(e.voices.spoken.every(u => u.lang !== 'zh-CN'));
   }
 });
-test('new instruction and presentation controls stay readable and target-safe in independent recall', async () => {
+test('remaining presentation controls stay readable and target-safe in independent recall', async () => {
   for (const character of ['聽', '指', '令', '精', '簡', '語', '由', '想', '再', '聲', '畫', '示', '字', '一', '更', '多', '工', '具', '其', '他', '選', '項', '開', '啟', '功', '能', '默', '憑', '記', '憶', '自', '己', '試']) {
-    const e = await feedbackApp(character); e.complete(); e.$('main-next').click(); assert(!e.$('speak').attributes['aria-label'].includes(character)); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click();
-    assert.equal(e.voices.spoken.at(-1).text, e.$('practice-instruction').textContent);
-    for (const id of ['practice-title', 'practice-instruction', 'hear-instruction', 'instruction-voice-note', 'speak-label', 'simplify', 'practice-tools-label']) {
+    const e = await feedbackApp(character); e.complete(); e.$('main-next').click(); assert(!e.$('speak').attributes['aria-label'].includes(character)); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('speak').click();
+    for (const id of ['practice-title', 'practice-instruction']) {
       assert(!e.$(id).textContent.includes(character), character + ' absent from ' + id); assert(!e.$(id).textContent.includes('□'), id + ' is readable');
       assert(!Object.values(e.$(id).attributes).some(value => value.includes(character)), 'no answer in attributes');
     }
-    assert(!e.$('speak').attributes['aria-label'].includes(character)); e.$('practice-tools').open = true; e.$('simplify').click(); assert(!e.$('simplify').textContent.includes(character)); assert(!e.$('practice-tools-label').textContent.includes(character)); assert(!visibleText(e.document).includes(character));
+    assert(!visibleText(e.document).includes(character));
     assert.equal(e.snapshot().attempts.at(-1).help.length, 0);
   }
 });
@@ -777,7 +658,7 @@ test('pinned vendor keeps one pointer-end listener pair across repeated mounts a
   const data = { strokes: ['M 100 500 L 900 500 Z'], medians: [[[100, 500], [900, 500]]] };
   let handle;
   for (let index = 0; index < 20; index++) {
-    handle = W.mount(element, '一', data, { phase: index % 2 ? 'guided' : 'recall', token: 'mount-' + index, onEvent: event => events.push(event) });
+    handle = W.mount(element, '一', data, { phase: index % 2 ? 'guided' : 'recall', token: 'mount-' + index, onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; } });
     await waitFor(() => element.style.visibility !== 'hidden' && element.childNodes.some(node => node.nodeName === 'svg' && node.childNodes.some(child => child.nodeName === 'defs') && node.childNodes.some(child => child.nodeName === 'g')));
     assert.equal(e.document.listeners.mouseup.length, 1);
     assert.equal(e.document.listeners.touchend.length, 1);
@@ -824,33 +705,33 @@ test('boot creates no phantom history and both home modes share only the applied
   e.$('teacher-open').click(); chooseCharacters(e, ['w0:2']); e.$('apply-words').click(); assert.equal(e.$('home-view').hidden, false);
   startLocal(e); const practice = e.snapshot(); assert.equal(practice.mode, 'practice'); assert.equal(practice.occurrences[0].index, 2);
   e.$('choice-summary').click(); for (let back = 0; back < 4; back++) e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false); startLocal(e, 'quiz'); const quiz = e.snapshot(); assert.equal(quiz.mode, 'quiz'); assert.notEqual(quiz.id, practice.id); assert.deepEqual(quiz.occurrences, practice.occurrences);
-  e.$('teacher-open').click(); assert(e.$('local-history').textContent.includes('測驗')); assert(e.$('local-history').textContent.includes('練習'));
+  e.$('teacher-open').click(); assert(e.$('local-history').textContent.includes('小挑戰')); assert(e.$('local-history').textContent.includes('練習'));
 });
 test('quiz gives a neutral retry cue and completion circle without hints, ticks, outlines or an automatic next', async () => {
   const e = await quizApp(); e.$('teacher-open').click(); chooseCharacters(e, ['w0:0']); e.$('apply-words').click(); await e.enter();
   assert.equal(e.$('practice-instruction').hidden, true); assert(!visibleText(e.document).includes('照住題目，自己寫。'));
-  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, '照住題目，自己寫。');
+  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('speak').click(); assert.equal(e.voices.spoken.at(-1).text, '推');
   assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(markedPosition(e.$('word-title')), 0); assert.equal(e.mounts.at(-1).character, '推'); assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, 'images/push-block.webp');
-  assert(e.document.querySelector('.step-rail').hidden); assert(e.$('demo-controls').hidden); assert(e.$('hint-outline').hidden); assert(e.$('hint-stroke').hidden); assert(e.$('main-next').hidden);
+  assert(e.document.querySelector('.step-rail').hidden); assert(e.$('demo-controls').hidden); assert(e.$('main-next').hidden);
   for (let i = 0; i < 3; i++) e.send('STROKE_MISSED', { strokeIndex: 0 });
   assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('feedback-text').textContent, '再試呢一畫。'); assert.equal(e.$('feedback-icon').hidden, true); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.snapshot().attempts[0].mistakes, 3); assert.equal(e.snapshot().attempts[0].help.length, 0);
-  e.$('hint-outline').click(); e.$('hint-stroke').click(); assert.equal(e.snapshot().attempts[0].help.length, 0);
+  sendApp(e, 'REQUEST_HELP', { kind: 'outline' }); sendApp(e, 'REQUEST_HELP', { kind: 'stroke' }); assert.equal(e.snapshot().attempts[0].help.length, 0);
   e.$('writer').emit('pointerdown'); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.doesNotMatch(visibleText(e.document), /已寫\s*\d+\s*\/\s*\d+\s*畫|共\s*\d+\s*畫/); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.snapshot().active.phase, 'character-complete');
   assert.equal(e.$('practice-instruction').hidden, true);
   assert.equal(e.$('quiz-clock-value').textContent, '0.0 秒'); const attempts = e.snapshot().attempts.length;
-  e.$('retry-writing').click(); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
+  sendApp(e, 'RETRY'); assert.equal(e.snapshot().attempts.length, attempts + 1); assert.equal(e.snapshot().finished.length, 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.$('teacher-open').click(); e.$('teacher-skip').click(); assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.snapshot().active.completedPhase, 'skipped');
   e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(!e.$('summary-view').textContent.includes('秒'));
 });
 test('quiz clock counts only ready foreground writing and checkpoints exact milliseconds across overlapping pauses', async () => {
   const e = await quizApp({ autoReady: false }); await e.enter();
   assert.equal(e.snapshot().attempts[0].elapsedMs, null); e.clock = 5000; e.mounts.at(-1).onReady(); assert.equal(e.snapshot().attempts[0].elapsedMs, 0);
-  e.clock = 5123.5; e.$('rest').click(); assert.equal(e.snapshot().attempts[0].elapsedMs, 123.5);
+  e.clock = 5123.5; e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].elapsedMs, 123.5);
   const stale = e.mounts[0]; e.clock = 6000; stale.onReady(); e.send('STROKE_ACCEPTED', { strokeIndex: 0 }, stale); assert.equal(e.snapshot().active.currentStroke, 0);
-  e.document.hidden = true; e.document.emit('visibilitychange'); e.$('resume').click(); assert.equal(e.mounts.length, 1);
+  e.document.hidden = true; e.document.emit('visibilitychange'); e.$('teacher-close').click(); assert.equal(e.mounts.length, 1);
   e.clock = 10000; e.document.hidden = false; e.document.emit('visibilitychange'); assert.equal(e.mounts.length, 2);
   stale.onReady(); e.clock = 15000; e.mounts[1].onReady(); e.clock = 15200; e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].elapsedMs, 323.5);
   e.clock = 19000; e.document.hidden = true; e.document.emit('visibilitychange'); e.$('teacher-close').click(); assert.equal(e.mounts.length, 2);
@@ -871,8 +752,8 @@ test('visible timer ticks read the sole controller clock without storage writes 
   const original = e.context.localStorage.setItem; e.context.localStorage.setItem = (...args) => { writes++; original(...args); };
   const tick = () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); };
   e.clock = 1334; tick(); assert.equal(e.$('quiz-clock-value').textContent, '1.2 秒'); assert.equal(writes, 0); assert.deepEqual(e.snapshot(), saved);
-  e.$('rest').click(); const pausedWrites = writes; e.clock = 9000; tick(); assert.equal(e.$('quiz-clock-value').textContent, '1.2 秒'); assert.equal(writes, pausedWrites); assert.equal(timers.size, 0);
-  e.$('resume').click(); e.mounts.at(-1).onReady(); e.clock = 9500;
+  e.$('teacher-open').click(); const pausedWrites = writes; e.clock = 9000; tick(); assert.equal(e.$('quiz-clock-value').textContent, '1.2 秒'); assert.equal(writes, pausedWrites); assert.equal(timers.size, 0);
+  e.$('teacher-close').click(); e.mounts.at(-1).onReady(); e.clock = 9500;
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   assert.equal(e.$('quiz-clock-value').textContent, '1.7 秒'); const doneWrites = writes; e.clock = 20000; tick(); assert.equal(writes, doneWrites); assert.equal(timers.size, 0);
 });
@@ -921,7 +802,7 @@ test('class assignments keep every assigned word and their word-list Back return
   e.$('previous-step').click(); assert.equal(e.$('word-cards').childNodes.length, 4); assert.equal(e.$('choice-summary').textContent, '返回首頁');
   e.$('choice-summary').click(); assert.equal(e.$('home-view').hidden, false); assert.equal(e.$('group-view').hidden, true);
   const ended = JSON.parse(e.store.get('bishun-school:v1:' + sessionId)); assert.equal(ended.active.phase, 'summary'); assert.equal(ended.attempts[0].outcome, 'abandoned');
-  openLocalGroups(e, 'quiz'); assert.equal(e.$('group-view').hidden, false); assert.equal(e.$('group-cards').childNodes[0].textContent, '測驗1粗、濃、鬍鬚');
+  openLocalGroups(e, 'quiz'); assert.equal(e.$('group-view').hidden, false); assert.equal(e.$('group-cards').childNodes[0].textContent, '小挑戰1粗、濃、鬍鬚');
   assert.equal(e.calls.filter(call => call.method === 'PUT').length, 0);
 });
 test('offline completion keeps exact pending evidence and navigates once after explicit retry succeeds', async () => {
@@ -994,7 +875,7 @@ test('pinned vendor retains original accepted ink through remount and resize whi
   const W = e.context.BishunWriting, element = e.$('writer'), events = [];
   const data = { strokes: ['M100 500L900 500Z', 'M100 300L900 300Z'], medians: [[[100, 500], [900, 500]], [[100, 300], [900, 300]]], radStrokes: [1] };
   let ready = 0, size = 360; element.getBoundingClientRect = () => ({ width: size, height: size, left: 0, top: 0 });
-  const mount = (token, currentStroke, phase = 'quiz') => W.mount(element, '二', data, { token, currentStroke, phase, onEvent: event => events.push(event), onReady: () => ready++ });
+  const mount = (token, currentStroke, phase = 'quiz') => W.mount(element, '二', data, { token, currentStroke, phase, onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; }, onReady: () => ready++ });
   const paths = () => walk(element).filter(node => node.nodeName === 'path');
   const ink = () => paths().filter(node => node.attributes['vector-effect'] === 'non-scaling-stroke');
   const draw = y => {
@@ -1008,7 +889,7 @@ test('pinned vendor retains original accepted ink through remount and resize whi
   for (const path of paths().filter(node => node.attributes['clip-path'])) assert.equal(path.attributes.stroke, 'rgba(33,75,59,0)');
   size = 400; [...e.observers][0].callback(); assert.equal(ink()[0].attributes.d, original);
   assert(walk(element).some(node => node.attributes.transform === e.context.HanziWriter.getScalingTransform(400, 400, 24).transform));
-  handle.showHelp('outline'); handle.showHelp('stroke'); handle.play(true); handle.nextStroke(); handle.dispose();
+  handle.showHelp('outline'); handle.showHelp('stroke'); handle.play(); handle.dispose();
   size = 420; handle = mount('quiz-ink', 1); await waitFor(() => ready === 2); assert.equal(ink()[0].attributes.d, original); assert.equal(ink().length, 1);
   assert(walk(element).some(node => node.attributes.transform === e.context.HanziWriter.getScalingTransform(420, 420, 24).transform));
   draw(310); await waitFor(() => events.some(event => event.type === 'WRITING_COMPLETE')); assert.equal(ink().length, 2);
@@ -1023,14 +904,14 @@ test('completed quiz keeps the same board and circle across rest, teacher and ba
   const e = await quizApp(); await e.enter(); e.clock = 350;
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   const count = e.mounts.length, elapsed = e.snapshot().attempts[0].elapsedMs;
-  e.$('rest').click(); e.clock = 1000; e.$('resume').click(); e.$('teacher-open').click(); e.clock = 2000; e.$('teacher-close').click();
+  e.$('teacher-open').click(); e.clock = 1000; e.$('teacher-close').click(); e.$('teacher-open').click(); e.clock = 2000; e.$('teacher-close').click();
   e.document.hidden = true; e.document.emit('visibilitychange'); e.clock = 3000; e.document.hidden = false; e.document.emit('visibilitychange');
   assert.equal(e.mounts.length, count); assert.equal(e.snapshot().attempts[0].elapsedMs, elapsed); assert.equal(e.snapshot().active.phase, 'character-complete');
   assert.equal('hidden' in e.$('quiz-mark').attributes, false);
 });
 test('retry, previous and home retain exact abandoned time and cold reload never extrapolates it', async () => {
   const e = await quizApp(); await e.enter(); const id = e.snapshot().id;
-  e.clock = 250; e.$('retry-writing').click(); await new Promise(resolve => setImmediate(resolve));
+  e.clock = 250; sendApp(e, 'RETRY'); await new Promise(resolve => setImmediate(resolve));
   assert.equal(e.snapshot().attempts[0].elapsedMs, 150); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned');
   e.clock = 450; e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word'); assert.equal(e.snapshot().attempts[1].elapsedMs, 200);
   e.$('word-cards').childNodes[0].click(); await waitFor(() => e.snapshot().active.phase === 'quiz'); e.clock = 550;
@@ -1048,7 +929,7 @@ test('same-token loading restart ignores old failure and only accepts the new re
   e.context.BishunWriting.loadCharacter = () => new Promise((resolve, reject) => requests.push({ resolve, reject }));
   startLocal(e, 'quiz'); e.$('word-cards').childNodes[0].click(); await waitFor(() => requests.length === 1);
   assert.equal(e.$('practice-instruction').hidden, false);
-  e.$('rest').click(); e.$('resume').click(); await waitFor(() => requests.length === 2);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => requests.length === 2);
   requests[0].reject(new Error('old abort')); await new Promise(resolve => setImmediate(resolve)); assert.equal(e.snapshot().active.phase, 'loading');
   requests[1].resolve({ strokes: ['M1 1L2 2'] }); await waitFor(() => e.snapshot().active.phase === 'quiz'); assert.equal(e.snapshot().attempts.length, 1);
 });
@@ -1064,11 +945,11 @@ test('pinned vendor mount queue recovers after setup rejection and only latest m
   handle = W.mount(element, '一', data, options('stale')); handle.dispose();
   handle = W.mount(element, '一', data, options('current')); await waitFor(() => ready.length === 1); assert.deepEqual(ready, ['current']); handle.dispose();
 });
-test('practice recall keeps its recorded outline assistance after teacher and rest remounts', async () => {
+test('practice recall keeps its recorded outline assistance after teacher and background remounts', async () => {
   const e = await feedbackApp(); e.complete(); e.$('main-next').click();
   e.$('teacher-open').click(); e.$('teacher-close').click();
   assert(e.mounts.at(-1).help.some(item => item.kind === 'outline')); const count = e.snapshot().attempts.at(-1).help.length;
-  e.$('rest').click(); e.$('resume').click(); assert(e.mounts.at(-1).help.some(item => item.kind === 'outline')); assert.equal(e.snapshot().attempts.at(-1).help.length, count);
+  e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); assert(e.mounts.at(-1).help.some(item => item.kind === 'outline')); assert.equal(e.snapshot().attempts.at(-1).help.length, count);
 });
 test('writer rejects malformed accepted ink and missing remount ink as recoverable tool failures', async () => {
   const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
@@ -1078,12 +959,12 @@ test('writer rejects malformed accepted ink and missing remount ink as recoverab
   let ready = 0, handle;
   for (const points of [null, [{ x: NaN, y: 2 }, { x: 4, y: 5 }], [{ x: 9000, y: 2 }, { x: 4, y: 5 }], Array(16385).fill({ x: 1, y: 2 })]) {
     const count = ready, errorCount = errors.length;
-    handle = W.mount(e.$('writer'), '一', data, { phase: 'quiz', token: 'bad-' + count, onReady: () => ready++, onError: error => errors.push(error), onEvent: event => events.push(event) });
+    handle = W.mount(e.$('writer'), '一', data, { phase: 'quiz', token: 'bad-' + count, onReady: () => ready++, onError: error => errors.push(error), onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; } });
     await waitFor(() => ready > count); callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points } });
     assert.equal(errors.length, errorCount + 1); assert.equal(events.length, 0); assert.equal(e.$('writer').style.visibility, 'hidden'); handle.dispose();
   }
   const errorCount = errors.length;
-  handle = W.mount(e.$('writer'), '一', data, { phase: 'quiz', token: 'missing', currentStroke: 1, onReady: () => assert.fail('missing ink cannot become ready'), onError: error => errors.push(error), onEvent: event => events.push(event) });
+  handle = W.mount(e.$('writer'), '一', data, { phase: 'quiz', token: 'missing', currentStroke: 1, onReady: () => assert.fail('missing ink cannot become ready'), onError: error => errors.push(error), onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; } });
   await waitFor(() => errors.length > errorCount); handle.dispose();
 });
 
@@ -1127,7 +1008,7 @@ test('sparse repeated demo positions keep their own targets and a single assigne
       assert.equal(e.snapshot().active.occurrenceId, 'w0:' + index); assert.equal(e.mounts.at(-1).character, Array.from('推來推去')[index]);
     }
     assert.deepEqual(e.snapshot().attempts, []); assert.deepEqual(e.snapshot().finished, []);
-    e.$('rest').click(); assert.equal(e.$('demo-navigation').hidden, true); const before = JSON.stringify(e.snapshot()); e.$('demo-previous').emit('click'); assert.equal(JSON.stringify(e.snapshot()), before);
+    e.document.hidden = true; e.document.emit('visibilitychange'); assert.equal(e.$('demo-navigation').hidden, true); const before = JSON.stringify(e.snapshot()); e.$('demo-previous').emit('click'); assert.equal(JSON.stringify(e.snapshot()), before);
   }
 });
 async function demoApp(words = '鬍鬚', indexes, autoReady = true) {
@@ -1140,7 +1021,7 @@ async function demoApp(words = '鬍鬚', indexes, autoReady = true) {
     mount(_el, character, _data, options) {
       const mount = { ...options, character }; e.mounts.push(mount);
       if (autoReady) options.onReady();
-      return { dispose() {}, play() { e.played.push(mount); options.onDemoState('playing'); }, pause() {}, nextStroke() {} };
+      return { dispose() {}, play() { e.played.push(mount); options.onDemoState('playing'); }, pause() {} };
     }
   };
   vm.runInContext(source('app.js'), e.context);
@@ -1190,7 +1071,7 @@ test('lifecycle changes clear pending autoplay and returning to a demo remains i
     const e = await demoApp('鬍鬚', undefined, false), first = e.mounts[0];
     first.onReady(); e.$('play').click(); first.onCharacterDemoComplete(); await flushDemo();
     const pending = e.mounts.at(-1); pending.onReady();
-    if (change === 'rest') { e.$('rest').click(); e.$('resume').click(); }
+    if (change === 'rest') { e.$('teacher-open').click(); e.$('teacher-close').click(); }
     if (change === 'teacher') { e.$('teacher-open').click(); e.$('teacher-close').click(); }
     if (change === 'hidden') { e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); }
     if (change === 'pagehide') { e.emitWindow('pagehide'); e.emitWindow('pageshow'); }
@@ -1214,12 +1095,11 @@ test('data and mount failures cancel autoplay and retry needs a manual play', as
   }
 });
 
-test('writer full completion distinguishes cancel, replay, pause, one-stroke, suspension and disposal', async () => {
+test('writer full completion distinguishes cancel, restart, pause, suspension and disposal', async () => {
   const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
-  const runs = [], strokes = [], states = [], complete = [], prototype = e.context.HanziWriter.prototype;
+  const runs = [], states = [], complete = [], prototype = e.context.HanziWriter.prototype;
   let resumes = 0, pauses = 0;
   prototype.animateCharacter = function() { return new Promise(resolve => runs.push(resolve)); };
-  prototype.animateStroke = function(index) { return new Promise(resolve => strokes.push({ index, resolve })); };
   prototype.pauseAnimation = () => { pauses++; }; prototype.resumeAnimation = () => { resumes++; };
   const data = { strokes: ['M100 500L900 500Z'], medians: [[[100, 500], [900, 500]]] };
   let ready = 0;
@@ -1229,15 +1109,13 @@ test('writer full completion distinguishes cancel, replay, pause, one-stroke, su
   handle.play(); await flushDemo(); assert.equal(runs.length, 1); assert(resumes > 0); assert(pauses > 0);
   runs[0]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 1);
   handle.play(); await flushDemo(); runs[1]({ canceled: true }); await flushDemo(); assert.equal(complete.length, 1);
-  handle.play(); await flushDemo(); handle.play(true); await flushDemo();
+  handle.play(); await flushDemo(); handle.play(); await flushDemo();
   runs[2]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 1);
   runs[3]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
-  handle.play(); await flushDemo(); handle.nextStroke(); await flushDemo();
-  runs[4]({ canceled: false }); strokes[0].resolve({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2); assert.equal(states.at(-1), 'stopped');
-  handle.play(); await flushDemo(); handle.suspend(); runs[5]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
+  handle.play(); await flushDemo(); handle.suspend(); runs[4]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
   handle.dispose(); handle = mount('watch'); await waitFor(() => ready === 2);
-  handle.play(); await flushDemo(); handle.dispose(); runs[6]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
-  handle = mount('quiz'); await waitFor(() => ready === 3); handle.play(); handle.nextStroke(); await flushDemo(); assert.equal(runs.length, 7); assert.equal(strokes.length, 1); handle.dispose();
+  handle.play(); await flushDemo(); handle.dispose(); runs[5]({ canceled: false }); await flushDemo(); assert.equal(complete.length, 2);
+  handle = mount('quiz'); await waitFor(() => ready === 3); handle.play(); await flushDemo(); assert.equal(runs.length, 6); handle.dispose();
 });
 
 test('autoplay intent is discarded during loading and manual navigation before the ready microtask', async () => {
@@ -1270,7 +1148,6 @@ test('practice starts with one cue, acknowledges real ink and keeps missed-strok
   assert.equal(e.$('practice-instruction').hidden, false);
   e.send('STROKE_MISSED', { strokeIndex: 0 });
   assert.equal(e.$('feedback-text').textContent, '再試呢一畫。');
-  assert.equal(e.$('hint-stroke').textContent, '睇一畫再試');
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
   assert.equal(e.$('feedback-text').textContent, '你再試成功咗！');
   e.send('STROKE_MISSED', { strokeIndex: 1 }); e.send('STROKE_MISSED', { strokeIndex: 1 });
@@ -1278,9 +1155,8 @@ test('practice starts with one cue, acknowledges real ink and keeps missed-strok
   assert.equal(e.snapshot().attempts[0].help.length, 1);
   assert.equal(e.$('feedback-text').textContent, '睇完呢一畫，再試。');
   assert.equal(e.$('practice-instruction').hidden, true); assert.equal(e.$('feedback').hidden, false);
-  assert.equal(e.$('hear-instruction').getAttribute('aria-describedby'), 'feedback-text');
-  const beforeVoice = JSON.stringify(e.snapshot()); e.$('hear-instruction').click();
-  assert.equal(e.voices.spoken.at(-1).text, e.$('feedback-text').textContent);
+  const beforeVoice = JSON.stringify(e.snapshot()); e.$('speak').click();
+  assert(e.voices.spoken.at(-1).text.includes('二'));
   assert.equal(JSON.stringify(e.snapshot()), beforeVoice);
   e.complete(); assert.equal(e.$('practice-stars').textContent, '★ 1');
 });
@@ -1296,10 +1172,10 @@ test('one-stroke practice acknowledges the start before retaining its completion
   const complete = JSON.stringify(e.snapshot()), writes = e.$('practice-stars').textWrites;
   e.voices.changed(); e.send('WRITING_COMPLETE');
   assert.equal(JSON.stringify(e.snapshot()), complete); assert.equal(e.$('practice-stars').textWrites, writes);
-  e.$('main-next').click(); e.$('hint-stroke').click(); e.complete();
+  e.$('main-next').click(); sendApp(e, 'REQUEST_HELP', { kind: 'stroke' }); e.complete();
   assert.equal(e.$('feedback').getAttribute('data-kind'), 'complete-assisted');
   assert.equal(e.$('practice-stars').textContent, '★ 1');
-  e.$('retry-writing').click(); e.send('STROKE_MISSED', { strokeIndex: 0 });
+  sendApp(e, 'RETRY'); e.send('STROKE_MISSED', { strokeIndex: 0 });
   assert.equal(e.$('practice-stars').textContent, '★ 1'); e.complete();
   assert.equal(e.$('feedback').getAttribute('data-kind'), 'complete-independent');
   assert.equal(e.$('practice-stars').textContent, '★ 1');
@@ -1319,7 +1195,7 @@ test('stars distinguish sparse repeated positions and exclude skipped, abandoned
   assert.equal(e.$('practice-stars').hidden, true);
   e.$('word-cards').childNodes[0].click(); await waitFor(() => e.snapshot().active.phase === 'watch');
   assert.equal(e.$('practice-stars').hidden, true); e.$('main-next').click();
-  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.$('retry-writing').click();
+  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); sendApp(e, 'RETRY');
   assert.equal(e.$('practice-stars').hidden, true); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned');
   e.complete(); assert.equal(e.$('practice-stars').textContent, '★ 1');
   e.$('main-next').click(); e.complete(); assert.equal(e.$('practice-stars').textContent, '★ 1');
@@ -1343,26 +1219,17 @@ test('arbitrary recall targets stay out of new star labels, visible cues and the
     const e = await feedbackApp(character, 3); e.complete(); e.$('main-next').click();
     e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
     for (const action of [() => {}, () => e.send('STROKE_ACCEPTED', { strokeIndex: 0 }), () => e.send('STROKE_MISSED', { strokeIndex: 1 }), () => e.send('STROKE_ACCEPTED', { strokeIndex: 1 })]) {
-      action(); e.$('hear-instruction').click();
-      const cue = e.$(e.$('hear-instruction').getAttribute('aria-describedby'));
+      action(); e.$('speak').click();
+      const cue = e.$('feedback').hidden ? e.$('practice-instruction') : e.$('feedback-text');
       assert.notEqual(cue.hidden, true);
-      assert.equal(e.voices.spoken.at(-1).text, cue.textContent);
-      assert(!e.voices.spoken.at(-1).text.includes(character)); assert(!visibleText(e.document).includes(character));
+
+      assert(e.voices.spoken.at(-1).text.includes(character), 'word audio explicitly reads the target'); assert(!visibleText(e.document).includes(character));
       assert(!e.$('practice-stars').getAttribute('aria-label').includes(character));
-      assert(!e.$('hint-stroke').textContent.includes(character));
       assert.notEqual(e.$('feedback').hidden, e.$('practice-instruction').hidden);
     }
   }
 });
 
-test('a changed stroke cue preserves current word narration but cancels an outdated instruction', async () => {
-  const e = await feedbackApp('二', 3); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
-  e.$('speak').click(); const wordCancels = e.voices.cancels;
-  e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.voices.cancels, wordCancels);
-  e.$('hear-instruction').click(); const instructionCancels = e.voices.cancels;
-  e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); assert(e.voices.cancels > instructionCancels);
-  e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, e.$('feedback-text').textContent);
-});
 
 
 for (const mode of ['practice', 'quiz']) {
@@ -1388,7 +1255,7 @@ for (const mode of ['practice', 'quiz']) {
     });
     assert.equal(e.$('group-title').textContent, labels[2]);
     assert(!e.$('group-title').className.includes('sr-only')); assert(visibleText(e.document).includes(labels[2]));
-    const label = mode === 'quiz' ? '測驗' : '練習';
+    const label = mode === 'quiz' ? '小挑戰' : '練習';
     assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), [label + '1推來推去', label + '2']);
     assert.equal(e.$('group-home').textContent, '返回課文');
     for (let index = labels.length - 1; index >= 0; index--) {
@@ -1435,20 +1302,19 @@ test('quiz completion keeps only a short live announcement and reads the real vi
   e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   const check = action => {
-    assert.equal(e.$('practice-title').textContent, '測驗完成');
+    assert.equal(e.$('practice-title').textContent, '小挑戰完成');
     assert.equal(e.$('practice-instruction').hidden, true); assert.equal(e.$('practice-instruction').textContent, '');
-    assert.equal(e.$('feedback-text').textContent, '測驗完成'); assert.equal(e.$('feedback').getAttribute('role'), 'status');
+    assert.equal(e.$('feedback-text').textContent, '小挑戰完成'); assert.equal(e.$('feedback').getAttribute('role'), 'status');
     assert.equal(e.$('feedback').getAttribute('data-kind'), 'quiz-complete'); assert(e.$('feedback').className.includes('sr-only')); assert.equal(e.$('feedback').hidden, false);
     assert.equal(e.$('feedback-icon').hidden, true); assert.equal('hidden' in e.$('quiz-mark').attributes, false);
-    assert.equal(e.$('hear-instruction').getAttribute('aria-describedby'), 'main-next'); assert.equal(e.$('main-next').textContent, action + ' →');
+    assert.equal(e.$('main-next').textContent, action + ' →');
     assert(!visibleText(e.document).includes('準備好，先行下一步。')); assert(!visibleText(e.document).includes('完成咗！準備好先行下一步。')); assert(!visibleText(e.document).includes('每一次嘅嘗試都保留喺紀錄。'));
-    e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, action);
   };
   check('下一個字');
-  e.$('rest').click(); e.$('resume').click(); check('下一個字');
+  e.$('teacher-open').click(); e.$('teacher-close').click(); check('下一個字');
   e.$('teacher-open').click(); e.$('teacher-close').click(); check('下一個字');
   e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); check('下一個字');
-  e.$('simplify').click(); check('下一個字');
+  check('下一個字');
   for (let index = 1; index < 4; index++) {
     e.$('main-next').click(); await waitFor(() => e.snapshot().active.phase === 'quiz');
     e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
@@ -1462,8 +1328,7 @@ test('classroom last completion offers the actual submit action and never enters
   assert.equal(e.$('group-view').hidden, true); assert.equal(e.$('home-view').hidden, true);
   const mount = e.mounts.at(-1);
   mount.onEvent({ type: 'STROKE_ACCEPTED', strokeIndex: 0, token: mount.token }); mount.onEvent({ type: 'WRITING_COMPLETE', token: mount.token });
-  assert.equal(e.$('main-next').textContent, '完成測驗 →'); assert.equal(e.$('hear-instruction').getAttribute('aria-describedby'), 'main-next');
-  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, '完成測驗');
+  assert.equal(e.$('main-next').textContent, '完成小挑戰 →');
   assert.equal(e.calls.filter(call => call.method === 'PUT').length, 0);
   e.$('main-next').click(); await waitFor(() => e.navigation.length === 1); assert.equal(e.calls.filter(call => call.method === 'PUT').length, 1);
 });
@@ -1526,7 +1391,7 @@ test('real guided components change in one live vendor mount while retaining acc
   let callbacks, ready = 0;
   prototype.quiz = function(options) { calls.push(options.quizStartStrokeNum); callbacks = options; return originalQuiz.call(this, options); };
   prototype.highlightStroke = function(index) { calls.push('highlight-' + index); return originalHighlight.call(this, index); };
-  const mount = (currentStroke, extra = {}) => e.context.BishunWriting.mount(e.$('writer'), '粗', data, { phase: 'guided', token: 'component', currentStroke, onReady: () => ready++, onEvent: event => events.push(event), ...extra });
+  const mount = (currentStroke, extra = {}) => e.context.BishunWriting.mount(e.$('writer'), '粗', data, { phase: 'guided', token: 'component', currentStroke, onReady: () => ready++, onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; }, ...extra });
   let handle = mount(5); await waitFor(() => ready === 1);
   const overlay = e.$('writer').firstChild, focus = overlay.childNodes[0].childNodes[0], arrow = walk(overlay).find(node => node.className === 'stroke-direction');
   assert.equal(overlay.className, 'start-overlay'); assert.equal(focus.childNodes.length, 6);
@@ -1566,37 +1431,6 @@ async function componentApp(character) {
   await waitFor(() => e.mounts.length === 2 && e.$('writer').style.visibility === '');
   return e;
 }
-test('mapped guided speech takes priority over encouragement and cancels on every stroke including identical wording', async () => {
-  const e = await componentApp('粗'), data = lessonGlyph('粗'); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
-  assert.equal(e.$('practice-title').textContent, '跟住寫 · 米'); assert.equal(e.$('practice-instruction').hidden, true);
-  assert(!visibleText(e.document).includes('由橙點開始')); assert.equal(e.voices.spoken.length, 0);
-  e.$('hear-instruction').click(); assert.equal(e.voices.spoken.at(-1).text, e.$('practice-instruction').textContent);
-  e.mounts.at(-1).onEvent({ type: 'STROKE_MISSED', token: e.snapshot().active.token, strokeIndex: 0 });
-  assert.equal(e.$('feedback-text').textContent, '再試呢一畫。'); e.$('hear-instruction').click();
-  assert.notEqual(e.voices.spoken.at(-1).text, e.$('feedback-text').textContent); assert.equal(e.$('hear-instruction').getAttribute('aria-describedby'), 'practice-instruction');
-  e.mounts.at(-1).onEvent({ type: 'STROKE_MISSED', token: e.snapshot().active.token, strokeIndex: 0 });
-  e.mounts.at(-1).onEvent({ type: 'STROKE_MISSED', token: e.snapshot().active.token, strokeIndex: 0 });
-  assert.equal(e.snapshot().attempts[0].help.length, 1, 'repeated misses demonstrate the current stroke only once');
-  for (let index = 0; index < 6; index++) { drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
-  assert.equal(e.$('practice-title').textContent, '跟住寫 · 且'); assert.equal(e.mounts.length, 2); assert.equal(e.$('practice-stars').hidden, true); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
-  e.$('hear-instruction').click(); assert(e.voices.spoken.at(-1).text.includes('右邊部件'));
-  e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.$('writer').style.visibility === '');
-  assert.equal(e.snapshot().active.currentStroke, 6); assert.equal(e.$('practice-title').textContent, '跟住寫 · 且');
-  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === '');
-  assert.equal(e.snapshot().active.currentStroke, 6);
-  for (let index = 6; index < 8; index++) { drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
-  e.$('hear-instruction').click(); const sameWords = e.$('practice-instruction').textContent, sameCancels = e.voices.cancels;
-  drawMedian(e, data.medians[8]); await waitFor(() => e.snapshot().active.currentStroke === 9);
-  assert.equal(e.$('practice-instruction').textContent, sameWords); assert(e.voices.cancels > sameCancels, 'identical instruction still cancels for the next expected stroke');
-  const atomic = await componentApp('來'); atomic.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
-  atomic.$('hear-instruction').click(); const old = atomic.voices.spoken.at(-1), cancels = atomic.voices.cancels;
-  const token = atomic.snapshot().active.token;
-  atomic.mounts.at(-1).onEvent({ type: 'STROKE_ACCEPTED', token, strokeIndex: 0 });
-  assert.equal(atomic.$('practice-title').textContent, '跟住寫 · 來'); assert(atomic.voices.cancels > cancels);
-  old.onerror(); assert.equal(atomic.$('instruction-voice-note').textContent, '');
-  atomic.voices.current = []; atomic.$('hear-instruction').click(); assert(atomic.$('instruction-voice-note').textContent.includes('冇粵語'));
-  e.document.querySelector('.brand').click(); atomic.document.querySelector('.brand').click();
-});
 test('completed real guided character restores as a ready display-only board after rest teacher background and resize', async () => {
   const e = await componentApp('來'), data = lessonGlyph('來');
   const prototype = e.context.HanziWriter.prototype, original = prototype.quiz, quizStarts = [];
@@ -1605,7 +1439,7 @@ test('completed real guided character restores as a ready display-only board aft
   await waitFor(() => e.snapshot().active.writingDone);
   assert.equal('hidden' in e.$('quiz-mark').attributes, false); assert.equal(e.$('feedback-icon').hidden, true); assert.equal(e.$('practice-stars').textContent, '★ 1');
   const attempt = JSON.stringify(e.snapshot().attempts), animations = e.$('feedback-icon').animations.length;
-  const actions = [() => { e.$('rest').click(); assert.equal('hidden' in e.$('quiz-mark').attributes, true); e.$('resume').click(); }, () => { e.$('teacher-open').click(); e.$('teacher-close').click(); }, () => { e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); }];
+  const actions = [() => { e.$('teacher-open').click(); assert.equal('hidden' in e.$('quiz-mark').attributes, true); e.$('teacher-close').click(); }, () => { e.$('teacher-open').click(); e.$('teacher-close').click(); }, () => { e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); }];
   for (const action of actions) {
     const count = e.mounts.length; action(); assert.equal(e.mounts.length, count + 1); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
     await waitFor(() => e.$('writer').style.visibility === ''); assert.equal('hidden' in e.$('quiz-mark').attributes, false);
@@ -1623,14 +1457,14 @@ test('guided completion waits for the current ready mount and hides the circle w
   await waitFor(() => e.snapshot().active.writingDone);
   const attempts = JSON.stringify(e.snapshot().attempts), W = e.context.BishunWriting, originalMount = W.mount, pending = [];
   W.mount = (...args) => { const options = args[3]; return originalMount(...args.slice(0, 3), { ...options, onReady: () => pending.push(options.onReady) }); };
-  e.$('rest').click(); e.$('resume').click(); await waitFor(() => pending.length === 1);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => pending.length === 1);
   assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => pending.length === 2);
   pending[0](); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   pending[1](); assert.equal('hidden' in e.$('quiz-mark').attributes, false);
   assert.equal(JSON.stringify(e.snapshot().attempts), attempts);
   e.context.HanziWriter.prototype.setCharacter = () => Promise.reject(new Error('restoration failed'));
-  e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.snapshot().active.phase === 'unavailable');
+  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => e.snapshot().active.phase === 'unavailable');
   assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('writer').style.visibility, 'hidden');
   assert.equal(JSON.stringify(e.snapshot().attempts), attempts); e.document.querySelector('.brand').click();
 });
@@ -1641,7 +1475,7 @@ test('v4 original ink uses accepted vendor geometry and survives guidance token 
   W.resetPractice(identity.sessionId);
   let ready = 0, callbacks; const original = e.context.HanziWriter.prototype.quiz;
   e.context.HanziWriter.prototype.quiz = function(options) { callbacks = options; return original.call(this, options); };
-  const mount = (token, currentStroke, phase = 'recall', id = identity) => W.mount(e.$('writer'), '來', data, { identity: id, token, phase, currentStroke, onReady: () => ready++, onError: error => { throw error; }, onEvent: event => events.push(event) });
+  const mount = (token, currentStroke, phase = 'recall', id = identity) => W.mount(e.$('writer'), '來', data, { identity: id, token, phase, currentStroke, onReady: () => ready++, onError: error => { throw error; }, onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; } });
   let handle = mount('recall', 0); await waitFor(() => ready === 1);
   const first = data.medians[0].map(([x,y]) => [x + 4, y + 3]); drawMedian(e, first); await waitFor(() => events.length === 1);
   const overlayPath = () => walk(e.$('writer')).find(node => node.nodeName === 'path' && node.attributes['vector-effect'] === 'non-scaling-stroke');
@@ -1663,7 +1497,7 @@ test('v4 ink bounds, prefix mismatch and session disposal fail without invented 
   let callbacks, ready = 0; const errors = [], events = [];
   e.context.HanziWriter.prototype.quiz = function(options) { callbacks = options; };
   W.resetPractice('bounded');
-  const mount = (attemptId, currentStroke = 0) => W.mount(e.$('writer'), '一', data, { phase: 'recall', token: attemptId, identity: { sessionId: 'bounded', occurrenceId: 'w0:0', attemptId }, currentStroke, onReady: () => ready++, onError: error => errors.push(error), onEvent: event => events.push(event) });
+  const mount = (attemptId, currentStroke = 0) => W.mount(e.$('writer'), '一', data, { phase: 'recall', token: attemptId, identity: { sessionId: 'bounded', occurrenceId: 'w0:0', attemptId }, currentStroke, onReady: () => ready++, onError: error => errors.push(error), onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; } });
   let handle = mount('many'); await waitFor(() => ready === 1);
   const points = Array.from({ length: 5000 }, (_, index) => ({ x: 100 + index / 10, y: 500 + Math.sin(index / 100) }));
   callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points } }); callbacks.onComplete();
@@ -1679,7 +1513,7 @@ test('v4 ink bounds, prefix mismatch and session disposal fail without invented 
   const before = events.length; callbacks.onCorrectStroke({ strokeNum: 0, drawnPath: { points: points.slice(0,2) } }); callbacks.onComplete(); assert.equal(events.length, before); handle.dispose();
 });
 async function purposeApp(text = '來', indexes = Array.from(text, (_, index) => index), historical = null) {
-  const e = environment(source('index.html')); e.mounts = []; e.vendorCallbacks = [];
+  const e = environment(source('index.html')); e.mounts = []; e.vendorCallbacks = []; e.handles = [];
   e.context.BishunSession = { ...currentSession, createSession(options) {
     const state = currentSession.createSession({ ...options, entries: [{ text, selectedIndexes: indexes }] });
     if (historical) { state.active = historical.active || { phase: 'choose-purpose', wordId: 'w0', token: 'historical-choice' }; if (historical.choice) state.wordChoices.w0 = historical.choice; }
@@ -1687,7 +1521,7 @@ async function purposeApp(text = '來', indexes = Array.from(text, (_, index) =>
   } };
   for (const file of ['content.js', 'data/characters.js', 'vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
   const originalMount = e.context.BishunWriting.mount, originalQuiz = e.context.HanziWriter.prototype.quiz;
-  e.context.BishunWriting.mount = (...args) => { e.mounts.push(args[3]); return originalMount(...args); };
+  e.context.BishunWriting.mount = (...args) => { e.mounts.push(args[3]); const handle = originalMount(...args); e.handles.push(handle); return handle; };
   e.context.HanziWriter.prototype.quiz = function(options) { e.vendorCallbacks.push(options); return originalQuiz.call(this, options); };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
   e.snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + e.store.get('bishun-school:v1:current')));
@@ -1716,8 +1550,8 @@ test('v4 word enters independent writing with visible target and keeps ink throu
   assert.equal(e.$('practice-instruction').hidden, true);
   assert.equal(e.$('word-title').childNodes[0].getAttribute('aria-current'), 'true');
   for (const copy of ['自己試', '先想一想，再落筆。', '睇筆順']) assert(!visibleText(e.document).includes(copy));
-  assert.equal(e.$('practice-stars').hidden, true); assert.equal(e.$('hint-stroke').hidden, true); assert.equal(e.$('hint-outline').hidden, true);
-  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('hear-instruction').click(); e.$('speak').click();
+  assert.equal(e.$('practice-stars').hidden, true);
+  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('speak').click(); e.$('speak').click();
   assert.deepEqual(e.voices.spoken.map(item => item.text), ['粗。寫第1個字。', '粗。寫第1個字。']); assert.equal(e.snapshot().attempts[0].help.length, 0);
   const callbacks = e.vendorCallbacks.at(-1); callbacks.onMistake({ strokeNum: 0 }); callbacks.onMistake({ strokeNum: 0 });
   assert.equal(e.snapshot().active.phase, 'recall'); assert.equal(e.snapshot().attempts[0].help.length, 0); assert(e.$('use-guidance').className.includes('help-emphasis'));
@@ -1734,17 +1568,17 @@ test('v4 word enters independent writing with visible target and keeps ink throu
   e.$('previous-step').click(); await waitFor(() => e.snapshot().active.phase === 'recall' && e.$('writer').style.visibility === '');
   assert.equal(e.snapshot().active.attemptId, attempt); assert.equal(paths()[0].attributes.d, prefix);
   e.vendorCallbacks.at(-1).onMistake({ strokeNum: 1 }); e.vendorCallbacks.at(-1).onMistake({ strokeNum: 1 });
-  e.$('hint-outline').click(); e.$('hint-stroke').click();
+  sendApp(e, 'REQUEST_HELP', { kind: 'outline' }); sendApp(e, 'REQUEST_HELP', { kind: 'stroke' });
   assert(walk(e.$('writer')).filter(node => node.nodeName === 'circle').every(node => node.style.display === 'none'));
   assert(!walk(e.$('writer')).some(node => node.className === 'stroke-direction' && node.style.display !== 'none'));
   assert.equal(e.snapshot().attempts[0].help[0].kind, 'guidance');
-  e.$('rest').click(); e.$('resume').click(); await waitFor(() => e.$('writer').style.visibility === ''); assert.equal(paths()[0].attributes.d, prefix);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); assert.equal(paths()[0].attributes.d, prefix);
   e.$('teacher-open').click(); e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); assert.equal(paths()[0].attributes.d, prefix);
   assert.equal(e.snapshot().attempts[0].help.length, 1); assert.equal(exposedOutlines, 0);
   assert(walk(e.$('writer')).filter(node => node.nodeName === 'circle').every(node => node.style.display === 'none'));
   await e.finish(); assert.equal(e.snapshot().attempts.length, 1); assert.equal(currentSession.summarize(e.snapshot())[0].assisted, true); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null);
   assert.equal(e.$('practice-stars').hidden, false); assert.equal(e.$('practice-stars').textContent, '★ 1');
-  e.$('rest').click(); e.$('resume').click(); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); assert.equal(paths().length, 11);
+  e.$('teacher-open').click(); e.$('teacher-close').click(); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); assert.equal(paths().length, 11);
   e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert.equal(e.$('task-next').textContent, '睇今次紀錄 →');
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'path').attributes.d, prefix);
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'img').attributes.src, 'images/rope.webp');
@@ -1758,25 +1592,25 @@ test('v4 word enters independent writing with visible target and keeps ink throu
 test('v4 guided retry returns to a fresh independent page without a demo route', async () => {
   const e = await purposeApp('粗'); await e.enter();
   e.$('use-guidance').click(); await waitFor(() => e.snapshot().active.phase === 'guided' && e.$('writer').style.visibility === '');
-  const guidedAttempt = e.snapshot().active.attemptId; e.$('retry-writing').click();
+  const guidedAttempt = e.snapshot().active.attemptId; sendApp(e, 'RETRY');
   await waitFor(() => e.snapshot().active.phase === 'recall' && e.$('writer').style.visibility === '');
   assert.notEqual(e.snapshot().active.attemptId, guidedAttempt); assert.deepEqual(e.snapshot().attempts.at(-1).help, []);
   assert.equal(e.$('practice-title').textContent, '自己寫'); assert.equal(e.$('previous-step').textContent, '← 返回選字');
   assert(!visibleText(e.document).includes('睇筆順')); e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word');
 });
 
-test('student menus remove generic descriptions and keep privacy and rest guidance', () => {
+test('student menus remove generic descriptions and keep privacy notices', () => {
   const e = environment(source('index.html'));
-  assert.equal(e.$('start-practice').textContent, '練習'); assert.equal(e.$('start-quiz').textContent, '測驗');
+  assert.equal(e.$('start-practice').textContent, '練習'); assert.equal(e.$('start-quiz').textContent, '小挑戰');
   assert(!e.$('class-dialog').textContent.includes('交卷後可查看自己的原卷'));
   assert(e.$('class-dialog').textContent.includes('暱稱（唔好用真名）')); assert(e.$('class-switch-note').textContent.includes('清除'));
-  assert(e.$('rest-dialog').textContent.includes('伸一伸手指，望一望遠處。')); assert(e.$('class-storage').textContent.includes('可能遺失'));
+  assert.equal(e.$('rest'), undefined); assert(e.$('class-storage').textContent.includes('可能遺失'));
 });
 
 test('v4 partial repeated word cards mark supplied, skipped and unavailable slots without substitutions', async () => {
   const e = await purposeApp('推來推去', [0,2], { choice: { purpose: 'intro', route: null } }); await e.enter('guided'); await e.finish();
   const originalAttempt = currentSession.summarize(e.snapshot())[0].completedAttemptId;
-  e.$('retry-writing').click(); await waitFor(() => e.$('writer').style.visibility === ''); e.$('teacher-open').click(); e.$('teacher-skip').click();
+  sendApp(e, 'RETRY'); await waitFor(() => e.$('writer').style.visibility === ''); e.$('teacher-open').click(); e.$('teacher-skip').click();
   assert.equal(currentSession.summarize(e.snapshot())[0].completedAttemptId, originalAttempt);
   e.$('main-next').click(); await waitFor(() => e.snapshot().active.phase === 'recall' && e.$('writer').style.visibility === '');
   assert.equal(e.snapshot().active.occurrenceId, 'w0:2'); assert.equal(e.snapshot().active.currentStroke, 0);
@@ -1786,7 +1620,7 @@ test('v4 partial repeated word cards mark supplied, skipped and unavailable slot
   assert.deepEqual(labels, ['我寫嘅', '配字', '已略過', '配字']); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 1);
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'img').attributes.src, 'images/push-block.webp');
   const context = walk(e.$('work-card')).filter(node => node.className === 'sentence-context').map(node => node.textContent); assert.deepEqual(context, ['我將積木', '。']);
-  e.context.BishunWriting.resetPractice(null); e.$('rest').click(); e.$('resume').click();
+  e.context.BishunWriting.resetPractice(null); e.$('teacher-open').click(); e.$('teacher-close').click();
   assert(walk(e.$('work-card')).some(node => node.className === 'work-label' && node.textContent === '筆跡未能顯示')); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 0);
 });
 
@@ -1836,4 +1670,88 @@ test('legacy v4 guided attempt without guidance still returns to demo browsing',
   assert.equal(e.snapshot().attempts.length, 1); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(e.$('pause').disabled, false);
   e.$('demo-previous').click(); await waitFor(() => e.snapshot().active.phase === 'watch' && e.snapshot().active.occurrenceId === 'w0:0');
   assert.equal(e.snapshot().attempts.length, 1); e.$('teacher-end').click();
+});
+
+test('v4 real writer undo keeps the exact prefix and same evidence, rejects old callbacks and reaches zero', async () => {
+  for (const phase of ['independent', 'guided']) {
+    const e = await purposeApp(); await e.enter(phase);
+    const data = lessonGlyph('來'), paths = () => walk(e.$('writer')).filter(node => node.attributes['vector-effect'] === 'non-scaling-stroke').map(node => node.attributes.d);
+    const old = e.vendorCallbacks.at(-1); old.onMistake({ strokeNum: 0 });
+    for (let index = 0; index < 2; index++) { drawMedian(e, data.medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
+    const before = e.snapshot(), prefix = paths()[0];
+    e.$('undo-stroke').click(); await waitFor(() => e.$('writer').style.visibility === '' && e.snapshot().active.currentStroke === 1);
+    assert.deepEqual(paths(), [prefix]); assert.equal(e.snapshot().active.attemptId, before.active.attemptId);
+    assert.deepEqual(e.snapshot().attempts, before.attempts); assert.equal(e.snapshot().active.phase, before.active.phase);
+    const saved = JSON.stringify(e.snapshot()); old.onCorrectStroke({ strokeNum: 1 }); old.onMistake({ strokeNum: 1 }); old.onComplete(); assert.equal(JSON.stringify(e.snapshot()), saved);
+    e.$('undo-stroke').click(); await waitFor(() => e.$('writer').style.visibility === '' && e.snapshot().active.currentStroke === 0);
+    assert.deepEqual(paths(), []); assert.equal(e.$('undo-stroke').disabled, true);
+    e.$('undo-stroke').emit('click'); assert.equal(e.snapshot().active.currentStroke, 0);
+    await e.finish(); assert.equal(e.snapshot().active.attemptId, before.active.attemptId); assert.equal(e.snapshot().attempts.length, 1);
+    e.document.querySelector('.brand').click();
+  }
+});
+
+test('v4 rejected stroke acceptance leaves no retained ink', async () => {
+  const e = await purposeApp(); await e.enter();
+  const reducer = e.context.BishunSession.transition;
+  e.context.BishunSession.transition = (state, event) => event.type === 'STROKE_ACCEPTED' ? state : reducer(state, event);
+  drawMedian(e, lessonGlyph('來').medians[0]);
+  assert.equal(e.snapshot().active.currentStroke, 0);
+  assert.equal(walk(e.$('writer')).filter(node => node.attributes['vector-effect'] === 'non-scaling-stroke').length, 0);
+  e.document.querySelector('.brand').click();
+});
+
+test('v4 undo ink transaction rolls back refused or throwing installs and preserves completed originals', async () => {
+  const e = await purposeApp(); await e.enter(); await e.finish();
+  const completed = e.snapshot(), identity = { sessionId: completed.id, occurrenceId: completed.active.occurrenceId, attemptId: completed.active.attemptId }, card = e.document.createElement('div');
+  const W = e.context.BishunWriting; assert(W.renderOriginal(card, identity)); const originalPaths = walk(card).filter(node => node.nodeName === 'path').map(node => node.attributes.d);
+  e.$('previous-step').click(); await waitFor(() => e.snapshot().active.phase === 'recall' && e.$('writer').style.visibility === '');
+  for (let index = 0; index < 2; index++) { drawMedian(e, lessonGlyph('來').medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
+  const handle = e.handles.at(-1), snapshot = JSON.stringify(e.snapshot());
+  for (const install of [() => false, () => { throw new Error('install failed'); }]) assert.equal(handle.editAcceptedInk('remove-last', 2, install), false);
+  assert.equal(handle.editAcceptedInk('remove-last', 1, () => true), false);
+  assert.equal(JSON.stringify(e.snapshot()), snapshot);
+  const reducer = e.context.BishunSession.transition;
+  e.context.BishunSession.transition = (state, event) => event.type === 'UNDO_STROKE' ? state : reducer(state, event);
+  e.$('undo-stroke').click(); assert.equal(JSON.stringify(e.snapshot()), snapshot);
+  e.context.BishunSession.transition = reducer;
+  e.$('undo-stroke').click(); await waitFor(() => e.snapshot().active.currentStroke === 1 && e.$('writer').style.visibility === '');
+  assert(W.renderOriginal(card, identity)); assert.deepEqual(walk(card).filter(node => node.nodeName === 'path').map(node => node.attributes.d), originalPaths);
+  assert.equal(handle.editAcceptedInk('remove-last', 1, () => true), false);
+  e.document.querySelector('.brand').click();
+});
+
+test('v4 undo restart failures retain the shortened attempt and retry the same prefix', async () => {
+  for (const failure of ['async', 'throw', 'vendor']) {
+    const e = await purposeApp(); await e.enter();
+    for (let index = 0; index < 2; index++) { drawMedian(e, lessonGlyph('來').medians[index]); await waitFor(() => e.snapshot().active.currentStroke === index + 1); }
+    const before = e.snapshot(), W = e.context.BishunWriting, mount = W.mount, vendor = e.context.HanziWriter, setCharacter = vendor.prototype.setCharacter;
+    if (failure === 'async') vendor.prototype.setCharacter = () => Promise.reject(new Error('restart failed'));
+    if (failure === 'throw') W.mount = () => { throw new Error('mount threw'); };
+    if (failure === 'vendor') e.context.HanziWriter = null;
+    e.$('undo-stroke').click(); await waitFor(() => e.$('reload-writer').hidden === false);
+    assert.equal(e.snapshot().active.currentStroke, 1); assert.equal(e.snapshot().active.attemptId, before.active.attemptId); assert.deepEqual(e.snapshot().attempts, before.attempts);
+    assert.equal(e.$('writer').style.visibility, 'hidden'); assert.equal(e.$('undo-stroke').disabled, true);
+    const stale = e.mounts.at(-1).onError;
+    W.mount = mount; e.context.HanziWriter = vendor; vendor.prototype.setCharacter = setCharacter;
+    e.$('reload-writer').click(); await waitFor(() => e.$('writer').style.visibility === '' && e.$('reload-writer').hidden);
+    stale(); assert.equal(e.$('reload-writer').hidden, true);
+    assert.equal(e.snapshot().active.attemptId, before.active.attemptId); assert.equal(e.snapshot().active.currentStroke, 1);
+    assert.equal(walk(e.$('writer')).filter(node => node.attributes['vector-effect'] === 'non-scaling-stroke').length, 1);
+    await e.finish(); assert.equal(e.snapshot().attempts.length, 1); e.document.querySelector('.brand').click();
+  }
+});
+
+test('simplified practice removes obsolete controls and keeps an accessible icon-only word button', async () => {
+  const e = await purposeApp('粗'); await e.enter();
+  for (const id of ['hear-instruction', 'instruction-voice-note', 'rest', 'rest-dialog', 'practice-tools', 'replay', 'one-stroke', 'hint-stroke', 'hint-outline', 'retry-writing', 'feedback-sound', 'simplify', 'speak-label']) assert.equal(e.$(id), undefined, id + ' removed from the DOM');
+  for (const copy of ['聽指令', '休息一下', '更多工具', '睇筆順', '睇呢一畫', '自己試', '先想一想，再落筆。', '聽詞語', '重新試一次']) assert(!visibleText(e.document).includes(copy), copy);
+  assert.equal(e.$('word-title').textContent, '粗'); assert.equal(e.$('semantic-cue').hidden, false); assert(e.document.body.className.includes('v4-practice'));
+  assert.equal(e.$('speak').nodeName, 'button'); assert.equal(e.$('speak').textContent, ''); assert.equal(e.$('speak').firstChild.getAttribute('aria-hidden'), 'true');
+  assert.equal(e.$('undo-stroke').textContent, '擦掉前一筆'); assert.equal(e.$('undo-stroke').hidden, false); assert.equal(e.$('undo-stroke').disabled, true);
+  const unavailableName = e.$('speak').getAttribute('aria-label');
+  e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.voices.changed();
+  assert.notEqual(e.$('speak').getAttribute('aria-label'), unavailableName); e.$('speak').click(); assert.equal(e.voices.spoken.at(-1).text, '粗。寫第1個字。');
+  e.document.querySelector('.brand').click(); assert.equal(e.$('start-quiz').textContent, '小挑戰'); assert(e.$('class-open').textContent.includes('小挑戰'));
+  assert(e.$('teacher-class').textContent.includes('測驗')); assert(e.$('teacher-dialog').textContent.includes('測驗題型'));
 });
