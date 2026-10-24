@@ -24,7 +24,7 @@
     const podium = node('div', '', 'class-podium');
     view.board.rows.filter(row => row.rank <= 3).forEach(row => { const card = node('div', '', 'podium-place'); card.append(node('strong', '第 ' + row.rank + ' 名'), node('span', row.alias), node('small', score(row))); podium.append(card); });
     const table = document.createElement('table'), header = document.createElement('tr');
-    table.append(node('caption', reviewed ? '每位同學第一份原卷' : '每位同學全份測驗嘅最佳成績'));
+    table.append(node('caption', reviewed ? '每位同學第一份原卷' : '每位同學全份小挑戰嘅最佳成績'));
     for (const text of reviewed ? ['名次', '暱稱', '字形正確'] : ['名次', '暱稱', '錯誤', '時間（秒）']) { const cell = node('th', text); cell.setAttribute('scope', 'col'); header.append(cell); } table.append(header);
     for (const row of view.board.rows) { const tr = document.createElement('tr'); if (row.isMe) tr.className = 'is-me'; for (const text of reviewed ? [row.rank, row.alias, row.score] : [row.rank, row.alias + (row.isMe ? '（你）' : ''), row.mistakes, (row.elapsedMs / 1000).toFixed(1)]) tr.append(node('td', String(text))); table.append(tr); }
     container.append(podium, table);

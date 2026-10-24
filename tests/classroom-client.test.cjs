@@ -127,3 +127,11 @@ test('malformed persisted join drafts are discarded and cannot crash joining', a
     const client = C.create(e.options); await client.join('ABCDEFGH', '小星'); assert.equal(client.view().accepted, true);
   }
 });
+
+test('student classroom errors use challenge wording without changing the server response', async () => {
+  const serverError = { error: { code: 'expired', message: '測驗已到期。' } };
+  const e = setup(() => response(serverError, 410));
+  await e.client.join(member.code, member.alias);
+  assert.equal(e.client.view().message, '小挑戰已到期。');
+  assert.equal(serverError.error.message, '測驗已到期。');
+});

@@ -54,7 +54,7 @@ function boot({ store = memory(), classroom = null, now = Date.now(), elapsed = 
 }
 async function fill(e) {
   await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke(); await e.click('交答案');
-  await e.stroke(); await e.click('暫時跳過'); await e.click('交整份測驗');
+  await e.stroke(); await e.click('暫時跳過'); await e.click('交整份小挑戰');
 }
 test('listen quiz has a free pad with private checkpoints and no visible or accessible answer model', async () => {
   const e = boot(); await e.ui.open(e.assigned);
@@ -171,20 +171,20 @@ test('receipt arriving after 24-hour expiry cannot resurrect or redisplay an ori
   assert(e.record().run.phase === 'sealed');
   e.setNow(member.expiresAt + 1); await e.timers[0](); assert.equal(e.store.records.size, 0);
   receipt.resolve({ runId: 'late', official: true }); await completion;
-  assert.equal(e.store.records.size, 0); assert.match(e.panel.textContent, /測驗已到期/);
+  assert.equal(e.store.records.size, 0); assert.match(e.panel.textContent, /小挑戰已到期/);
   assert.equal(e.panel.all().filter(item => item.tagName === 'PATH').length, 0);
 });
-test('persistent storage failure allows audio, pause and repeated undo while retaining reduced visible ink', async () => {
+test('persistent storage failure allows audio, background and repeated undo while retaining reduced visible ink', async () => {
   const e = boot(); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); e.store.blocked = true;
   const inkCount = () => e.panel.all().filter(item => item.tagName === 'PATH' && !item.attributes['aria-hidden']).length;
   await e.stroke(); await e.stroke(); assert.equal(inkCount(), 2);
   await e.click('聽題目'); assert.equal(e.spoken.length, 1);
-  await e.click('撤回一筆'); assert.equal(inkCount(), 1);
-  await e.click('休息一下'); assert(e.button('繼續寫字')); await e.click('繼續寫字');
+  await e.click('擦掉前一筆'); assert.equal(inkCount(), 1);
+  e.context.document.hidden = true; await e.listeners.visibilitychange(); await tick(); e.context.document.hidden = false; await e.listeners.visibilitychange(); await tick();
   assert.equal(inkCount(), 1);
-  await e.click('撤回一筆'); assert.equal(inkCount(), 0);
+  await e.click('擦掉前一筆'); assert.equal(inkCount(), 0);
   assert.match(e.panel.textContent, /儲存空間不足/); assert(e.button('重試保存'));
-  await e.click('← 返回選題'); assert(e.button('撤回一筆'), 'destructive navigation stays blocked');
+  await e.click('← 返回選題'); assert(e.button('擦掉前一筆'), 'destructive navigation stays blocked');
   e.store.blocked = false; await e.click('重試保存'); assert.equal(e.record().run.answers[0].strokes.length, 0);
 });
 test('reviewing an older local original does not change the active next-pupil pointer', async () => {
@@ -198,19 +198,19 @@ test('reviewing an older local original does not change the active next-pupil po
   assert(runs.some(item => item.key === first)); assert(runs.some(item => item.key === second));
   assert.match(e.panel.textContent, /未提交/);
 });
-test('pause excludes rest from teacher elapsed time and resumes the exact ink without speaking', async () => {
+test('background excludes hidden time from teacher elapsed time and resumes the exact ink without speaking', async () => {
   let time = 0; const e = boot({ elapsed: () => time }); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
-  time = 100; await e.stroke(); time = 1000; await e.click('休息一下');
+  time = 100; await e.stroke(); time = 1000; e.context.document.hidden = true; await e.listeners.visibilitychange(); await tick();
   const ink = clone(e.record().run.answers[0].strokes); assert.equal(e.record().run.elapsedMs, 1000);
-  time = 50000; await e.click('繼續寫字'); assert.equal(e.spoken.length, 0);
+  time = 50000; e.context.document.hidden = false; await e.listeners.visibilitychange(); await tick(); assert.equal(e.spoken.length, 0);
   time = 51000; await e.click('交答案'); assert.equal(e.record().run.elapsedMs, 2000); assert.deepEqual(e.record().run.answers[0].strokes, ink);
   assert(!e.panel.textContent.includes('秒'));
-  for (const label of ['聽題目', '休息一下', '交答案', '暫時跳過', '撤回一筆']) assert.equal(e.button(label).tagName, 'BUTTON', 'native keyboard activation remains available');
+  for (const label of ['聽題目', '交答案', '暫時跳過', '擦掉前一筆']) assert.equal(e.button(label).tagName, 'BUTTON', 'native keyboard activation remains available');
 });
 test('partial formal selections expand to complete words in the separate context challenge', async () => {
   for (const word of ['鬍鬚', '剪草機', '推來推去']) {
     const e = boot(), assigned = e.context.BishunAssessment.assignment([{ text: word, selectedIndexes: [0] }], 'listen');
-    await e.ui.open(assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke(); await e.click('交答案'); await e.click('交整份測驗');
+    await e.ui.open(assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke(); await e.click('交答案'); await e.click('交整份小挑戰');
     const original = clone(e.record().run); await e.click('情境小挑戰');
     const challenge = [...e.store.records.values()].find(item => item.kind === 'challenge');
     assert.equal(challenge.run.answers.length, Array.from(word).length); assert.deepEqual(challenge.run.assignment.entries[0].selectedIndexes, Array.from(word, (_, i) => i));
@@ -222,7 +222,7 @@ test('twelve-position summary keeps actions separate from paged original details
   const assignment = e.context.BishunAssessment.assignment(words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) })), 'listen');
   await e.ui.open(assignment); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
   for (let index = 0; index < 12; index++) { await e.stroke(); await e.click('交答案'); }
-  await e.click('交整份測驗');
+  await e.click('交整份小挑戰');
   assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, 0, 'summary does not render twelve large sheets above its actions');
   for (const label of ['查看原筆跡', '老師批改', '本機原卷', '下一位同學', '情境小挑戰', '跟住練習', '← 返回課程']) assert(e.button(label));
   await e.click('查看原筆跡'); assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, 1);
@@ -251,4 +251,12 @@ test('a conflicting second tab preserves its visible ink and never overwrites th
   await second.click('重試保存'); assert.match(second.panel.textContent, /另一分頁/);
   assert(second.panel.all().some(item => item.attributes.d?.startsWith('M1600 600')));
   assert.deepEqual(first.record().run.answers, saved);
+});
+
+test('assessment status translates server activity wording while preserving the original error', async () => {
+  const e = boot(), failure = new Error('測驗紀錄或題目不一致。');
+  e.store.initialize = async () => { throw failure; };
+  await e.ui.open(e.assigned);
+  assert.match(e.panel.textContent, /小挑戰紀錄或題目不一致/);
+  assert.equal(failure.message, '測驗紀錄或題目不一致。');
 });

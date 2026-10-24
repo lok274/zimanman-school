@@ -47,3 +47,18 @@ test('the portable page embeds all word photos and preserves literal script text
     fs.rmSync(fixture, { recursive: true, force: true });
   }
 });
+
+test('web and generated standalone expose the same simplified controls and student names', () => {
+  for (const file of ['index.html', 'standalone.html']) {
+    const html = fs.readFileSync(path.join(__dirname, '../dist', file), 'utf8');
+    for (const id of ['hear-instruction', 'rest', 'rest-dialog', 'practice-tools', 'hint-stroke', 'hint-outline', 'retry-writing', 'speak-label']) assert(!html.includes('id="' + id + '"'), file + ': ' + id);
+    assert.match(html, /id="undo-stroke"[^>]*>擦掉前一筆<\/button>/);
+    assert.match(html, /id="start-quiz"[^>]*><strong>小挑戰<\/strong>/);
+    assert.match(html, /id="speak"[^>]*><svg[^>]*aria-hidden="true"/);
+    assert(html.includes('測驗題型')); assert(html.includes('用以上範圍開班級測驗'));
+  }
+  const css = fs.readFileSync(path.join(__dirname, '../dist/styles.css'), 'utf8');
+  assert.match(css, /\.simplified-practice \.speech-button\{width:60px;min-width:60px;height:60px;min-height:60px/);
+  assert.match(css, /\.speech-button:focus-visible\{outline:3px/);
+  assert.match(css, /\.v4-practice\.simplified-practice \.semantic-cue\{display:block/);
+});

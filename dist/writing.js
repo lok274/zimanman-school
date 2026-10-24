@@ -116,7 +116,7 @@
     const practice = !!identity && ['guided', 'recall'].includes(options.phase);
     const componentGuided = options.phase === 'guided' && !!activePart(character, data, options.currentStroke || 0);
     const guidedComplete = options.complete || options.phase === 'guided' && options.currentStroke === data.strokes.length;
-    let alive = true, suspended = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, nextIndex = 0, demoRun = 0;
+    let alive = true, suspended = false, mounted = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, demoRun = 0;
     const size = Math.round(element.getBoundingClientRect().width) || 360;
     let engine = engines.get(element);
     if (!engine) {
@@ -149,6 +149,22 @@
     const dot = document.createElementNS(ns, 'circle'); dot.setAttribute('r', '16'); dot.setAttribute('fill', '#bf6c36'); dot.setAttribute('stroke', '#fffaf0'); dot.setAttribute('stroke-width', '7'); group.append(dot); element.append(overlay);
     const inkGroup = document.createElementNS(ns, 'g'); group.append(inkGroup);
     function drawInk() { drawOriginal(inkGroup, ink); }
+    function editAcceptedInk(operation, expectedCount, installNext) {
+      const remove = operation === 'remove-last';
+      if (!practice || !mounted || !current() || guidedComplete || currentStroke !== expectedCount || ink.length !== expectedCount || currentStroke >= data.strokes.length || remove && expectedCount <= 0) return false;
+      const path = remove ? ink.pop() : operation.path;
+      if (remove) { currentStroke--; suspended = true; }
+      else { ink.push(path); currentStroke++; }
+      let accepted = false;
+      try { accepted = installNext() === true; } catch (_) { accepted = false; }
+      finally {
+        if (!accepted) {
+          if (remove) { ink.push(path); currentStroke++; suspended = false; }
+          else { ink.pop(); currentStroke--; }
+        }
+      }
+      return accepted;
+    }
     drawInk();
     if (componentGuided) element.insertBefore(overlay, element.firstChild);
     const direction = componentGuided ? document.createElementNS(ns, 'path') : null;
@@ -204,9 +220,13 @@
           if (quiz || practice) {
             const points = event.drawnPath && event.drawnPath.points;
             if (event.strokeNum !== currentStroke || !Array.isArray(points) || points.length < 2 || points.length > 16384 || points.some(point => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 8192 || Math.abs(point.y) > 8192)) { fail(new Error('筆跡資料無效，請重新試一次。')); return; }
-            ink.push(practice ? boundedStroke(points) : points.map(point => ({ x: point.x, y: point.y }))); drawInk();
+            if (practice) {
+              const accepted = options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }, installNext => editAcceptedInk({ path: boundedStroke(points) }, event.strokeNum, installNext));
+              if (!accepted) { suspended = true; writer.cancelQuiz(); return; }
+            } else ink.push(points.map(point => ({ x: point.x, y: point.y })));
+            drawInk();
           }
-          currentStroke = event.strokeNum + 1; directionVisible = false; drawFocus(); placeStart(); options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
+          currentStroke = event.strokeNum + 1; directionVisible = false; drawFocus(); placeStart(); if (!practice) options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
         onMistake: event => { if (current()) { if (componentGuided) { directionVisible = true; placeStart(); } options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); } },
         onComplete: () => {
           if (!current()) return;
@@ -217,7 +237,7 @@
           options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() });
         }
       });
-      if (alive && !suspended) { element.style.visibility = ''; if (options.onReady) options.onReady(); }
+      if (alive && !suspended) { mounted = true; element.style.visibility = ''; if (options.onReady) options.onReady(); }
     }).catch(fail);
     function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }).catch(fail); }
     const observer = new ResizeObserver(() => {
@@ -225,27 +245,20 @@
       const n = Math.round(element.getBoundingClientRect().width);
       if (n > 0) { writer.updateDimensions({ width: n, height: n, padding: 24 }); placeStart(); }
     }); observer.observe(element);
-    function demoDone(run, result, fullCharacter = false) {
+    function demoDone(run, result) {
       if (!alive || suspended || run !== demoRun) return;
       playing = false; paused = false; options.onDemoState && options.onDemoState('stopped');
-      if (fullCharacter && result && result.canceled === false && options.onCharacterDemoComplete) options.onCharacterDemoComplete();
+      if (result && result.canceled === false && options.onCharacterDemoComplete) options.onCharacterDemoComplete();
     }
     return {
-      play(replay) {
+      editAcceptedInk,
+      play() {
         if (!alive || options.phase !== 'watch') return;
-        if (paused && !replay) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
-        else { const run = ++demoRun; nextIndex = 0; playing = true; paused = false; ready(() => writer.animateCharacter().then(result => demoDone(run, result, true))); }
+        if (paused) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
+        else { const run = ++demoRun; playing = true; paused = false; ready(() => writer.animateCharacter().then(result => demoDone(run, result))); }
         options.onDemoState && options.onDemoState('playing');
       },
       pause() { if (!alive) return; ready(() => writer.pauseAnimation()); if (playing) { paused = true; options.onDemoState && options.onDemoState('paused'); } },
-      nextStroke() {
-        if (!alive || options.phase !== 'watch') return;
-        paused = false; playing = true;
-        const run = ++demoRun;
-        const index = nextIndex; nextIndex = (nextIndex + 1) % data.strokes.length;
-        ready(() => { writer.resumeAnimation(); writer.animateStroke(index).then(() => demoDone(run)); });
-        options.onDemoState && options.onDemoState('playing');
-      },
       showHelp(kind) {
         if (quiz || practice && options.phase === 'recall' || guidedComplete || !alive) return;
         const expectedStroke = currentStroke;

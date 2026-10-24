@@ -4,20 +4,20 @@
     const A = root.BishunAssessment, F = root.BishunFreehand, C = root.BishunContent;
     const node = (tag, text = '', className = '') => { const el = document.createElement(tag); el.textContent = text; if (className) el.className = className; return el; };
     const panel = node('section', '', 'assessment-panel'); panel.id = 'assessment-view'; panel.hidden = true;
-    panel.setAttribute('aria-label', '自由書寫測驗'); document.body.append(panel);
+    panel.setAttribute('aria-label', '自由書寫小挑戰'); document.body.append(panel);
     let context = null, activeLocal = null, record = null, official = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0, segmentStart = null, pad = null, stopReplay = null, stopReview = null, expiryTimer = null, visible = false;
     const siblings = [...document.body.children].filter(el => el !== panel && el.tagName !== 'SCRIPT');
     function conceal(value) { for (const el of siblings) { el.inert = value; if (value) el.setAttribute('aria-hidden', 'true'); else el.removeAttribute('aria-hidden'); } }
-    function status(text) { const el = panel.querySelector('[data-status]'); if (el) el.textContent = text; }
+    function status(text) { const el = panel.querySelector('[data-status]'); if (el) el.textContent = text.replaceAll('測驗', '小挑戰'); }
     function current(owner, value) {
-      if (!owner || owner !== context || !visible) throw Object.assign(new Error('此測驗已關閉。'), { stale: true });
-      if (owner.expiresAt <= Date.now() || value?.expiresAt <= Date.now()) throw Object.assign(new Error('測驗已到期，請老師開新一班。'), { stale: true });
+      if (!owner || owner !== context || !visible) throw Object.assign(new Error('此小挑戰已關閉。'), { stale: true });
+      if (owner.expiresAt <= Date.now() || value?.expiresAt <= Date.now()) throw Object.assign(new Error('小挑戰已到期，請老師開新一班。'), { stale: true });
     }
     function armExpiry() {
       clearTimeout(expiryTimer); const owner = context;
       expiryTimer = setTimeout(async () => {
         if (owner !== context) return;
-        clock(false); context = null; busy = false; dispose(); record = null; official = null; shell('測驗已到期'); panel.append(message('請老師開新一班。')); footer(close);
+        clock(false); context = null; busy = false; dispose(); record = null; official = null; shell('小挑戰已到期'); panel.append(message('請老師開新一班。')); footer(close);
         try { await store.purge(Date.now()); } catch { if (!context && visible) status('原稿已停止顯示。裝置未能清理，恢復儲存後會再試。'); }
       }, Math.max(0, Math.min(owner.expiresAt, record?.expiresAt || owner.expiresAt) - Date.now()));
     }
@@ -53,7 +53,7 @@
         const submit = controls.querySelector('[data-submit]'); if (submit) submit.hidden = true;
       }
     }
-    function message(text) { const el = node('p', text, 'assessment-status'); el.setAttribute('role', 'status'); el.setAttribute('data-status', ''); return el; }
+    function message(text) { const el = node('p', text.replaceAll('測驗', '小挑戰'), 'assessment-status'); el.setAttribute('role', 'status'); el.setAttribute('data-status', ''); return el; }
     function shell(title) {
       dispose(); panel.replaceChildren();
       const heading = node('header', '', 'assessment-heading'); heading.append(node('h1', title));
@@ -72,7 +72,7 @@
     }
     async function close() { visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; official = null; activeLocal = null; onClose(); }
     function drawList() {
-      page = 'list'; shell(isChallenge() ? '情境小挑戰' : '測驗');
+      page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
       const list = node('div', '', 'assessment-choices');
       A.positions(record.run.assignment).forEach((position, index) => {
         const answer = record.run.answers[index], label = answer.status === 'draft' ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交';
@@ -81,7 +81,7 @@
         }));
       });
       panel.append(list, message(error));
-      if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份測驗', seal, 'primary large'));
+      if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
       footer(isChallenge() ? async () => { record = official; drawSummary(); } : close, isChallenge() ? '← 返回原卷' : '← 返回課程');
     }
     function drawWriting() {
@@ -92,7 +92,7 @@
       if (isChallenge()) {
         const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = '情境圖片'; photo.className = 'assessment-context'; controls.append(photo);
       }
-      controls.append(button('聽題目', () => speak(position, isChallenge())), button('休息一下', pause));
+      controls.append(button('聽題目', () => speak(position, isChallenge())));
       if (answer.status === 'draft') {
         pad = F.capture(paper, answer.strokes, stroke => {
           clock(!busy);
@@ -107,7 +107,7 @@
         };
         const submit = button('交答案', () => answerWith('submitted'), 'primary large'); submit.setAttribute('data-submit', '');
         controls.append(submit, button('暫時跳過', () => answerWith('skipped')),
-          button('撤回一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }));
+          button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }));
       } else {
         F.render(paper, answer.strokes); controls.append(node('p', answer.status === 'skipped' ? '已跳過，原筆跡保留。' : '已提交，等老師批改。'));
         controls.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }));
@@ -115,11 +115,6 @@
       controls.append(message(error)); showSaveRetry();
       footer(drawList, '← 返回選題');
       clock(true);
-    }
-    async function pause() {
-      page = 'paused'; shell('休息一下'); root.speechSynthesis?.cancel();
-      panel.append(button('繼續寫字', drawWriting, 'primary large'), message(error)); footer(drawList, '← 返回選題');
-      await persist();
     }
     async function seal() {
       const run = A.transition(record.run, { type: 'SEAL', elapsedMs: record.run.elapsedMs });
@@ -241,7 +236,7 @@
       const assignment = A.assignment(assigned.entries, assigned.mode), scope = joined ? 'class:' + joined.code + ':' + joined.memberId : 'local:' + JSON.stringify(assignment);
       const owner = Object.freeze({ scope, member: joined ? Object.freeze({ ...joined }) : null, expiresAt: joined?.expiresAt || Date.now() + 86400000, revisions: new Map() });
       visible = true; context = owner; activeLocal = null; busy = false; error = ''; record = null; official = null; pending = Promise.resolve(); segmentStart = null;
-      panel.hidden = false; conceal(true); shell('測驗'); panel.append(message('載入原稿…')); footer(close, '← 返回課程');
+      panel.hidden = false; conceal(true); shell('小挑戰'); panel.append(message('載入原稿…')); footer(close, '← 返回課程');
       armExpiry();
       try {
         await store.purge(); current(owner);

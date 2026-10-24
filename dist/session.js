@@ -138,6 +138,9 @@
           s.active = { phase: 'watch', occurrenceId: a.occurrenceId, token: event.newToken, strokeCount: a.strokeCount };
         } else s.active = { phase: 'choose-word' };
         return s;
+      case 'UNDO_STROKE':
+        if (!purposePractice || !['recall', 'guided'].includes(a.phase) || a.writingDone || !attempt || attempt.outcome !== 'active' || attempt.occurrenceId !== a.occurrenceId || a.currentStroke <= 0 || a.currentStroke >= a.strokeCount || event.strokeIndex !== a.currentStroke - 1 || typeof event.newToken !== 'string' || !event.newToken || event.newToken === a.token || s.attempts.some(item => item.id === event.newToken)) return state;
+        active.currentStroke--; active.missesOnCurrentStroke = 0; active.token = event.newToken; return s;
       case 'STROKE_ACCEPTED':
         if (!writing || a.writingDone || event.strokeIndex !== a.currentStroke || a.currentStroke >= a.strokeCount) return state;
         active.currentStroke++; active.missesOnCurrentStroke = 0; return s;

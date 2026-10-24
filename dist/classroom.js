@@ -18,7 +18,7 @@
       }
     } catch { storageOkay = false; }
     function persist() { try { storage.setItem(storageKey, JSON.stringify(saved)); storageOkay = true; } catch { storageOkay = false; } return storageOkay; }
-    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message, pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
+    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message: message.replaceAll('測驗', '小挑戰'), pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
     function notify() { changed(view()); }
     function invalidate() { generation++; controller?.abort(); controller = null; busy = false; }
     async function request(path, method = 'GET', value, token) {
@@ -48,29 +48,29 @@
         const token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join('');
         saved = { join: { code, body: { requestId: crypto.randomUUID(), alias, memberToken: token } } };
       }
-      if (!persist()) { message = '此瀏覽器未能保存參加身份，暫時不能加入班級。可以返回首頁做本機測驗。'; notify(); return; }
+      if (!persist()) { message = '此瀏覽器未能保存參加身份，暫時不能加入班級。可以返回首頁做本機小挑戰。'; notify(); return; }
       const pending = saved.join; message = '加入中…';
       try {
         const member = await request('/' + pending.code + '/members', 'POST', pending.body);
         if (!member || member.code !== pending.code || typeof member.memberId !== 'string' || typeof member.alias !== 'string' || !Number.isFinite(member.expiresAt)) throw new Error('班級回應無效，請重試。');
         validateAssignment(member.assignment);
-        saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始測驗。'; persist();
+        saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始小挑戰。'; persist();
       } catch (error) { if (error.stale) return; message = error.message || '班級服務未能連線。'; }
       notify();
     }
-    function continueMember() { if (saved.member) { accepted = true; message = saved.pending ? '上次測驗尚未交到班級榜，請重試交卷。' : '已確認參加身份。'; notify(); } }
+    function continueMember() { if (saved.member) { accepted = true; message = saved.pending ? '上次小挑戰尚未交到班級榜，請重試交卷。' : '已確認參加身份。'; notify(); } }
     function leave() { invalidate(); saved = {}; accepted = false; board = null; message = ''; persist(); notify(); }
     function bindRun(runId) {
-      if (!accepted || !saved.member || saved.pending || busy) throw new Error('請先確認身份，並交回上次測驗。');
+      if (!accepted || !saved.member || saved.pending || busy) throw new Error('請先確認身份，並交回上次小挑戰。');
       saved.boundRunId = runId; saved.receipt = null; board = null; message = '';
-      if (!persist()) throw new Error('此頁未能保存參加身份，請恢復瀏覽器儲存後再試，或返回首頁做本機測驗。');
+      if (!persist()) throw new Error('此頁未能保存參加身份，請恢復瀏覽器儲存後再試，或返回首頁做本機小挑戰。');
       notify();
     }
     async function retry() {
       if (!accepted || !saved.member || !saved.pending || busy) return;
       const member = saved.member, evidence = saved.pending;
-      if (!persist()) { message = '測驗已完成，但待交紀錄未能保存。請保持頁面開啟，恢復瀏覽器儲存後再重試。'; notify(); return; }
-      message = '交緊測驗紀錄…';
+      if (!persist()) { message = '小挑戰已完成，但待交紀錄未能保存。請保持頁面開啟，恢復瀏覽器儲存後再重試。'; notify(); return; }
+      message = '交緊小挑戰紀錄…';
       try {
         const receipt = await request('/' + member.code + '/runs/' + evidence.runId, 'PUT', evidence, member.token);
         if (receipt.runId !== evidence.runId || typeof receipt.ranked !== 'boolean') throw new Error('交卷回應無效，請重試。');
