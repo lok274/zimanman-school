@@ -4,6 +4,16 @@ Implementation date is 2026-10-24. Base was `b520f1cd4e9eb4409e3383e92a42857e138
 
 ## Implemented behavior
 
+## Release correction ownership plan
+
+The exclusive correction checkout starts at `58fdf1d`. Each open gets an immutable context containing its scope, member and expiry. Async continuations and store transactions must still own that context before mutating storage or the view. Expiry and close invalidate it. Historical review changes the displayed record without changing the active local pupil pointer.
+
+IndexedDB owns a per-record revision. Checkpoints compare and increment it in the same read-write transaction. A context tracks only revisions returned by its own successful writes, so queued strokes from one tab serialize while a stale second tab gets a visible conflict without replacing either original. Failed undo changes the visible draft first, and destructive navigation alone requires a successful checkpoint.
+
+The canonical assessment envelope owns its byte calculation, including worst-case terminal statuses and teacher timer space before locking a character. Publication uses one conditional SQL insert requiring at least one submitted original and no unmarked submitted originals. Existing publication remains live on regrade.
+
+The correction units are persistence and lifecycle, capacity and publication, then full-word challenge and tablet controls. Each unit gets ordering or boundary regressions before its commit. The final unit regenerates pages and service, runs the full suite and isolated real D1 smoke, and releases ownership for independent native verification. No new framework, dependency, plugin endpoint, background schedule or deployment is part of this correction checkout.
+
 New quizzes use the independent version 2 assessment model. Teacher choices are 看字寫 and 聽詞寫. Both accept actual free strokes, explicit per-character submission and skip with retained ink. Listen mode keeps the standard answer out of the visible and accessible pupil UI. It can speak the whole word, situation and ordinal. Submission remains pending until teacher shape marks exist.
 
 IndexedDB checkpoints original strokes and a sealed retry outbox. Keys include class, member and run. Navigation waits for storage. Failed storage leaves the current ink visible. Failed upload leaves the same sealed original for retry. Cold class visits require membership confirmation. Local resume restores the exact saved assignment and mode. Local next-pupil switching is explicit after sealing, preserves prior originals for teacher review, and excludes class caches from the local list.

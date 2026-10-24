@@ -13,8 +13,9 @@
       });
       return opening;
     }
-    async function transaction(mode, operation) {
+    async function transaction(mode, operation, guard = () => {}) {
       const db = await database();
+      guard();
       return new Promise((resolve, reject) => {
         const tx = db.transaction('records', mode), request = operation(tx.objectStore('records'));
         tx.oncomplete = () => resolve(request?.result);
@@ -26,22 +27,29 @@
       if (value && value.expiresAt <= now) { await remove(key); return null; }
       return value || null;
     }
-    async function put(value) {
+    async function put(value, guard = () => {}) {
       const snapshot = structuredClone(value);
       const db = await database();
+      guard();
       return new Promise((resolve, reject) => {
-        const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'), request = store.get(snapshot.key); let conflict = false;
+        const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'), request = store.get(snapshot.key); let failure;
         request.onsuccess = () => {
-          if (request.result?.run?.phase === 'sealed' && JSON.stringify(request.result.run) !== JSON.stringify(snapshot.run)) { conflict = true; tx.abort(); return; }
-          store.put(snapshot);
+          try {
+            guard();
+            if (snapshot.expiresAt <= Date.now()) throw new Error('測驗已到期。');
+            if (request.result?.run?.phase === 'sealed' && JSON.stringify(request.result.run) !== JSON.stringify(snapshot.run)) throw new Error('原卷已封存，請重新開啟原卷。');
+            if ((request.result?.revision || 0) !== (snapshot.revision || 0)) throw new Error('另一分頁已更新原稿。眼前筆跡仍保留，請勿關頁，請老師協助。');
+            snapshot.revision = (snapshot.revision || 0) + 1;
+            store.put(snapshot);
+          } catch (problem) { failure = problem; tx.abort(); }
         };
-        tx.oncomplete = () => resolve();
-        tx.onabort = tx.onerror = () => reject(conflict ? new Error('原卷已封存，請重新開啟原卷。') : tx.error || new Error('原稿未能保存，請保持頁面開啟再試。'));
+        tx.oncomplete = () => resolve(snapshot);
+        tx.onabort = tx.onerror = () => reject(failure || tx.error || new Error('原稿未能保存，請保持頁面開啟再試。'));
       });
     }
-    function putMany(values) {
+    function putMany(values, guard) {
       const snapshots = structuredClone(values);
-      return transaction('readwrite', store => { for (const value of snapshots) store.put(value); });
+      return transaction('readwrite', store => { for (const value of snapshots) store.put(value); }, guard);
     }
     function remove(key) { return transaction('readwrite', store => store.delete(key)); }
     async function localOriginals() {
@@ -59,19 +67,22 @@
         request.onsuccess = () => { if (request.result?.runKey === runKey) store.delete(scope); };
       });
     }
-    async function initialize(scope, candidate) {
+    async function initialize(scope, candidate, guard = () => {}) {
       const db = await database(), snapshot = structuredClone(candidate);
+      guard();
       return new Promise((resolve, reject) => {
-        const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'); let saved;
+        const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'); let saved, failure;
         const pointer = store.get(scope);
-        function insert() { saved = snapshot; store.put(saved); store.put({ key: scope, runKey: saved.key, expiresAt: saved.expiresAt }); }
+        function valid() { try { guard(); if (snapshot.expiresAt <= Date.now()) throw new Error('測驗已到期。'); return true; } catch (problem) { failure = problem; tx.abort(); return false; } }
+        function insert() { if (!valid()) return; saved = { ...snapshot, revision: 1 }; store.put(saved); store.put({ key: scope, runKey: saved.key, expiresAt: saved.expiresAt }); }
         pointer.onsuccess = () => {
+          if (!valid()) return;
           if (!pointer.result || pointer.result.expiresAt <= Date.now()) { insert(); return; }
           const existing = store.get(pointer.result.runKey);
-          existing.onsuccess = () => { if (existing.result) saved = existing.result; else insert(); };
+          existing.onsuccess = () => { if (!valid()) return; if (existing.result?.expiresAt > Date.now()) saved = existing.result; else insert(); };
         };
         tx.oncomplete = () => resolve(saved);
-        tx.onabort = tx.onerror = () => reject(tx.error || new Error('原稿未能保存。'));
+        tx.onabort = tx.onerror = () => reject(failure || tx.error || new Error('原稿未能保存。'));
       });
     }
     async function purge(now = Date.now()) {
