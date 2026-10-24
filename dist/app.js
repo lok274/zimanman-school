@@ -206,7 +206,7 @@
     const labels = soundEnabled ? ['完成提示聲：開', '音效已啟用', '有聲慶祝'] : ['完成提示聲：關', '靜音', '不播放聲效'];
     const notes = audioStatus === 'blocked' ? ['裝置未能播放，畫面回饋照常。', '聲效暫時用唔到，仍可繼續寫。', '可以安靜練習，圖示會保留。']
       : audioStatus === 'preparing' ? ['聲效準備中，畫面回饋照常。', '等裝置開啟音效，仍可繼續寫。', '暫時安靜練習，圖示會保留。']
-      : ['寫好一個字，先有短聲。', '做妥今次書寫才響起。', '達成後播放提示。'];
+      : [''];
     const label = safeText(labels), note = safeText(notes);
     if ($('feedback-sound').textContent !== label) $('feedback-sound').textContent = label;
     $('feedback-sound').setAttribute('aria-pressed', String(soundEnabled));
@@ -265,6 +265,7 @@
     const label = localMode === 'quiz' ? '測驗' : '練習';
     const page = curriculumPages[curriculumLevel];
     $('group-title').textContent = page ? page.title : label;
+    $('group-title').classList.toggle('sr-only', curriculumLevel < curriculumPages.length - 1);
     $('group-home').textContent = page ? page.back : '返回首頁';
     $('group-cards').classList.toggle('curriculum-cards', !!page?.label);
     const container = $('group-cards'); container.replaceChildren();
@@ -280,6 +281,7 @@
       button.addEventListener('click', () => localMode === 'quiz' && assessment ? startLocalAssessment(group) : startSession(sessionCandidate(localMode, group, selected))); container.append(button);
     });
   }
+  function defaultPurpose(word) { return C.purposes?.[word.text] ? 'label' : null; }
   function renderChoices() {
     $('choose-title').textContent = state.mode === 'quiz' ? '測驗：想先寫邊個字？' : '練習：想先寫邊個字？';
     const container = $('word-cards'); container.replaceChildren();
@@ -293,14 +295,14 @@
       const content = textNode('span', '', 'word-name'); renderWordLabel(content, word, target.index);
       button.append(content, visualCue(word.text));
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
-      button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id })); container.append(button);
+      button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id, purpose: defaultPurpose(word) })); container.append(button);
     });
     $('choice-summary').textContent = localMode ? '返回揀組別' : '返回首頁';
   }
   function renderWorkCard(element, word) {
     element.replaceChildren();
     const choice = state.wordChoices[word.id], context = C.purposes?.[word.text];
-    element.append(textNode('h2', context ? choice.purpose === 'intro' ? '做介紹' : context.label : '我嘅詞語作品'));
+    element.append(textNode('h2', context ? choice.purpose === 'intro' ? '做介紹' : context.label : '我嘅詞語作品', 'sr-only'));
     const sentence = textNode('div', '', 'work-sentence');
     if (choice.purpose === 'intro' && context) sentence.append(textNode('span', context.intro[0], 'sentence-context'));
     const wordInk = textNode('div', '', 'work-word'); wordInk.style.setProperty('--word-length', word.characters.length);
@@ -321,20 +323,18 @@
     } else element.append(sentence);
   }
   function renderTask() {
-    const a = state.active, word = currentWord(), context = C.purposes?.[word.text];
-    $('task-picture').replaceChildren(); $('task-options').replaceChildren(); $('work-card').replaceChildren();
+    const a = state.active, word = currentWord();
+    $('task-options').replaceChildren(); $('work-card').replaceChildren();
     $('work-card').hidden = a.phase !== 'word-complete'; $('task-next').hidden = a.phase !== 'word-complete';
     if (a.phase === 'word-complete') {
       $('task-title').textContent = '我嘅作品'; renderWorkCard($('work-card'), word);
       $('task-next').textContent = state.occurrences.every(item => state.finished.includes(item.id)) ? '睇今次紀錄 →' : '揀下一個詞語 →'; return;
     }
-    if (a.phase === 'choose-purpose' && !context) { event('CHOOSE_PURPOSE', { purpose: null }); return; }
-    $('task-title').textContent = a.phase === 'choose-purpose' ? '想用嚟做乜？' : '想點樣寫？';
-    if (a.phase === 'choose-purpose') $('task-picture').append(visualCue(word.text));
-    const choices = a.phase === 'choose-purpose' ? [['label', '做標籤', context.label], ['intro', '做介紹', context.intro.join(word.text)]] : [['independent', '自己寫', '聽題目，自己試'], ['guided', '跟住寫', '睇提示，跟住寫']];
-    choices.forEach(([value, title, caption]) => {
-      const button = textNode('button', '', 'task-option'); button.append(textNode('strong', title), textNode('span', caption));
-      button.addEventListener('click', () => event(a.phase === 'choose-purpose' ? 'CHOOSE_PURPOSE' : 'CHOOSE_ROUTE', a.phase === 'choose-purpose' ? { purpose: value } : { route: value }));
+    $('task-title').textContent = '想點樣寫？';
+    const choices = [['independent', '自己寫'], ['guided', '跟住寫']];
+    choices.forEach(([route, title]) => {
+      const button = textNode('button', '', 'task-option'); button.append(textNode('strong', title));
+      button.addEventListener('click', () => event('CHOOSE_ROUTE', { route, purpose: defaultPurpose(word) }));
       $('task-options').append(button);
     });
   }
@@ -361,7 +361,7 @@
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary || task; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
     $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回睇筆順'] : ['← 返回選字']);
-    if (state.version === 4) $('previous-step').textContent = a.phase === 'guided' ? '← 返回睇筆順' : a.phase === 'character-complete' ? '← 返回跟寫' : ['recall', 'loading', 'unavailable', 'word-complete'].includes(a.phase) ? '← 返回揀寫法' : a.phase === 'choose-route' && state.wordChoices[a.wordId]?.purpose !== null ? '← 返回揀用途' : '← 返回選字';
+    if (state.version === 4) $('previous-step').textContent = a.phase === 'guided' ? '← 返回睇筆順' : a.phase === 'character-complete' ? '← 返回跟寫' : ['recall', 'loading', 'unavailable', 'word-complete'].includes(a.phase) ? '← 返回揀寫法' : '← 返回選字';
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
     $('practice-tools-label').textContent = safeText(['更多工具', '其他選項', '開啟功能']);
