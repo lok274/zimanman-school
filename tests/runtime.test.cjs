@@ -1625,6 +1625,12 @@ test('student menus remove generic descriptions and keep privacy notices', () =>
   assert.equal(e.$('rest'), undefined); assert(e.$('class-storage').textContent.includes('可能遺失'));
 });
 
+test('every built-in word has a daily-life use for the record page', () => {
+  const context = {}; vm.runInNewContext(source('content.js'), context);
+  assert.deepEqual(Object.keys(context.BishunContent.uses), Array.from(context.BishunContent.words));
+  Object.values(context.BishunContent.uses).forEach(use => assert.match(use, /。$/));
+});
+
 test('v4 partial repeated word cards mark supplied, skipped and unavailable slots without substitutions', async () => {
   const e = await purposeApp('推來推去', [0,2], { choice: { purpose: 'intro', route: null } }); await e.enter('guided'); await e.finish();
   const originalAttempt = currentSession.summarize(e.snapshot())[0].completedAttemptId;
@@ -1648,7 +1654,8 @@ test('v4 custom word stays generic and teacher tools do not reveal writing hints
   await e.enter(); e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].help.length, 0); assert.equal(e.$('teacher-dialog').open, true); assert.equal(e.$('teacher-words').value.length > 0, true);
   e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); await e.finish();
   assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); e.$('main-next').click(); assert(e.$('work-card').textContent.includes('我的詞語作品')); assert.equal(walk(e.$('work-card')).filter(node => node.nodeName === 'img').length, 0);
-  assert(!visibleText(e.document).includes('我的詞語作品'));
+  assert(!visibleText(e.document).includes('我的詞語作品')); e.$('task-next').click();
+  assert(e.$('summary-rows').textContent.includes('生活用途：描述生活中的事物或動作。'));
 });
 
 test('independent writing keeps the complete target word without stroke hints and uses the shorter record title', async () => {
@@ -1668,6 +1675,7 @@ test('independent writing keeps the complete target word without stroke hints an
   assert.equal(e.$('summary-title').textContent, '我的紀錄');
   assert(!e.$('summary-stats').textContent.includes('老師協助跳過')); assert(!e.$('summary-stats').textContent.includes('待練字次'));
   assert(!e.$('summary-rows').textContent.includes('無提示完成')); assert(!walk(e.$('summary-rows')).some(node => node.className === 'attempt-detail'));
+  assert(e.$('summary-rows').textContent.includes('生活用途：描述繩子、樹幹等物件的粗幼。'));
 });
 
 test('v4 Back retries the completed occurrence and work-card Back retries its last position', async () => {

@@ -101,3 +101,4 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 
 .v4-practice.simplified-practice .semantic-cue{display:block;width:60px;flex:none}.v4-practice .semantic-cue .word-photo,.v4-practice .semantic-cue svg{display:block;width:60px;height:60px;margin:0;padding:0}.simplified-practice .speech-button{width:60px;min-width:60px;height:60px;min-height:60px;padding:12px;justify-content:center}.speech-button:focus-visible{outline:3px solid #bf6c36;outline-offset:3px}#undo-stroke,#reload-writer{min-height:64px;width:100%;font-size:22px}
 .summary-stats{grid-template-columns:repeat(2,1fr)}
+.work-use{margin:10px 0 0;font-size:18px;font-weight:700;color:var(--green)}
