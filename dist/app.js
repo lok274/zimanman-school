@@ -511,7 +511,7 @@
       });
       if (snapshot.version === 4 && snapshot.wordChoices[word.id]) {
         const card = textNode('div', '', 'work-card summary-work'); renderWorkCard(card, word);
-        card.append(textNode('p', '生活用途：' + (C.uses?.[word.text] || '描述生活中的事物或動作。'), 'work-use')); div.append(card);
+        div.append(card);
       }
       list.append(div);
     });
