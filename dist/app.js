@@ -291,9 +291,9 @@
       const row = rows.find(item => item.wordId === word.id && item.index === index), slot = textNode('div', '', 'work-slot'), ink = textNode('div', '', 'work-glyph');
       let label;
       if (!row) { ink.textContent = character; label = '配字'; }
-      else if (row.completedAttemptId && W.renderOriginal(ink, { sessionId: state.id, occurrenceId: row.id, attemptId: row.completedAttemptId })) label = '我寫嘅';
+      else if (row.completedAttemptId && W.renderOriginal(ink, { sessionId: state.id, occurrenceId: row.id, attemptId: row.completedAttemptId })) label = '';
       else { ink.textContent = '□'; label = row.completedAttemptId ? '筆跡未能顯示' : row.skipped ? '已略過' : '未完成'; }
-      slot.append(ink, textNode('span', label, 'work-label')); wordInk.append(slot);
+      slot.append(ink); if (label) slot.append(textNode('span', label, 'work-label')); wordInk.append(slot);
     });
     sentence.append(wordInk);
     if (choice.purpose === 'intro' && context) sentence.append(textNode('span', context.intro[1], 'sentence-context'));
@@ -496,7 +496,7 @@
     return false;
   }
   function renderSummary(snapshot) {
-    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次小挑戰完成紀錄' : '每一步，都記低咗。';
+    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次小挑戰完成紀錄' : '我的紀錄';
     const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = '自己寫'; stats.replaceChildren();
     const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length], ['老師協助跳過', rows.filter(r => r.skipped && !r.independent && !r.assisted).length], ['待練字次', rows.filter(r => r.unfinished).length]];
     groups.forEach(([label, n]) => { const div = textNode('div', '', 'stat'); div.append(textNode('b', String(n)), textNode('span', label)); stats.append(div); });

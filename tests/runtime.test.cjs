@@ -1617,7 +1617,8 @@ test('v4 partial repeated word cards mark supplied, skipped and unavailable slot
   e.$('teacher-open').click(); e.$('teacher-skip').click(); e.$('main-next').click();
   assert.equal(e.snapshot().active.phase, 'word-complete');
   const labels = walk(e.$('work-card')).filter(node => node.className === 'work-label').map(node => node.textContent);
-  assert.deepEqual(labels, ['我寫嘅', '配字', '已略過', '配字']); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 1);
+  assert.deepEqual(labels, ['配字', '已略過', '配字']); assert.equal(walk(e.$('work-card')).filter(node => node.className === 'original-ink').length, 1);
+  assert(!e.$('work-card').textContent.includes('我寫嘅'));
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'img').attributes.src, 'images/push-block.webp');
   const context = walk(e.$('work-card')).filter(node => node.className === 'sentence-context').map(node => node.textContent); assert.deepEqual(context, ['我將積木', '。']);
   e.context.BishunWriting.resetPractice(null); e.$('teacher-open').click(); e.$('teacher-close').click();
@@ -1630,6 +1631,18 @@ test('v4 custom word stays generic and teacher tools do not reveal writing hints
   e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); await e.finish();
   assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert(e.$('work-card').textContent.includes('我嘅詞語作品')); assert.equal(walk(e.$('work-card')).filter(node => node.nodeName === 'img').length, 0);
   assert(!visibleText(e.document).includes('我嘅詞語作品'));
+});
+
+test('independent writing keeps the complete target word without stroke hints and uses the shorter record title', async () => {
+  const e = await purposeApp('粗'); await e.enter();
+  assert.equal(e.snapshot().active.phase, 'recall');
+  assert.equal(e.$('word-title').textContent, '粗');
+  assert.equal(e.$('practice-title').textContent, '自己寫');
+  assert.equal(e.$('practice-instruction').hidden, true);
+  assert.equal(e.$('writer').getAttribute('aria-label'), '無字形提示嘅書寫格');
+  assert(!walk(e.$('writer')).some(node => node.className === 'stroke-direction' && node.style.display !== 'none'));
+  await e.finish(); e.$('main-next').click(); e.$('task-next').click();
+  assert.equal(e.$('summary-title').textContent, '我的紀錄');
 });
 
 test('v4 Back retries the completed occurrence and work-card Back retries its last position', async () => {
