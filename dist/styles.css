@@ -100,3 +100,4 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 @media(orientation:portrait){.work-card-body{grid-template-columns:minmax(0,1fr);gap:8px}.work-card-body>.word-photo,.work-card-body>svg{width:min(220px,25svh);justify-self:center}}
 
 .v4-practice.simplified-practice .semantic-cue{display:block;width:60px;flex:none}.v4-practice .semantic-cue .word-photo,.v4-practice .semantic-cue svg{display:block;width:60px;height:60px;margin:0;padding:0}.simplified-practice .speech-button{width:60px;min-width:60px;height:60px;min-height:60px;padding:12px;justify-content:center}.speech-button:focus-visible{outline:3px solid #bf6c36;outline-offset:3px}#undo-stroke,#reload-writer{min-height:64px;width:100%;font-size:22px}
+.summary-stats{grid-template-columns:repeat(2,1fr)}

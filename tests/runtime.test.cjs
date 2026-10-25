@@ -1666,6 +1666,8 @@ test('independent writing keeps the complete target word without stroke hints an
   assert(target.every(node => Number(node.style.opacity) > 0), 'the complete target glyph stays visible after writing starts');
   await e.finish(); e.$('main-next').click(); e.$('task-next').click();
   assert.equal(e.$('summary-title').textContent, '我的紀錄');
+  assert(!e.$('summary-stats').textContent.includes('老師協助跳過')); assert(!e.$('summary-stats').textContent.includes('待練字次'));
+  assert(!e.$('summary-rows').textContent.includes('無提示完成')); assert(!walk(e.$('summary-rows')).some(node => node.className === 'attempt-detail'));
 });
 
 test('v4 Back retries the completed occurrence and work-card Back retries its last position', async () => {
