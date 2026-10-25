@@ -13,6 +13,11 @@
     { title: '2上1', label: '第一課《爸爸的鬍鬚》', back: '返回課本' },
     { title: '第一課《爸爸的鬍鬚》', back: '返回課文' }
   ];
+  const gradeChoices = [
+    { label: '一年級', available: false }, { label: '二年級', available: true },
+    { label: '三年級', available: false }, { label: '四年級', available: false },
+    { label: '五年級', available: false }, { label: '六年級', available: false }
+  ];
   let state = null, localMode = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   let feedback = null, feedbackAnimation = null;
   let speechKey = '', speechGeneration = 0;
@@ -248,7 +253,18 @@
     $('group-title').classList.toggle('sr-only', curriculumLevel < curriculumPages.length - 1);
     $('group-home').textContent = page ? page.back : '返回首頁';
     $('group-cards').classList.toggle('curriculum-cards', !!page?.label);
+    $('group-cards').classList.toggle('grade-cards', curriculumLevel === 0);
     const container = $('group-cards'); container.replaceChildren();
+    if (curriculumLevel === 0) {
+      gradeChoices.forEach(choice => {
+        const button = document.createElement('button'); button.className = 'mode-card'; button.disabled = !choice.available;
+        button.append(textNode('strong', choice.label));
+        if (choice.available) button.addEventListener('click', () => { curriculumLevel++; render(); });
+        else button.setAttribute('aria-label', choice.label + '，尚未開放');
+        container.append(button);
+      });
+      return;
+    }
     if (page?.label) {
       const button = document.createElement('button'); button.className = 'mode-card';
       button.append(textNode('strong', page.label));
