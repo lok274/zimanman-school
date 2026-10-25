@@ -676,6 +676,24 @@ test('pinned vendor keeps one pointer-end listener pair across repeated mounts a
   assert.equal(element.style.visibility, 'hidden');
   assert.equal(e.document.listeners.mouseup.length + e.document.listeners.touchend.length, 2);
 });
+test('independent writing rejects a centred half-stroke instead of completing the character', async () => {
+  const e = environment();
+  vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context);
+  vm.runInContext(source('writing.js'), e.context);
+  const events = [], data = { strokes: ['M 100 500 L 900 500 Z'], medians: [[[100, 500], [900, 500]]] };
+  const identity = { sessionId: 'short', occurrenceId: 'w0:0', attemptId: 'one' };
+  e.context.BishunWriting.resetPractice(identity.sessionId);
+  const handle = e.context.BishunWriting.mount(e.$('writer'), '一', data, { phase: 'recall', token: 'short-stroke', identity, onEvent: (event, editInk) => { if (editInk && !editInk(() => true)) return false; events.push(event); return true; } });
+  await waitFor(() => e.$('writer').style.visibility === '');
+  const svg = e.$('writer').childNodes.find(node => node.nodeName === 'svg');
+  const transform = e.context.HanziWriter.getScalingTransform(360, 360, 24);
+  const point = x => ({ clientX: transform.x + x * transform.scale, clientY: 360 - transform.y - 500 * transform.scale });
+  svg.emit('mousedown', point(330)); for (let x = 370; x <= 670; x += 50) svg.emit('mousemove', point(x)); e.document.emit('mouseup');
+  await new Promise(resolve => setImmediate(resolve));
+  assert(events.some(event => event.type === 'STROKE_MISSED'), JSON.stringify(events));
+  assert(!events.some(event => event.type === 'STROKE_ACCEPTED' || event.type === 'WRITING_COMPLETE'));
+  handle.dispose();
+});
 async function quizApp({ autoReady = true, failMount = false } = {}) {
   const e = environment(source('index.html')); e.mounts = []; e.clock = 100;
   e.context.performance = { now: () => e.clock };

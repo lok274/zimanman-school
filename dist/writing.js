@@ -215,7 +215,7 @@
       if (practice && options.phase === 'recall' || guidedComplete && !practice) await writer.showCharacter({ duration: 0 });
       if (!alive) return;
       writer.updateDimensions({ width: size, height: size, padding: 24 }); placeStart();
-      if (!suspended && !guidedComplete && ['guided', 'recall', 'quiz'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke,
+      if (!suspended && !guidedComplete && ['guided', 'recall', 'quiz'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke, leniency: practice ? options.phase === 'recall' ? 0.9 : 1 : 1.65,
         onCorrectStroke: event => { if (!current()) return;
           if (quiz || practice) {
             const points = event.drawnPath && event.drawnPath.points;
