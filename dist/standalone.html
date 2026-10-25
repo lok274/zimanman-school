@@ -217,7 +217,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
       </div>
     </section>
     <section id="summary-view" class="summary-view" hidden aria-labelledby="summary-title">
-      <h1 id="summary-title">每一步，都記低咗。</h1>
+      <h1 id="summary-title">我的紀錄</h1>
       <div id="summary-stats" class="summary-stats"></div><div id="summary-rows" class="summary-rows"></div>
       <section id="quiz-results" class="quiz-results" hidden aria-labelledby="quiz-results-title"><h2 id="quiz-results-title">全份小挑戰成績</h2><p id="quiz-result-score"></p><p id="personal-best"></p><p id="class-result-status" role="status"></p><button id="class-retry" class="button secondary" hidden>重試交卷</button><a id="class-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><button id="class-again" class="button primary" hidden>再做同一份小挑戰</button></section>
       <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">返回首頁 <span aria-hidden="true">→</span></button></div>
@@ -1954,9 +1954,9 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const row = rows.find(item => item.wordId === word.id && item.index === index), slot = textNode('div', '', 'work-slot'), ink = textNode('div', '', 'work-glyph');
       let label;
       if (!row) { ink.textContent = character; label = '配字'; }
-      else if (row.completedAttemptId && W.renderOriginal(ink, { sessionId: state.id, occurrenceId: row.id, attemptId: row.completedAttemptId })) label = '我寫嘅';
+      else if (row.completedAttemptId && W.renderOriginal(ink, { sessionId: state.id, occurrenceId: row.id, attemptId: row.completedAttemptId })) label = '';
       else { ink.textContent = '□'; label = row.completedAttemptId ? '筆跡未能顯示' : row.skipped ? '已略過' : '未完成'; }
-      slot.append(ink, textNode('span', label, 'work-label')); wordInk.append(slot);
+      slot.append(ink); if (label) slot.append(textNode('span', label, 'work-label')); wordInk.append(slot);
     });
     sentence.append(wordInk);
     if (choice.purpose === 'intro' && context) sentence.append(textNode('span', context.intro[1], 'sentence-context'));
@@ -2159,7 +2159,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     return false;
   }
   function renderSummary(snapshot) {
-    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次小挑戰完成紀錄' : '每一步，都記低咗。';
+    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次小挑戰完成紀錄' : '我的紀錄';
     const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = '自己寫'; stats.replaceChildren();
     const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length], ['老師協助跳過', rows.filter(r => r.skipped && !r.independent && !r.assisted).length], ['待練字次', rows.filter(r => r.unfinished).length]];
     groups.forEach(([label, n]) => { const div = textNode('div', '', 'stat'); div.append(textNode('b', String(n)), textNode('span', label)); stats.append(div); });
