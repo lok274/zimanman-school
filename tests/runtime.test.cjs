@@ -1652,14 +1652,14 @@ test('v4 custom word stays generic and teacher tools do not reveal writing hints
 });
 
 test('independent writing keeps the complete target word without stroke hints and uses the shorter record title', async () => {
-  const e = await purposeApp('粗'); let shown = 0; const showCharacter = e.context.HanziWriter.prototype.showCharacter;
-  e.context.HanziWriter.prototype.showCharacter = function(...args) { shown++; return showCharacter.apply(this, args); };
-  await e.enter(); assert.equal(shown, 1);
+  const e = await purposeApp('粗'); await e.enter();
   assert.equal(e.snapshot().active.phase, 'recall');
   assert.equal(e.$('word-title').textContent, '粗');
   assert.equal(e.$('practice-title').textContent, '自己寫');
   assert.equal(e.$('practice-instruction').hidden, true);
   assert.equal(e.$('writer').getAttribute('aria-label'), '沒有字形提示的書寫格');
+  const target = walk(e.$('writer')).filter(node => node.nodeName === 'path' && Object.values(node.attributes).includes('rgba(174,185,176,1)'));
+  assert(target.length > 0, 'the complete target glyph is visibly rendered');
   assert(!walk(e.$('writer')).some(node => node.className === 'stroke-direction' && node.style.display !== 'none'));
   await e.finish(); e.$('main-next').click(); e.$('task-next').click();
   assert.equal(e.$('summary-title').textContent, '我的紀錄');
