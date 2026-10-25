@@ -497,8 +497,8 @@
   }
   function renderSummary(snapshot) {
     $('summary-title').textContent = snapshot.mode === 'quiz' ? '本次小挑戰完成紀錄' : '我的紀錄';
-    const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = '自己寫'; stats.replaceChildren();
-    const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length], ['老師協助跳過', rows.filter(r => r.skipped && !r.independent && !r.assisted).length], ['待練字次', rows.filter(r => r.unfinished).length]];
+    const rows = S.summarize(snapshot), stats = $('summary-stats'); stats.replaceChildren();
+    const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length]];
     groups.forEach(([label, n]) => { const div = textNode('div', '', 'stat'); div.append(textNode('b', String(n)), textNode('span', label)); stats.append(div); });
     const list = $('summary-rows'); list.replaceChildren();
     snapshot.entries.forEach(word => {
@@ -507,12 +507,7 @@
         const line = textNode('div', '', 'char-record'), text = document.createElement('span');
         const label = row.independent ? '自己完成' : row.assisted ? '有提示完成' : row.skipped ? '老師協助跳過' : row.guided ? '完成引導練習 · 自己寫待練' : '待練';
         text.append(textNode('span', '第 ' + (row.index + 1) + ' 字 · ' + label, 'record-label'));
-        const attempts = row.attempts.map((attempt, index) => {
-          const phase = attempt.phase === 'quiz' ? '小挑戰' : attempt.phase === 'guided' ? '引導' : attempt.phase === 'recall' ? recallLabel : '老師';
-          const outcome = attempt.outcome === 'complete' ? attempt.phase === 'recall' && !attempt.help.length ? '無提示完成' : '完成' : attempt.outcome === 'skipped' ? '協助跳過' : attempt.outcome === 'abandoned' ? '未完成／重新試' : '未完成';
-          return (index + 1) + '. ' + phase + outcome + (attempt.help.length ? '，提示 ' + attempt.help.length + ' 次' : '');
-        }).join('；');
-        text.append(textNode('span', attempts || '今節尚未練習', 'attempt-detail')); line.append(textNode('strong', row.character), text); detail.append(line);
+        line.append(textNode('strong', row.character), text); detail.append(line);
       });
       if (snapshot.version === 4 && snapshot.wordChoices[word.id]) { const card = textNode('div', '', 'work-card summary-work'); renderWorkCard(card, word); div.append(card); }
       list.append(div);
