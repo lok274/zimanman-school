@@ -95,7 +95,8 @@ function visibleText(document) {
 }
 function openLocalGroups(e, mode = 'practice') {
   e.$('start-' + mode).click();
-  for (let level = 0; level < 3; level++) e.$('group-cards').childNodes[0].click();
+  e.$('group-cards').childNodes[1].click();
+  for (let level = 1; level < 3; level++) e.$('group-cards').childNodes[0].click();
 }
 function startLocal(e, mode = 'practice', group = 0) { openLocalGroups(e, mode); e.$('group-cards').childNodes[group].click(); }
 function markedPosition(element) { return element.childNodes.findIndex(node => node.getAttribute('aria-current') === 'true'); }
@@ -1261,7 +1262,14 @@ for (const mode of ['practice', 'quiz']) {
     const titles = ['選擇年級', '二年級', '2上1'];
     const backs = ['返回首頁', '返回年級', '返回課本'];
     e.$('start-' + mode).click();
-    labels.forEach((label, index) => {
+    const grades = ['一年級', '二年級', '三年級', '四年級', '五年級', '六年級'];
+    assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), grades);
+    assert.deepEqual(e.$('group-cards').childNodes.map(card => card.disabled), [true, false, true, true, true, true]);
+    assert.equal(e.$('group-cards').childNodes[0].getAttribute('aria-label'), '一年級，尚未開放');
+    e.$('group-cards').childNodes[0].click(); assert.equal(e.$('group-title').textContent, titles[0]);
+    e.$('group-cards').childNodes[1].click();
+    labels.slice(1).forEach((label, offset) => {
+      const index = offset + 1;
       assert.equal(e.$('group-cards').childNodes.length, 1);
       assert.equal(e.$('group-cards').childNodes[0].textContent, label);
       assert.equal(e.$('group-title').textContent, titles[index]);
@@ -1276,13 +1284,15 @@ for (const mode of ['practice', 'quiz']) {
     const label = mode === 'quiz' ? '小挑戰' : '練習';
     assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), [label + '1推來推去', label + '2']);
     assert.equal(e.$('group-home').textContent, '返回課文');
-    for (let index = labels.length - 1; index >= 0; index--) {
+    for (let index = labels.length - 1; index >= 1; index--) {
       e.$('group-home').click();
       assert.equal(e.$('group-cards').childNodes.length, 1);
       assert.equal(e.$('group-cards').childNodes[0].textContent, labels[index]);
       assert.equal(e.$('group-title').textContent, titles[index]);
       assert.equal(e.$('group-home').textContent, backs[index]);
     }
+    e.$('group-home').click(); assert.deepEqual(e.$('group-cards').childNodes.map(card => card.textContent), grades);
+    assert.equal(e.$('group-title').textContent, titles[0]); assert.equal(e.$('group-home').textContent, backs[0]);
     e.$('group-home').click(); assert.equal(e.$('home-view').hidden, false);
     assert(!e.document.body.className.includes('menu-view'));
     assert.equal(writes, 0); assert.equal(e.store.size, 0);
@@ -1295,23 +1305,23 @@ for (const mode of ['practice', 'quiz']) {
 
   test(mode + ' brand and teacher apply reset curriculum browsing while keeping applied custom character positions', async () => {
     const e = await quizApp();
-    e.$('start-' + mode).click(); e.$('group-cards').childNodes[0].click();
+    e.$('start-' + mode).click(); e.$('group-cards').childNodes[1].click();
     e.document.querySelector('.brand').click();
     assert.equal(e.$('home-view').hidden, false); assert.equal(e.document.querySelector('.brand').getAttribute('aria-label'), '寫字樂首頁');
-    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
-    e.$('group-cards').childNodes[0].click(); e.$('teacher-open').click();
+    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[1].textContent, '二年級');
+    e.$('group-cards').childNodes[1].click(); e.$('teacher-open').click();
     e.$('teacher-words').value = '朋友朋'; e.$('validate-words').click(); chooseCharacters(e, ['w0:2']); e.$('apply-words').click();
     assert.equal(e.$('home-view').hidden, false); assert.equal(e.store.size, 0);
-    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
+    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[1].textContent, '二年級');
     e.document.querySelector('.brand').click(); startLocal(e, mode);
     assert.deepEqual(e.snapshot().entries.map(word => word.text), ['朋友朋']);
     assert.deepEqual(e.snapshot().occurrences.map(item => item.index), [2]);
     e.$('new-session').click(); assert.equal(e.$('home-view').hidden, false);
     const otherMode = mode === 'quiz' ? 'practice' : 'quiz';
-    e.$('start-' + otherMode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
-    e.$('group-cards').childNodes[0].click();
+    e.$('start-' + otherMode).click(); assert.equal(e.$('group-cards').childNodes[1].textContent, '二年級');
+    e.$('group-cards').childNodes[1].click();
     e.document.querySelector('.brand').click();
-    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[0].textContent, '二年級');
+    e.$('start-' + mode).click(); assert.equal(e.$('group-cards').childNodes[1].textContent, '二年級');
   });
 }
 

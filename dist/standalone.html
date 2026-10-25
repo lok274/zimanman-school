@@ -109,6 +109,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 
 .v4-practice.simplified-practice .semantic-cue{display:block;width:60px;flex:none}.v4-practice .semantic-cue .word-photo,.v4-practice .semantic-cue svg{display:block;width:60px;height:60px;margin:0;padding:0}.simplified-practice .speech-button{width:60px;min-width:60px;height:60px;min-height:60px;padding:12px;justify-content:center}.speech-button:focus-visible{outline:3px solid #bf6c36;outline-offset:3px}#undo-stroke,#reload-writer{min-height:64px;width:100%;font-size:22px}
 .summary-stats{grid-template-columns:repeat(2,1fr)}
+#group-cards.curriculum-cards.grade-cards{grid-template-columns:repeat(3,minmax(0,1fr))}#group-cards.grade-cards .mode-card{min-height:140px;padding:18px}#group-cards.grade-cards strong{font-size:clamp(30px,4vw,44px)}@media(max-width:570px){#group-cards.curriculum-cards.grade-cards{grid-template-columns:repeat(2,minmax(0,1fr))}#group-cards.grade-cards .mode-card{min-height:118px;padding:12px}}
 
 </style>
   <style>
@@ -1678,6 +1679,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     { title: '2上1', label: '第一課《爸爸的鬍鬚》', back: '返回課本' },
     { title: '第一課《爸爸的鬍鬚》', back: '返回課文' }
   ];
+  const gradeChoices = [
+    { label: '一年級', available: false }, { label: '二年級', available: true },
+    { label: '三年級', available: false }, { label: '四年級', available: false },
+    { label: '五年級', available: false }, { label: '六年級', available: false }
+  ];
   let state = null, localMode = null, handle, mountedKey = '', loadingController, storageOkay = true, demoState = 'stopped';
   let feedback = null, feedbackAnimation = null;
   let speechKey = '', speechGeneration = 0;
@@ -1913,7 +1919,18 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     $('group-title').classList.toggle('sr-only', curriculumLevel < curriculumPages.length - 1);
     $('group-home').textContent = page ? page.back : '返回首頁';
     $('group-cards').classList.toggle('curriculum-cards', !!page?.label);
+    $('group-cards').classList.toggle('grade-cards', curriculumLevel === 0);
     const container = $('group-cards'); container.replaceChildren();
+    if (curriculumLevel === 0) {
+      gradeChoices.forEach(choice => {
+        const button = document.createElement('button'); button.className = 'mode-card'; button.disabled = !choice.available;
+        button.append(textNode('strong', choice.label));
+        if (choice.available) button.addEventListener('click', () => { curriculumLevel++; render(); });
+        else button.setAttribute('aria-label', choice.label + '，尚未開放');
+        container.append(button);
+      });
+      return;
+    }
     if (page?.label) {
       const button = document.createElement('button'); button.className = 'mode-card';
       button.append(textNode('strong', page.label));
