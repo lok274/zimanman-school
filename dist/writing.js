@@ -212,7 +212,7 @@
       await Promise.all([writer.hideCharacter({ duration: 0 }), writer.hideOutline({ duration: 0 })]);
       if (!alive) return;
       if (!componentGuided && !guidedComplete && (options.phase === 'guided' || help.some(item => item.kind === 'outline'))) await writer.showOutline({ duration: 0 });
-      if (practice && options.phase === 'recall' || guidedComplete && !practice) await writer.showCharacter({ duration: 0 });
+      if (guidedComplete && !practice) await writer.showCharacter({ duration: 0 });
       if (!alive) return;
       writer.updateDimensions({ width: size, height: size, padding: 24 }); placeStart();
       if (!suspended && !guidedComplete && ['guided', 'recall', 'quiz'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke, leniency: practice ? options.phase === 'recall' ? 0.9 : 1 : 1.65,
@@ -237,6 +237,7 @@
           options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() });
         }
       });
+      if (practice && options.phase === 'recall' && alive && !suspended) await writer.showCharacter({ duration: 0 });
       if (alive && !suspended) { mounted = true; element.style.visibility = ''; if (options.onReady) options.onReady(); }
     }).catch(fail);
     function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }).catch(fail); }
