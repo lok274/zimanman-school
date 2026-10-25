@@ -509,7 +509,10 @@
         text.append(textNode('span', '第 ' + (row.index + 1) + ' 字 · ' + label, 'record-label'));
         line.append(textNode('strong', row.character), text); detail.append(line);
       });
-      if (snapshot.version === 4 && snapshot.wordChoices[word.id]) { const card = textNode('div', '', 'work-card summary-work'); renderWorkCard(card, word); div.append(card); }
+      if (snapshot.version === 4 && snapshot.wordChoices[word.id]) {
+        const card = textNode('div', '', 'work-card summary-work'); renderWorkCard(card, word);
+        card.append(textNode('p', '生活用途：' + (C.uses?.[word.text] || '描述生活中的事物或動作。'), 'work-use')); div.append(card);
+      }
       list.append(div);
     });
     $('saved-message').textContent = storageOkay ? '' : '紀錄未能儲存。離開前可請老師記錄結果。';
