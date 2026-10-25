@@ -334,7 +334,7 @@ test('skipped word card shows pending practice instead of a completion stamp', (
   e.context.BishunContent = { words: ['一'], cue: () => ['例子', 'M1 1L2 2'] };
   vm.runInContext(source('app.js'), e.context); startLocal(e);
   assert(e.$('word-cards').textContent.includes('有字待練'));
-  assert(!e.$('word-cards').textContent.includes('完成今次練習'));
+  assert(!e.$('word-cards').textContent.includes('完成本次練習'));
 });
 test('history counts each character once while retaining assisted and independent attempts', () => {
   const e = environment(source('index.html'));
@@ -602,7 +602,7 @@ test('nonconsecutive repeated positions stay distinct on full-word cards and sam
     if (index !== 3) { await waitFor(() => snapshot().active.phase === 'watch'); assert.equal(snapshot().active.occurrenceId, 'w0:' + (index === 0 ? 2 : 3)); e.$('previous-step').click(); }
   }
   assert.equal(snapshot().active.phase, 'choose-word'); assert.equal(markedPosition(targetName()), 3);
-  const completed = e.$('word-cards').childNodes[0]; assert(completed.disabled); assert(completed.textContent.includes('完成今次練習'));
+  const completed = e.$('word-cards').childNodes[0]; assert(completed.disabled); assert(completed.textContent.includes('完成本次練習'));
   assert(completed.textContent.includes('推來推去')); assert.equal(e.$('word-cards').childNodes[1].textContent, '粗');
   const rows = S.summarize(snapshot()).filter(row => row.wordId === 'w0');
   assert.equal(rows.length, 3); assert(rows.every(row => row.independent && row.word === '推來推去'));
