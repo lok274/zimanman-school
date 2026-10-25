@@ -18,14 +18,6 @@
       剪草機: { label: '幫剪草機做標籤', intro: ['我用', '剪草。'] },
       推來推去: { label: '幫積木動作做標籤', intro: ['我將積木', '。'] }
     },
-    uses: {
-      粗: '描述繩子、樹幹等物件的粗幼。',
-      濃: '描述茶、湯或味道的濃淡。',
-      鬍鬚: '介紹人物的外貌特徵。',
-      密: '描述樹葉、人群或物件排列得很接近。',
-      剪草機: '標示修剪草地所使用的工具。',
-      推來推去: '描述物件反覆前後移動的動作。'
-    },
     photos: { 粗: 'images/rope.webp', 濃: 'images/tea.webp', 鬍鬚: 'images/beard.webp', 密: 'images/leaves.webp', 剪草機: 'images/mower.webp', 推來推去: 'images/push-block.webp' },
     dataUrl: 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1/',
     edbUrl: 'https://www.edbchinese.hk/lexlist_ch/',
