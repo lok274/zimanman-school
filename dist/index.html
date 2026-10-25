@@ -27,9 +27,9 @@
       <div class="choice-footer"><button id="group-home" class="button secondary">返回首頁</button></div>
     </section>
     <section id="choose-view" class="choose-view" hidden aria-labelledby="choose-title">
-      <h1 id="choose-title" class="sr-only">你想先寫邊個字？</h1>
+      <h1 id="choose-title" class="sr-only">選擇要書寫的字</h1>
       <div id="word-cards" class="word-cards"></div>
-      <div class="choice-footer"><button id="choice-summary" class="button secondary">睇今節紀錄</button></div>
+      <div class="choice-footer"><button id="choice-summary" class="button secondary">查看本節紀錄</button></div>
     </section>
     <section id="task-view" class="task-view" hidden aria-labelledby="task-title">
       <h1 id="task-title" class="sr-only"></h1><div id="task-options" class="task-options"></div>
@@ -43,17 +43,17 @@
         <p id="voice-note" class="small muted"></p>
       </aside>
       <div class="work-panel">
-        <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 示範</li><li data-stage="guided"><b>2</b> 跟住寫</li><li data-stage="recall"><b>3</b> 自己寫</li></ol>
+        <ol class="step-rail" aria-label="目前步驟"><li data-stage="watch"><b>1</b> 示範</li><li data-stage="guided"><b>2</b> 跟隨書寫</li><li data-stage="recall"><b>3</b> 自行書寫</li></ol>
         <div class="practice-heading"><h2 id="practice-title">示範</h2><p id="practice-instruction" hidden>撳播放，示範。</p></div>
         <div class="practice-body"><div class="board-row"><div class="grid-shell"><div class="grid-lines" aria-hidden="true"></div><div id="writer" class="writer" role="img" aria-label="書寫練習格"></div><svg id="quiz-mark" class="quiz-mark" viewBox="0 0 100 100" aria-hidden="true" hidden><circle class="quiz-circle" cx="50" cy="50" r="46"/></svg><div id="board-message" class="board-message" hidden></div></div></div>
           <div class="practice-side">
             <div id="demo-controls" class="demo-controls"><button id="play" class="button primary">▶ 播放</button><button id="pause" class="button secondary">Ⅱ 暫停</button></div>
             <div id="demo-navigation" class="demo-navigation" hidden><button id="demo-previous" class="button secondary" hidden></button><button id="demo-next" class="button secondary" hidden></button></div>
-            <div id="writing-controls" class="writing-controls" hidden><button id="use-guidance" class="button primary" hidden>跟住寫</button><button id="undo-stroke" class="button secondary" disabled>擦掉前一筆</button></div>
+            <div id="writing-controls" class="writing-controls" hidden><button id="use-guidance" class="button primary" hidden>跟隨書寫</button><button id="undo-stroke" class="button secondary" disabled>擦掉前一筆</button></div>
             <button id="reload-writer" class="button primary" hidden>再載入書寫格</button>
             <div id="data-controls" class="demo-controls" hidden><button id="retry-data" class="button primary">再載入一次</button><button id="different-word" class="button secondary">先揀另一個字</button></div>
             <div class="feedback-line"><p id="feedback" role="status" aria-live="polite"><span id="feedback-icon" aria-hidden="true" hidden></span><span id="feedback-text"></span></p><span id="practice-stars" role="img" hidden></span></div>
-            <div id="next-row" class="next-row"><button id="main-next" class="button primary large">到我跟住寫 <span aria-hidden="true">→</span></button></div>
+            <div id="next-row" class="next-row"><button id="main-next" class="button primary large">開始跟隨書寫 <span aria-hidden="true">→</span></button></div>
             <div id="quiz-clock" class="quiz-clock" hidden><span>本次小挑戰書寫時間</span><strong id="quiz-clock-value">未開始</strong></div>
           </div>
         </div>
@@ -62,7 +62,7 @@
     <section id="summary-view" class="summary-view" hidden aria-labelledby="summary-title">
       <h1 id="summary-title">我的紀錄</h1>
       <div id="summary-stats" class="summary-stats"></div><div id="summary-rows" class="summary-rows"></div>
-      <section id="quiz-results" class="quiz-results" hidden aria-labelledby="quiz-results-title"><h2 id="quiz-results-title">全份小挑戰成績</h2><p id="quiz-result-score"></p><p id="personal-best"></p><p id="class-result-status" role="status"></p><button id="class-retry" class="button secondary" hidden>重試交卷</button><a id="class-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><button id="class-again" class="button primary" hidden>再做同一份小挑戰</button></section>
+      <section id="quiz-results" class="quiz-results" hidden aria-labelledby="quiz-results-title"><h2 id="quiz-results-title">全份小挑戰成績</h2><p id="quiz-result-score"></p><p id="personal-best"></p><p id="class-result-status" role="status"></p><button id="class-retry" class="button secondary" hidden>重試交卷</button><a id="class-board-link" class="button secondary" href="leaderboard.html" hidden>查看班級排行榜 →</a><button id="class-again" class="button primary" hidden>再做同一份小挑戰</button></section>
       <div class="summary-footer"><p id="saved-message" class="small muted"></p><button id="new-session" class="button primary large">返回首頁 <span aria-hidden="true">→</span></button></div>
     </section>
   </main>
@@ -79,11 +79,11 @@
     <button id="apply-words" class="button primary">套用並返回首頁</button>
     <label class="field-label" for="assessment-mode">測驗題型</label><select id="assessment-mode"><option value="copy">看字寫</option><option value="listen">聽詞寫</option></select>
     <button id="teacher-class" class="button secondary">用以上範圍開班級測驗 ↗</button>
-    <div id="teacher-active" class="teacher-active" hidden><h3>今節練習</h3><button id="teacher-skip" class="button secondary">老師協助，略過呢個字</button><button id="teacher-end" class="button quiet">結束今節並睇紀錄</button></div>
+    <div id="teacher-active" class="teacher-active" hidden><h3>本節練習</h3><button id="teacher-skip" class="button secondary">老師協助，跳過此字</button><button id="teacher-end" class="button quiet">結束本節並查看紀錄</button></div>
     <details id="license-details"><summary>字庫授權及修改說明</summary><p>Copyright 1999 Arphic Technology Co., Ltd. Copyright 2016 Shaunak Kishore. 字庫按 Arphic Public License 提供，並無擔保。你可以按授權條款修改及再分發。</p><p>本版將「草」改為十畫，交換「密」第七、八畫，並調整「來」嘅筆順。初始十一字嘅筆順已對照教育局圖示；字形仍有字庫風格差異。</p><p><a href="data/ARPHICPL.TXT" target="_blank" rel="noopener">Arphic Public License 全文</a> · <a href="data/NOTICE.txt" target="_blank" rel="noopener">字庫來源及修改紀錄</a> · <a href="LICENSES/hanzi-writer-MIT.txt" target="_blank" rel="noopener">Hanzi Writer 3.5.0 MIT 授權</a></p></details>
-    <details id="history-details"><summary>呢部裝置嘅練習紀錄</summary><div id="local-history"></div></details>
+    <details id="history-details"><summary>本裝置的練習紀錄</summary><div id="local-history"></div></details>
   </dialog>
-  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級小挑戰</h2><button id="class-close" class="icon-button" aria-label="關閉班級小挑戰">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（唔好用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級小挑戰</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次小挑戰</button><button id="class-leave" class="button secondary" hidden>換下一位同學</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>睇班級排行榜 →</a><p id="class-switch-note" class="small" hidden>換人會清除參加身份和未交紀錄。請先交卷。</p></dialog>
+  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級小挑戰</h2><button id="class-close" class="icon-button" aria-label="關閉班級小挑戰">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（請勿使用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級小挑戰</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次小挑戰</button><button id="class-leave" class="button secondary" hidden>更換使用者</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>查看班級排行榜 →</a><p id="class-switch-note" class="small" hidden>切換使用者會清除參加身份和未交紀錄。請先交卷。</p></dialog>
   <script src="vendor/hanzi-writer.min.js"></script>
   <script src="data/characters.js"></script>
   <script src="content.js?v=051508558ead"></script>
@@ -96,6 +96,6 @@
   <script src="classroom.js?v=458e2f611e1f"></script>
   <script src="assessment-ui.js?v=a2e6fe341da9"></script>
   <script src="writing.js?v=c26807aa791a"></script>
-  <script src="app.js?v=869a1ece8d9b"></script>
+  <script src="app.js?v=3b09f968e118"></script>
 </body>
 </html>

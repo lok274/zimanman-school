@@ -8,7 +8,7 @@
   let draftEntries = entries, draftSelected = new Set(selected);
   let curriculumLevel = 0;
   const curriculumPages = [
-    { title: '揀年級', label: '二年級', back: '返回首頁' },
+    { title: '選擇年級', label: '二年級', back: '返回首頁' },
     { title: '二年級', label: '2上1', back: '返回年級' },
     { title: '2上1', label: '第一課《爸爸的鬍鬚》', back: '返回課本' },
     { title: '第一課《爸爸的鬍鬚》', back: '返回課文' }
@@ -103,7 +103,7 @@
     }
   }
   function id() { return globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2); }
-  function storageError() { storageOkay = false; $('storage-notice').hidden = false; $('storage-notice').textContent = '今次紀錄暫時只留喺畫面，關閉後可能遺失。你仍然可以繼續練習。'; }
+  function storageError() { storageOkay = false; $('storage-notice').hidden = false; $('storage-notice').textContent = '本次紀錄暫時只保留在畫面上，關閉後可能遺失。仍可繼續練習。'; }
   function save() {
     checkpoint();
     if (!state) return;
@@ -123,7 +123,7 @@
   }
   function sessionCandidate(mode = 'practice', sourceEntries = entries, sourceSelected = selected) {
     const assigned = sourceEntries.map(entry => ({ text: entry.text, selectedIndexes: entry.characters.flatMap((_, index) => sourceSelected.has(entry.id + ':' + index) ? [index] : []) })).filter(entry => entry.selectedIndexes.length);
-    if (!assigned.length || assigned.length > 6) throw new Error('今節請揀 1 至 6 項詞語入面嘅字。');
+    if (!assigned.length || assigned.length > 6) throw new Error('本節請選擇 1 至 6 項詞語中的字。');
     return S.createSession({ id: id(), entries: assigned, startedAt: Date.now(), mode });
   }
   function localGroups() {
@@ -192,23 +192,23 @@
   function feedbackFor(before, next, event) {
     const make = (kind, icon, variants, celebrate = false) => ({ kind, icon, text: safeText(variants, next), celebrate });
     if (next.mode === 'quiz') {
-      if (event.type === 'STROKE_MISSED') return make('quiz-miss', '', ['再試呢一畫。']);
+      if (event.type === 'STROKE_MISSED') return make('quiz-miss', '', ['請重新書寫此筆。']);
       if (event.type === 'WRITING_COMPLETE') return make('quiz-complete', '', ['小挑戰完成'], true);
       return null;
     }
     const n = next.active.currentStroke;
     switch (event.type) {
       case 'STROKE_ACCEPTED': return before.active.missesOnCurrentStroke
-        ? make('recovered', '✓', ['你再試成功咗！', '再試後，完成第 ' + n + ' 畫！', '重試嗰筆已寫好，進度 ' + n + '。', '再做成功，已到 ' + n + '。'])
-        : make('step', '✓', [...(n === 1 ? ['你開始咗，第一畫完成！'] : []), '完成第 ' + n + ' 畫！', '呢筆已寫好，進度 ' + n + '。', '做到第 ' + n + ' 步。']);
-      case 'STROKE_MISSED': return make('support', '↻', ['再試呢一畫。', '慢慢再試，需要提示都可以。', '由起點落筆，或者請老師幫手。', '停低諗吓，想求助就撳掣。']);
-      case 'REQUEST_HELP': return make('support', '•', [...(event.kind === 'stroke' && next.active.missesOnCurrentStroke ? ['睇完呢一畫，再試。'] : []), '提示已開，可以繼續寫。', '睇住幫手，再試吓。', '有需要就求助，慢慢嚟。']);
+        ? make('recovered', '✓', ['重新嘗試成功！', '重新嘗試後完成第 ' + n + ' 筆！', '該筆已完成，進度為第 ' + n + ' 筆。', '成功完成第 ' + n + ' 筆。'])
+        : make('step', '✓', [...(n === 1 ? ['第一筆已完成！'] : []), '完成第 ' + n + ' 筆！', '此筆已完成，進度為第 ' + n + ' 筆。', '已完成第 ' + n + ' 步。']);
+      case 'STROKE_MISSED': return make('support', '↻', ['請重新書寫此筆。', '可以慢慢重新嘗試，需要提示時可按下按鈕。', '請從起點落筆，或請老師協助。', '如需要協助，請按下按鈕。']);
+      case 'REQUEST_HELP': return make('support', '•', [...(event.kind === 'stroke' && next.active.missesOnCurrentStroke ? ['查看此筆提示後再試。'] : []), '提示已開啟，可以繼續書寫。', '請按照提示重新嘗試。', '如有需要，請尋求協助。']);
       case 'WRITING_COMPLETE': {
         const attempt = next.attempts.find(item => item.id === next.active.attemptId);
         if (before.active.phase === 'guided') return make('complete-guided', '✓', ['跟寫完成。下一步由你決定。'], true);
         return attempt.help.length
-          ? make('complete-assisted', '✓', ['有提示完成。你完成咗今次書寫。'], true)
-          : make('complete-independent', '✓', ['自己完成。今次冇開提示。'], true);
+          ? make('complete-assisted', '✓', ['有提示完成本次書寫。'], true)
+          : make('complete-independent', '✓', ['自行完成本次書寫，沒有開啟提示。'], true);
       }
       default: return null;
     }
@@ -263,7 +263,7 @@
   }
   function defaultPurpose(word) { return C.purposes?.[word.text] ? 'label' : null; }
   function renderChoices() {
-    $('choose-title').textContent = state.mode === 'quiz' ? '小挑戰：想先寫邊個字？' : '練習：想先寫邊個字？';
+    $('choose-title').textContent = state.mode === 'quiz' ? '小挑戰：選擇要書寫的字' : '練習：選擇要書寫的字';
     const container = $('word-cards'); container.replaceChildren();
     const rows = S.summarize(state);
     state.entries.forEach(word => {
@@ -277,12 +277,12 @@
       if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id, purpose: defaultPurpose(word) })); container.append(button);
     });
-    $('choice-summary').textContent = localMode ? '返回揀組別' : '返回首頁';
+    $('choice-summary').textContent = localMode ? '返回選擇組別' : '返回首頁';
   }
   function renderWorkCard(element, word) {
     element.replaceChildren();
     const choice = state.wordChoices[word.id], context = C.purposes?.[word.text];
-    element.append(textNode('h2', context ? choice.purpose === 'intro' ? '做介紹' : context.label : '我嘅詞語作品', 'sr-only'));
+    element.append(textNode('h2', context ? choice.purpose === 'intro' ? '作介紹' : context.label : '我的詞語作品', 'sr-only'));
     const sentence = textNode('div', '', 'work-sentence');
     if (choice.purpose === 'intro' && context) sentence.append(textNode('span', context.intro[0], 'sentence-context'));
     const wordInk = textNode('div', '', 'work-word'); wordInk.style.setProperty('--word-length', word.characters.length);
@@ -307,10 +307,10 @@
     $('task-options').replaceChildren(); $('work-card').replaceChildren();
     $('work-card').hidden = a.phase !== 'word-complete'; $('task-next').hidden = a.phase !== 'word-complete';
     if (a.phase === 'word-complete') {
-      $('task-title').textContent = '我嘅作品'; renderWorkCard($('work-card'), word);
-      $('task-next').textContent = state.occurrences.every(item => state.finished.includes(item.id)) ? '睇今次紀錄 →' : '揀下一個詞語 →'; return;
+      $('task-title').textContent = '我的作品'; renderWorkCard($('work-card'), word);
+      $('task-next').textContent = state.occurrences.every(item => state.finished.includes(item.id)) ? '查看本次紀錄 →' : '選擇下一個詞語 →'; return;
     }
-    $('task-title').textContent = '想點樣寫？';
+    $('task-title').textContent = '選擇書寫方式';
     const button = textNode('button', '', 'task-option'); button.append(textNode('strong', '自己寫'));
     button.addEventListener('click', () => event('CHOOSE_ROUTE', { route: 'independent', purpose: defaultPurpose(word) }));
     $('task-options').append(button);
@@ -337,10 +337,10 @@
     $('task-view').hidden = !task;
     $('choose-view').hidden = !choose; $('practice-view').hidden = choose || summary || task; $('summary-view').hidden = !summary;
     $('previous-step').hidden = choose || summary;
-    $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選字' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 再載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟寫', '← 睇提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回示範'] : ['← 返回選字']);
+    $('previous-step').textContent = state.mode === 'quiz' ? '← 返回選擇字詞' : safeText(a.phase === 'character-complete' && !a.strokeCount ? ['← 重新載入'] : ['recall', 'character-complete'].includes(a.phase) ? ['← 返回跟隨書寫', '← 查看提示', '← 上一步'] : a.phase === 'guided' ? ['← 返回示範'] : ['← 返回選擇字詞']);
     if (state.version === 4) {
-      if (a.phase === 'guided') $('previous-step').textContent = attempt?.help.some(help => help.kind === 'guidance') ? '← 返回自己寫' : '← 返回示範';
-      else $('previous-step').textContent = ['character-complete', 'word-complete'].includes(a.phase) ? '← 再寫一次' : '← 返回選字';
+      if (a.phase === 'guided') $('previous-step').textContent = attempt?.help.some(help => help.kind === 'guidance') ? '← 返回自行書寫' : '← 返回示範';
+      else $('previous-step').textContent = ['character-complete', 'word-complete'].includes(a.phase) ? '← 再寫一次' : '← 返回選擇字詞';
     }
     document.body.classList.toggle('has-recall', a.phase === 'recall');
     renderPresentation();
@@ -357,7 +357,7 @@
     $('word-title').classList.toggle('concealed', concealTask);
     $('semantic-cue').replaceChildren(visualCue(word.text)); $('semantic-cue').hidden = false;
     document.querySelector('.step-rail').hidden = quiz || state.version === 4;
-    $('writer').setAttribute('aria-label', quiz ? '小挑戰書寫格，沒有筆畫提示' : recall ? '無字形提示嘅書寫格' : '書寫練習格');
+    $('writer').setAttribute('aria-label', quiz ? '小挑戰書寫格，沒有筆畫提示' : recall ? '沒有字形提示的書寫格' : '書寫練習格');
     const stage = complete ? 'recall' : a.phase;
     const stageIndex = ['watch', 'guided', 'recall'].indexOf(stage);
     document.querySelectorAll('[data-stage]').forEach((element, index) => { element.classList.toggle('active', index === stageIndex); element.classList.toggle('done', index < stageIndex); if (index === stageIndex) element.setAttribute('aria-current', 'step'); else element.removeAttribute('aria-current'); });
@@ -379,21 +379,21 @@
     $('next-row').hidden = $('main-next').hidden;
     const guide = a.phase === 'guided' && !a.writingDone ? W.guide(currentOccurrence().character, dataCache.get(currentOccurrence().character), a.currentStroke) : null;
     let title = '', instruction = '', defaultFeedback = '';
-    if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['等一等，整理緊筆順。', '稍候，資料準備中。', '就嚟可以開始。']); }
-    if (a.phase === 'unavailable') { title = '呢個字暫時未準備好'; instruction = safeText(['可以再載入，或者請老師幫手。', '資料未準備好，稍後再試。', '想求助就撳老師工具。']); }
-    if (a.phase === 'watch') { title = safeText(['示範', '看示範', '觀察']); instruction = safeText(['撳播放睇示範。', '眼睛跟住每一畫。', '先觀察示範。']); defaultFeedback = '可以暫停，再繼續播放。'; $('main-next').textContent = '到我跟住寫 →'; }
-    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟住寫', '照樣做', '練習']); instruction = safeText(a.writingDone ? ['準備好，就自己寫。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一畫。', '由橙點開始寫。', '手指跟住起筆提示。', '順住方向慢慢做。']); defaultFeedback = a.writingDone ? '跟寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '再慢慢試。需要幫手都可以。' : '由起點開始，慢慢寫。'; $('main-next').textContent = '收起字形，自己寫 →'; }
+    if (a.phase === 'loading') { title = '準備好書寫格'; instruction = safeText(['請稍候，正在整理筆順。', '請稍候，資料準備中。', '即將可以開始。']); }
+    if (a.phase === 'unavailable') { title = '此字暫時未準備好'; instruction = safeText(['可以重新載入，或請老師協助。', '資料尚未準備好，請稍後再試。', '如需協助，請開啟老師工具。']); }
+    if (a.phase === 'watch') { title = safeText(['示範', '觀看示範', '觀察']); instruction = safeText(['按播放觀看示範。', '觀察每一筆。', '先觀察示範。']); defaultFeedback = '可以暫停，再繼續播放。'; $('main-next').textContent = '開始跟隨書寫 →'; }
+    if (a.phase === 'guided') { title = a.writingDone ? '完成引導練習' : safeText(['跟隨書寫', '按照示範書寫', '練習']); instruction = safeText(a.writingDone ? ['準備好後自行書寫。', '可以收起字形再寫。', '下一步由你決定。'] : ['先寫一筆。', '由橙點開始書寫。', '手指按照起筆提示。', '按照方向慢慢書寫。']); defaultFeedback = a.writingDone ? '跟隨書寫完成。下一步由你決定。' : a.missesOnCurrentStroke ? '請慢慢重新嘗試，需要協助時可按下按鈕。' : '由起點開始，慢慢書寫。'; $('main-next').textContent = '收起字形，自行書寫 →'; }
     if (a.phase === 'quiz') { title = '小挑戰'; instruction = '照住題目，自己寫。'; defaultFeedback = '寫錯可以再試。'; }
-    if (a.phase === 'recall') { title = state.version === 4 ? '自己寫' : safeText(['自己寫', '試住記', '憑記憶']); instruction = state.version === 4 ? '照住詞語自己寫。需要時可揀跟住寫。' : safeText(['按記憶慢慢寫。', '按記憶寫，需要就開提示。', '慢慢做，隨時可以求助。']); defaultFeedback = attempt.help.length ? '已記低用過提示，放心繼續寫。' : a.missesOnCurrentStroke ? state.version === 4 ? '再試一次，或者揀跟住寫。' : '再試一次，或者開提示幫手。' : state.version === 4 ? '照住詞語慢慢寫。' : '用自己記住嘅筆順寫。'; }
+    if (a.phase === 'recall') { title = state.version === 4 ? '自己寫' : safeText(['自己寫', '嘗試記憶', '憑記憶書寫']); instruction = state.version === 4 ? '按照詞語自行書寫。需要時可選擇跟隨書寫。' : safeText(['按照記憶慢慢書寫。', '按照記憶書寫，需要時可開啟提示。', '慢慢完成，如需協助可提出。']); defaultFeedback = attempt.help.length ? '已記錄使用過提示，請繼續。' : a.missesOnCurrentStroke ? state.version === 4 ? '請重新嘗試，或選擇跟隨書寫。' : '請重新嘗試，或開啟提示。' : state.version === 4 ? '按照詞語慢慢書寫。' : '按照記住的筆順書寫。'; }
     if (complete) {
       const label = a.completedPhase === 'skipped' ? '老師協助跳過' : attempt && (attempt.help.length || state.version === 4 && attempt.phase === 'guided') ? '有提示完成' : '自己完成';
-      title = quizComplete ? '小挑戰完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '今次先放低，之後再一齊試。' : '準備好，先行下一步。'; defaultFeedback = '每一次嘅嘗試都保留喺紀錄。';
+      title = quizComplete ? '小挑戰完成' : label; instruction = quizComplete ? '' : a.completedPhase === 'skipped' ? '本次先暫停，之後再一起嘗試。' : '準備好後，進入下一步。'; defaultFeedback = '每次嘗試都會保留在紀錄中。';
       const remaining = state.occurrences.filter(item => !state.finished.includes(item.id));
-      $('main-next').textContent = !remaining.length ? '睇今次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '揀下一個字 →';
-      if (state.version === 4 && !remaining.some(item => item.wordId === word.id)) $('main-next').textContent = '睇作品 →';
+      $('main-next').textContent = !remaining.length ? '查看本次紀錄 →' : remaining.some(item => item.wordId === word.id) ? '下一個字 →' : '選擇下一個字 →';
+      if (state.version === 4 && !remaining.some(item => item.wordId === word.id)) $('main-next').textContent = '查看作品 →';
       if (!remaining.length && classroom?.view().boundRunId === state.id) $('main-next').textContent = '完成小挑戰 →';
     }
-    if (guide) { title += ' · ' + guide.label; instruction = guide.instruction; }
+    if (guide) { instruction = guide.instruction; }
     $('practice-title').textContent = title; $('practice-instruction').textContent = instruction;
     const practiceCue = !quiz && ['guided', 'recall', 'character-complete'].includes(a.phase);
     const eventCue = practiceCue && !!feedback;
@@ -410,7 +410,7 @@
     $('feedback').setAttribute('data-kind', quizComplete ? 'quiz-complete' : feedback ? feedback.kind : 'instruction');
     renderCompletionMark();
     $('board-message').hidden = !['loading', 'unavailable'].includes(a.phase);
-    $('board-message').textContent = a.phase === 'loading' ? '整理緊筆順…' : '未能載入字形\n請再試，或者請老師幫手。';
+    $('board-message').textContent = a.phase === 'loading' ? '正在整理筆順…' : '未能載入字形\n請重新嘗試，或請老師協助。';
     $('play').textContent = demoState === 'paused' ? '▶ 繼續播放' : '▶ 播放';
     $('pause').disabled = demoState !== 'playing';
     if (available()) syncWriter();
@@ -449,7 +449,7 @@
       if (!state || generation !== mountGeneration || state.active.token !== a.token) return;
       if (undoRestart?.token !== a.token) { dispatch({ type: 'MOUNT_FAILED', token: a.token }); return; }
       handle?.suspend(); readyMount = null;
-      undoRestart = { token: a.token, phase: 'failed', message: '書寫格未能載入。已保留剩低嘅筆畫，請再載入書寫格。' };
+      undoRestart = { token: a.token, phase: 'failed', message: '書寫格未能載入。已保留剩餘筆畫，請重新載入書寫格。' };
       $('writer').style.visibility = 'hidden'; $('board-message').hidden = false; $('board-message').textContent = undoRestart.message; renderUndo();
     };
     if (!data || !globalThis.HanziWriter) { mountFailed(); return; }
@@ -496,7 +496,7 @@
     return false;
   }
   function renderSummary(snapshot) {
-    $('summary-title').textContent = snapshot.mode === 'quiz' ? '今次小挑戰完成紀錄' : '我的紀錄';
+    $('summary-title').textContent = snapshot.mode === 'quiz' ? '本次小挑戰完成紀錄' : '我的紀錄';
     const rows = S.summarize(snapshot), stats = $('summary-stats'), recallLabel = '自己寫'; stats.replaceChildren();
     const groups = [['自己完成', rows.filter(r => r.independent).length], ['有提示完成', rows.filter(r => r.assisted && !r.independent).length], ['老師協助跳過', rows.filter(r => r.skipped && !r.independent && !r.assisted).length], ['待練字次', rows.filter(r => r.unfinished).length]];
     groups.forEach(([label, n]) => { const div = textNode('div', '', 'stat'); div.append(textNode('b', String(n)), textNode('span', label)); stats.append(div); });
@@ -517,7 +517,7 @@
       if (snapshot.version === 4 && snapshot.wordChoices[word.id]) { const card = textNode('div', '', 'work-card summary-work'); renderWorkCard(card, word); div.append(card); }
       list.append(div);
     });
-    $('saved-message').textContent = storageOkay ? '紀錄只儲存喺呢個瀏覽器。無需帳戶。' : '紀錄未能儲存。離開前可請老師記低結果。';
+    $('saved-message').textContent = storageOkay ? '' : '紀錄未能儲存。離開前可請老師記錄結果。';
   }
   function scoreLabel(score) { return '錯誤 ' + score.mistakes + ' 次 · ' + (score.elapsedMs / 1000).toFixed(1) + ' 秒'; }
   function renderClassroom() {
@@ -545,7 +545,7 @@
     $('class-board-link').hidden = !classSummary || !view.receipt;
     $('class-again').hidden = !classSummary || !view.accepted || view.pending;
     $('class-again').disabled = view.busy;
-    if (classSummary) { $('personal-best').textContent = member.alias + ' · 個人最佳及全班排名會喺排行榜頁顯示。'; $('saved-message').textContent = '本機紀錄留喺此瀏覽器；班級交卷成功後，暱稱和結果亦會儲存喺班級服務。'; }
+    if (classSummary) { $('personal-best').textContent = member.alias + ' · 個人最佳及全班排名會在排行榜頁顯示。'; $('saved-message').textContent = '本機紀錄保留在此瀏覽器；班級交卷成功後，暱稱和結果亦會儲存在班級服務。'; }
     const homeRetry = !state && boardNavigationRun !== null && boardNavigationRun === view.boundRunId;
     if ((classSummary ? available() && !$('class-dialog').open : homeRetry && !document.hidden && !$('teacher-dialog').open && !leaving) && view.accepted && view.receipt?.runId === view.boundRunId && boardNavigationRun === view.receipt.runId) {
       boardNavigationRun = null;
@@ -574,7 +574,7 @@
         const result = Q.fromSession(snapshot); return result?.ranked ? [result.score] : [];
       } catch { return []; }
     }).sort(Q.compare);
-    $('personal-best').textContent = scores.length ? '此瀏覽器最佳（最近 40 筆、相同題目）：' + scoreLabel(scores[0]) + '。共用平板未能分辨同學。' : '此瀏覽器未有相同題目嘅完整最佳紀錄。';
+    $('personal-best').textContent = scores.length ? '此瀏覽器最佳（最近 40 筆、相同題目）：' + scoreLabel(scores[0]) + '。共用平板未能分辨同學。' : '此瀏覽器沒有相同題目的完整最佳紀錄。';
     renderClassroom();
   }
   function startClassQuiz() {
@@ -616,7 +616,7 @@
     });
     renderSelectionTotal();
   }
-  function renderSelectionTotal() { $('teacher-selection-total').textContent = '已揀 ' + draftSelected.size + ' 個字 · ' + draftEntries.filter(entry => entry.characters.some((_, index) => draftSelected.has(entry.id + ':' + index))).length + ' 項詞語'; }
+  function renderSelectionTotal() { $('teacher-selection-total').textContent = '已選 ' + draftSelected.size + ' 個字 · ' + draftEntries.filter(entry => entry.characters.some((_, index) => draftSelected.has(entry.id + ':' + index))).length + ' 項詞語'; }
   const dictationFallback = '可直接打字或用鍵盤語音輸入。';
   function renderDictation() {
     const active = ['starting', 'listening', 'finishing'].includes(dictation.phase);
@@ -685,13 +685,13 @@
     if (dictation.phase !== 'review') return;
     try {
       const word = $('dictation-pending').value.normalize('NFC').replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '');
-      if (!/^\p{Script=Han}{1,8}$/u.test(word)) throw new Error('每次只可加入一項 1 至 8 個中文字嘅詞語，請修改後再確認。');
+      if (!/^\p{Script=Han}{1,8}$/u.test(word)) throw new Error('每次只可加入一項 1 至 8 個中文字的詞語，請修改後再確認。');
       const before = $('teacher-words').value;
       if (before.trim() && S.parseEntries(before).some(entry => entry.text === word)) throw new Error('已有相同詞語，未有重複加入。');
       const combined = before + (before && !/[\r\n]$/.test(before) ? '\n' : '') + word;
       S.parseEntries(combined);
       $('teacher-words').value = combined;
-      cancelDictation('idle', '已加入文字框。撳「更新可選詞語」先選擇範圍。');
+      cancelDictation('idle', '已加入文字框。請按「更新可選詞語」再選擇範圍。');
     } catch (error) { dictation.message = error.message; renderDictation(); }
   });
   function durationLabel(attempts, unstarted = false) {
@@ -712,7 +712,7 @@
       }
       div.append(textNode('strong', new Date(snapshot.startedAt).toLocaleString('zh-HK')), textNode('div', snapshot.entries.map(word => word.text).join('、')),
         textNode('div', '自己完成 ' + rows.filter(r => r.independent).length + ' · 有提示完成 ' + rows.filter(r => r.assisted && !r.independent).length + ' · 跳過 ' + rows.filter(r => r.skipped && !r.independent && !r.assisted).length + ' · 待練 ' + rows.filter(r => r.unfinished).length));
-      const details = document.createElement('details'); details.append(textNode('summary', '睇每次嘗試'));
+      const details = document.createElement('details'); details.append(textNode('summary', '查看每次嘗試'));
       rows.forEach(row => details.append(textNode('p', row.word + ' 第 ' + (row.index + 1) + ' 字「' + row.character + '」' + (row.attempts.length ? row.attempts.map(a => (a.phase === 'quiz' ? '小挑戰' : a.phase === 'guided' ? '引導' : a.phase === 'recall' ? recallLabel : '老師') + ' ' + ({ complete: '完成', active: '未完成', abandoned: '未完成／重試', skipped: '協助跳過' }[a.outcome]) + (snapshot.mode === 'quiz' ? '，' + durationLabel([a]) : '，提示 ' + a.help.length + ' 次')).join('；') : '待練'))));
       if (snapshot.mode === 'quiz') rows.forEach(row => details.append(textNode('p', '第 ' + (row.index + 1) + ' 字「' + row.character + '」書寫時間：' + durationLabel(row.attempts, true))));
       div.append(details); list.append(div);
@@ -725,18 +725,18 @@
     document.body.classList.toggle('menu-view', !$('group-view').hidden || !$('choose-view').hidden || !$('task-view').hidden);
     document.body.classList.toggle('writing-view', !$('practice-view').hidden);
   }
-  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用嘅說明', '請老師幫手朗讀', '裝置未提供合適發音'])); }
+  function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用的說明', '請老師協助朗讀', '裝置未提供合適發音'])); }
   function updateVoices() {
     restoreRecallText();
     try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
-    $('voice-note').textContent = cantoneseVoice ? '' : '暫時冇粵語聲音。可以請老師讀一次。';
+    $('voice-note').textContent = cantoneseVoice ? '' : '暫時沒有粵語聲音。可以請老師朗讀一次。';
     renderWordVoiceLabel();
     maskRecallText();
   }
   function speakText(text) {
     cancelDictation(); stopSpeech(); const generation = speechGeneration;
-    if (!cantoneseVoice) { $('voice-note').textContent = safeText(['請老師讀一次，再試吓自己讀。暫時冇粵語聲音。', '裝置未提供合適發音，請老師幫手。']); return; }
-    const failed = () => { if (generation === speechGeneration) $('voice-note').textContent = safeText(['裝置未能朗讀，可以請老師讀一次。', '聲音未能播放，可以請大人幫手。']); };
+    if (!cantoneseVoice) { $('voice-note').textContent = safeText(['請老師朗讀一次，再嘗試自行朗讀。暫時沒有粵語聲音。', '裝置未提供合適發音，請老師協助。']); return; }
+    const failed = () => { if (generation === speechGeneration) $('voice-note').textContent = safeText(['裝置未能朗讀，可以請老師朗讀一次。', '聲音未能播放，可以請大人協助。']); };
     try {
       const u = new SpeechSynthesisUtterance(text); u.voice = cantoneseVoice; u.lang = cantoneseVoice.lang; u.rate = 0.72;
       u.onerror = failed; speechSynthesis.speak(u);
@@ -765,7 +765,7 @@
     cancelDictation();
     try {
       const parsed = S.parseEntries($('teacher-words').value);
-      if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動。先撳「更新可選詞語」，再選擇範圍。');
+      if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動。請先按「更新可選詞語」，再選擇範圍。');
       sessionCandidate('practice', draftEntries, draftSelected);
       entries = draftEntries; selected = new Set(draftSelected);
       goHome(); $('teacher-dialog').close();
