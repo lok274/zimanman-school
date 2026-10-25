@@ -46,7 +46,7 @@ function boot({ store = memory(), classroom = null, now = Date.now(), elapsed = 
   const ui = context.BishunAssessmentUI.create({ store, classroom, onClose() { calls.closed++; }, onPractice(assigned) { calls.practice.push(assigned); } });
   const assigned = context.BishunAssessment.assignment([{ text: '鬍鬚', selectedIndexes: [0, 1] }], 'listen');
   const panel = body.children.at(-1);
-  const button = text => panel.all().find(item => item.tagName === 'BUTTON' && item.textContent === text);
+  const button = text => panel.all().find(item => item.tagName === 'BUTTON' && (item.textContent === text || item.attributes['aria-label'] === text));
   const click = async text => { const item = button(text); assert(item, 'button exists: ' + text); await item.click(); await new Promise(resolve => setImmediate(resolve)); };
   const stroke = async (x = 20) => { const svg = panel.all().find(item => item.tagName === 'SVG' && item.listeners.pointerdown); assert(svg, 'freehand pad exists'); await svg.emit('pointerdown', { button: 0, pointerId: 1, clientX: x, clientY: 30 }); await svg.emit('pointermove', { pointerId: 1, clientX: 420, clientY: 470 }); await svg.emit('pointerup', { pointerId: 1, clientX: 430, clientY: 480 }); await new Promise(resolve => setImmediate(resolve)); };
   const record = () => [...store.records.values()].find(value => value.run && value.kind === 'official');
@@ -58,6 +58,11 @@ async function fill(e) {
 }
 test('listen quiz has a free pad with private checkpoints and no visible or accessible answer model', async () => {
   const e = boot(); await e.ui.open(e.assigned);
+  const cards = e.panel.all().filter(item => item.tagName === 'BUTTON' && item.className?.includes('assessment-choice-card'));
+  assert.equal(cards.length, 2); assert(cards.every(card => card.className.includes('word-card')));
+  assert(cards.every(card => card.className.includes('assessment-choice-listen')));
+  assert(cards.every(card => card.children.find(item => item.className === 'word-name').textContent.startsWith('第 ')));
+  assert(cards.every(card => !card.children.some(item => item.tagName === 'IMG')));
   assert.equal(e.previous.inert, true); assert.equal(e.previous.attributes['aria-hidden'], 'true');
   assert(!/鬍|鬚/.test(e.panel.textContent));
   await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.click('聽題目');
@@ -69,6 +74,13 @@ test('listen quiz has a free pad with private checkpoints and no visible or acce
   await reloaded.click('第 1 題 · 詞語第 1 字 · 未提交');
   assert(reloaded.panel.all().some(item => item.attributes.d?.includes('8400 9400')));
   assert(!/鬍|鬚/.test(reloaded.panel.textContent + JSON.stringify(reloaded.panel.all().map(item => item.attributes))));
+});
+test('copy quiz uses the practice-style word and photo cards', async () => {
+  const e = boot(), assigned = { ...e.assigned, mode: 'copy' }; await e.ui.open(assigned);
+  const cards = e.panel.all().filter(item => item.tagName === 'BUTTON' && item.className?.includes('assessment-choice-card'));
+  assert.equal(cards.length, 2); assert(cards.every(card => !card.className.includes('assessment-choice-listen')));
+  assert.equal(cards[0].children.find(item => item.className === 'word-name').textContent, '鬍鬚');
+  assert(cards.every(card => card.children.some(item => item.tagName === 'IMG')));
 });
 test('explicit local resume restores the saved assignment and mode without showing any ink on cold load', async () => {
   const e = boot(); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke();

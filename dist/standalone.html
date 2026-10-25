@@ -130,8 +130,11 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-controls:has(.assessment-context)>p:not(.assessment-status) { display:none; }
 .assessment-status { min-height:1.5em; margin:4px 0; font-size:16px; }
 .assessment-context { width:100%; height:100px; object-fit:contain; }
-.assessment-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin:22px 0; }
-.assessment-choices button { min-height:80px; }
+.assessment-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:22px 0; }
+.assessment-choices.word-card { min-height:250px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.assessment-choices.word-card .word-photo { width:min(100%,240px); height:auto; aspect-ratio:1; justify-self:center; }
+.assessment-choices.word-card .word-name { font-size:clamp(48px,7vw,100px); align-self:center; }
+.assessment-choices.word-card .stamp { grid-column:1/-1; }
 .review-answers { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px; }
 .review-answer,.assessment-workcard { border:1px solid #bac9b9; border-radius:12px; padding:16px; background:#fffef8; }
 .review-paper { width:100%; max-width:280px; aspect-ratio:1; border:1px solid #d4ddd6; background:white; }
@@ -155,6 +158,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
   .assessment-controls { gap:8px; }
   .assessment-footer { padding:10px 14px; }
   .assessment-context { height:90px; }
+  .assessment-choices { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .assessment-summary-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (max-width:480px) {
@@ -163,6 +167,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
   .assessment-workcard { grid-template-columns:1fr; }
   .assessment-workcard>img { grid-row:auto; max-height:90px; }
   .assessment-status { grid-column:1 / -1; }
+  .assessment-choices { grid-template-columns:1fr; }
 }
 
 </style>
@@ -1178,12 +1183,19 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     async function close() { visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; official = null; activeLocal = null; onClose(); }
     function drawList() {
       page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
-      const list = node('div', '', 'assessment-choices');
+      const list = node('div', '', 'word-cards assessment-choices');
       A.positions(record.run.assignment).forEach((position, index) => {
         const answer = record.run.answers[index], label = answer.status === 'draft' ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交';
-        list.append(button(titleFor(position, index) + ' · ' + label, () => {
+        const title = titleFor(position, index) + ' · ' + label;
+        const card = button('', () => {
           record = { ...record, run: A.transition(record.run, { type: 'SELECT', index }) }; drawWriting();
-        }));
+        });
+        const listen = record.run.assignment.mode === 'listen' && !isChallenge();
+        card.className = 'word-card assessment-choice-card' + (listen ? ' assessment-choice-listen' : ''); card.setAttribute('aria-label', title);
+        const word = node('span', listen ? '第 ' + (index + 1) + ' 題' : position.word, 'word-name');
+        card.append(word);
+        if (!listen) { const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = position.word + '圖片'; photo.className = 'word-photo'; card.append(photo); }
+        card.append(node('span', '第 ' + (position.index + 1) + ' 字 · ' + label, 'stamp')); list.append(card);
       });
       panel.append(list, message(error));
       if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
