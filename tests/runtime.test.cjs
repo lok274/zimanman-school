@@ -382,16 +382,16 @@ async function feedbackApp(character = '粗', strokeCount = 2, startGuided = tru
 }
 test('feedback follows accepted strokes, changes progress and recognizes only observed recovery', async () => {
   const e = await feedbackApp('粗', 3), icon = e.$('feedback-icon');
-  assert.equal(e.$('feedback-text').textContent, '由起點開始，慢慢寫。');
+  assert.equal(e.$('feedback-text').textContent, '由起點開始，慢慢書寫。');
   assert.notEqual(icon.textContent, '✓');
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
-  assert.equal(e.$('feedback-text').textContent, '你開始咗，第一畫完成！'); assert.equal(icon.textContent, '✓');
+  assert.equal(e.$('feedback-text').textContent, '第一筆已完成！'); assert.equal(icon.textContent, '✓');
   e.send('STROKE_MISSED', { strokeIndex: 1 });
   assert.equal(e.$('feedback').attributes['data-kind'], 'support'); assert.notEqual(icon.textContent, '✓');
   e.send('STROKE_ACCEPTED', { strokeIndex: 1 });
-  assert.equal(e.$('feedback-text').textContent, '你再試成功咗！');
+  assert.equal(e.$('feedback-text').textContent, '重新嘗試成功！');
   e.send('STROKE_ACCEPTED', { strokeIndex: 2 });
-  assert.equal(e.$('feedback-text').textContent, '完成第 3 畫！'); assert.equal(icon.animations.length, 0);
+  assert.equal(e.$('feedback-text').textContent, '完成第 3 筆！'); assert.equal(icon.animations.length, 0);
   const acceptedText = e.$('feedback-text').textContent, saved = JSON.stringify(e.snapshot()), writes = e.$('feedback-text').textWrites;
   e.send('STROKE_ACCEPTED', { strokeIndex: 2 }); e.send('STROKE_MISSED', { strokeIndex: 0, token: 'stale' });
   assert.equal(e.$('feedback-text').textContent, acceptedText); assert.equal(e.$('feedback-text').textWrites, writes); assert.equal(JSON.stringify(e.snapshot()), saved);
@@ -404,7 +404,7 @@ test('three completion labels celebrate once, while premature callbacks and voic
   e.$('main-next').click(); sendApp(e, 'REQUEST_HELP', { kind: 'outline' }); e.complete();
   assert.equal(e.$('feedback').attributes['data-kind'], 'complete-assisted'); assert(e.$('feedback-text').textContent.includes('有提示完成')); assert.equal(icon.animations.length, 2);
   sendApp(e, 'RETRY'); e.complete();
-  assert.equal(e.$('feedback').attributes['data-kind'], 'complete-independent'); assert(e.$('feedback-text').textContent.includes('自己完成')); assert.equal(icon.animations.length, 3);
+  assert.equal(e.$('feedback').attributes['data-kind'], 'complete-independent'); assert(e.$('feedback-text').textContent.includes('自行完成')); assert.equal(icon.animations.length, 3);
   e.send('WRITING_COMPLETE'); e.voices.changed(); assert.equal(icon.animations.length, 3);
   const row = S.summarize(e.snapshot())[0]; assert(row.assisted && row.independent); assert.equal(row.attempts.length, 3);
 });
@@ -448,10 +448,10 @@ test('previous button returns practice steps, retains results and stops completi
   e.send('STROKE_MISSED', { strokeIndex: 0 }); sendApp(e, 'REQUEST_HELP', { kind: 'stroke' });
   const oldGuidance = e.mounts.at(-1); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'watch'); assert.equal(e.snapshot().attempts[0].outcome, 'abandoned'); assert.equal(e.snapshot().attempts[0].help.length, 1);
-  assert.equal(e.$('feedback').attributes['data-kind'], 'instruction'); assert.equal(e.$('previous-step').textContent, '← 返回選字');
+  assert.equal(e.$('feedback').attributes['data-kind'], 'instruction'); assert.equal(e.$('previous-step').textContent, '← 返回選擇字詞');
   const watched = JSON.stringify(e.snapshot()); e.send('WRITING_COMPLETE', {}, oldGuidance); assert.equal(JSON.stringify(e.snapshot()), watched);
   e.$('main-next').click(); e.complete(); e.$('main-next').click();
-  assert.equal(e.$('previous-step').textContent, '← 返回跟寫');
+  assert.equal(e.$('previous-step').textContent, '← 返回跟隨書寫');
   assert(e.document.body.className.includes('writing-view'));
   sendApp(e, 'REQUEST_HELP', { kind: 'outline' }); e.$('previous-step').click();
   assert.equal(e.snapshot().active.phase, 'guided'); assert.equal(e.snapshot().attempts.at(-2).outcome, 'abandoned'); assert.equal(e.snapshot().attempts.at(-2).help.length, 1);
@@ -501,7 +501,7 @@ test('updated vocabulary selects every position and still accepts a smaller teac
   const e = await quizApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '朋友\n推來推去'; e.$('validate-words').click();
   const inputs = walk(e.$('teacher-word-options')).filter(node => node.nodeName === 'input');
   assert.equal(inputs.length, 6); assert(inputs.every(input => input.checked));
-  assert.equal(e.$('teacher-selection-total').textContent, '已揀 6 個字 · 2 項詞語');
+  assert.equal(e.$('teacher-selection-total').textContent, '已選 6 個字 · 2 項詞語');
   e.$('apply-words').click(); startLocal(e);
   assert.deepEqual(e.snapshot().occurrences.map(item => [item.id, item.character]), [['w0:0', '朋'], ['w0:1', '友']]);
   e.$('choice-summary').click(); e.$('group-cards').childNodes[1].click();
@@ -556,7 +556,7 @@ test('completed writing advances to the second character of the same full word a
 test('a fourth-only assignment displays the full word and marks its position while mounting only that character', async () => {
   const e = await feedbackApp(); e.$('teacher-open').click(); e.$('teacher-words').value = '粗\n濃\n鬍鬚\n密\n剪草機\n推來推去'; e.$('validate-words').click();
   const content = {}; vm.runInNewContext(source('content.js'), content); e.context.BishunContent.photos = content.BishunContent.photos;
-  chooseCharacters(e, ['w5:3']); assert.equal(e.$('teacher-selection-total').textContent, '已揀 1 個字 · 1 項詞語'); e.$('apply-words').click(); startLocal(e);
+  chooseCharacters(e, ['w5:3']); assert.equal(e.$('teacher-selection-total').textContent, '已選 1 個字 · 1 項詞語'); e.$('apply-words').click(); startLocal(e);
   const sessionId = e.store.get('bishun-school:v1:current'), snapshot = () => JSON.parse(e.store.get('bishun-school:v1:' + sessionId));
   assert.equal(snapshot().entries[0].text, '推來推去'); assert.equal(snapshot().occurrences.length, 1); assert.equal(snapshot().occurrences[0].id, 'w0:3');
   assert.equal(e.$('word-cards').textContent, '推來推去'); assert.equal(markedPosition(e.$('word-cards').childNodes[0].childNodes[0]), 3);
@@ -576,7 +576,7 @@ test('a fourth-only assignment displays the full word and marks its position whi
     for (let i = 0; i < 2; i++) e.send('STROKE_ACCEPTED', { strokeIndex: i }); e.send('WRITING_COMPLETE');
     if (round === 0) { e.$('main-next').click(); assert(!visibleText(e.document).includes('去')); assert.equal(snapshot().attempts.at(-1).help.length, 0); }
   }
-  assert.equal(snapshot().active.phase, 'character-complete'); assert.equal(e.$('main-next').textContent, '睇今次紀錄 →'); e.$('main-next').click();
+  assert.equal(snapshot().active.phase, 'character-complete'); assert.equal(e.$('main-next').textContent, '查看本次紀錄 →'); e.$('main-next').click();
   assert.equal(snapshot().active.phase, 'summary'); assert.equal(S.summarize(snapshot()).length, 1); assert(!e.$('summary-rows').textContent.includes('待練'));
   assert(e.$('summary-rows').textContent.includes('推來推去')); assert(e.$('summary-rows').textContent.includes('第 4 字'));
   e.$('teacher-open').click(); assert(e.$('teacher-word-options').textContent.includes('第 4 字「去」'));
@@ -611,7 +611,7 @@ test('nonconsecutive repeated positions stay distinct on full-word cards and sam
 test('zero selection or changed words cannot end the current valid lesson', async () => {
   const e = await feedbackApp(); e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.$('teacher-open').click();
   const before = JSON.stringify(e.snapshot()); chooseCharacters(e, []); e.$('apply-words').click();
-  assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-dialog').open); assert(e.$('teacher-error').textContent.includes('請揀'));
+  assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-dialog').open); assert(e.$('teacher-error').textContent.includes('請選擇'));
   e.$('teacher-words').value = '濃'; e.$('apply-words').click();
   assert.equal(JSON.stringify(e.snapshot()), before); assert(e.$('teacher-error').textContent.includes('詞語有改動'));
 });
@@ -624,7 +624,7 @@ test('word audio falls back honestly for missing APIs, absent Cantonese, synchro
     if (mode === 'throws') e.voices.fail = true;
     const saved = JSON.stringify(e.snapshot()); e.$('speak').click();
     if (mode === 'utterance-error') e.voices.spoken.at(-1).onerror();
-    assert(/冇粵語|未能朗讀/.test(e.$('voice-note').textContent), mode); assert.equal(JSON.stringify(e.snapshot()), saved);
+    assert(/沒有粵語聲音|未能朗讀|未能播放/.test(e.$('voice-note').textContent), mode); assert.equal(JSON.stringify(e.snapshot()), saved);
     assert(e.voices.spoken.every(u => u.lang !== 'zh-CN'));
   }
 });
@@ -714,7 +714,7 @@ test('quiz gives a neutral retry cue and completion circle without hints, ticks,
   assert.equal(e.snapshot().active.phase, 'quiz'); assert.equal(e.$('word-title').textContent, '推來推去'); assert.equal(markedPosition(e.$('word-title')), 0); assert.equal(e.mounts.at(-1).character, '推'); assert.equal(e.$('semantic-cue').childNodes[0].attributes.src, 'images/push-block.webp');
   assert(e.document.querySelector('.step-rail').hidden); assert(e.$('demo-controls').hidden); assert(e.$('main-next').hidden);
   for (let i = 0; i < 3; i++) e.send('STROKE_MISSED', { strokeIndex: 0 });
-  assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('feedback-text').textContent, '再試呢一畫。'); assert.equal(e.$('feedback-icon').hidden, true); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.snapshot().attempts[0].mistakes, 3); assert.equal(e.snapshot().attempts[0].help.length, 0);
+  assert.equal('hidden' in e.$('quiz-mark').attributes, true); assert.equal(e.$('feedback-text').textContent, '請重新書寫此筆。'); assert.equal(e.$('feedback-icon').hidden, true); assert.equal(e.$('feedback-icon').textContent, ''); assert.equal(e.snapshot().attempts[0].mistakes, 3); assert.equal(e.snapshot().attempts[0].help.length, 0);
   sendApp(e, 'REQUEST_HELP', { kind: 'outline' }); sendApp(e, 'REQUEST_HELP', { kind: 'stroke' }); assert.equal(e.snapshot().attempts[0].help.length, 0);
   e.$('writer').emit('pointerdown'); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); assert.equal(e.$('feedback-icon').textContent, ''); assert.doesNotMatch(visibleText(e.document), /已寫\s*\d+\s*\/\s*\d+\s*畫|共\s*\d+\s*畫/); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
@@ -1141,19 +1141,19 @@ test('a quiz mount cannot advance demos or add hints from a full-demo callback',
 test('practice starts with one cue, acknowledges real ink and keeps missed-stroke help actionable', async () => {
   const e = await feedbackApp('二', 2);
   e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }];
-  assert.equal(e.$('practice-instruction').textContent, '先寫一畫。');
+  assert.equal(e.$('practice-instruction').textContent, '先寫一筆。');
   assert.equal(e.$('feedback').hidden, true); assert.equal(e.$('practice-stars').hidden, true);
   const beforeTouch = JSON.stringify(e.snapshot()); e.$('writer').emit('pointerdown');
   assert.equal(JSON.stringify(e.snapshot()), beforeTouch);
   assert.equal(e.$('practice-instruction').hidden, false);
   e.send('STROKE_MISSED', { strokeIndex: 0 });
-  assert.equal(e.$('feedback-text').textContent, '再試呢一畫。');
+  assert.equal(e.$('feedback-text').textContent, '請重新書寫此筆。');
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
-  assert.equal(e.$('feedback-text').textContent, '你再試成功咗！');
+  assert.equal(e.$('feedback-text').textContent, '重新嘗試成功！');
   e.send('STROKE_MISSED', { strokeIndex: 1 }); e.send('STROKE_MISSED', { strokeIndex: 1 });
   assert.equal(e.snapshot().active.currentStroke, 1); assert.equal(e.snapshot().attempts[0].mistakes, 3);
   assert.equal(e.snapshot().attempts[0].help.length, 1);
-  assert.equal(e.$('feedback-text').textContent, '睇完呢一畫，再試。');
+  assert.equal(e.$('feedback-text').textContent, '查看此筆提示後再試。');
   assert.equal(e.$('practice-instruction').hidden, true); assert.equal(e.$('feedback').hidden, false);
   const beforeVoice = JSON.stringify(e.snapshot()); e.$('speak').click();
   assert(e.voices.spoken.at(-1).text.includes('二'));
@@ -1164,7 +1164,7 @@ test('practice starts with one cue, acknowledges real ink and keeps missed-strok
 test('one-stroke practice acknowledges the start before retaining its completion category and one star', async () => {
   const e = await feedbackApp('一', 1);
   e.send('STROKE_ACCEPTED', { strokeIndex: 0 });
-  assert.equal(e.$('feedback-text').textContent, '你開始咗，第一畫完成！');
+  assert.equal(e.$('feedback-text').textContent, '第一筆已完成！');
   assert.equal(e.$('practice-stars').hidden, true);
   e.send('WRITING_COMPLETE');
   assert.equal(e.$('feedback').getAttribute('data-kind'), 'complete-guided');
@@ -1240,7 +1240,7 @@ for (const mode of ['practice', 'quiz']) {
       e.context.localStorage[name] = (...args) => { writes++; return original(...args); };
     }
     const labels = ['二年級', '2上1', '第一課《爸爸的鬍鬚》'];
-    const titles = ['揀年級', '二年級', '2上1'];
+    const titles = ['選擇年級', '二年級', '2上1'];
     const backs = ['返回首頁', '返回年級', '返回課本'];
     e.$('start-' + mode).click();
     labels.forEach((label, index) => {
@@ -1319,7 +1319,7 @@ test('quiz completion keeps only a short live announcement and reads the real vi
     e.$('main-next').click(); await waitFor(() => e.snapshot().active.phase === 'quiz');
     e.send('STROKE_ACCEPTED', { strokeIndex: 0 }); e.send('STROKE_ACCEPTED', { strokeIndex: 1 }); e.send('WRITING_COMPLETE');
   }
-  check('睇今次紀錄'); e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'summary');
+  check('查看本次紀錄'); e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'summary');
   assert(!e.voices.spoken.some(item => /準備好.*先行下一步/.test(item.text)));
 });
 
@@ -1579,14 +1579,14 @@ test('v4 word enters independent writing with visible target and keeps ink throu
   await e.finish(); assert.equal(e.snapshot().attempts.length, 1); assert.equal(currentSession.summarize(e.snapshot())[0].assisted, true); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null);
   assert.equal(e.$('practice-stars').hidden, false); assert.equal(e.$('practice-stars').textContent, '★ 1');
   e.$('teacher-open').click(); e.$('teacher-close').click(); assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); assert.equal(paths().length, 11);
-  e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert.equal(e.$('task-next').textContent, '睇今次紀錄 →');
+  e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert.equal(e.$('task-next').textContent, '查看本次紀錄 →');
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'path').attributes.d, prefix);
   assert.equal(walk(e.$('work-card')).find(node => node.nodeName === 'img').attributes.src, 'images/rope.webp');
   assert(walk(e.$('work-card')).find(node => node.nodeName === 'h2').className.includes('sr-only'));
   e.$('task-next').click(); assert.equal(e.snapshot().active.phase, 'summary'); assert(walk(e.$('summary-rows')).some(node => node.className === 'original-ink'));
   e.$('teacher-open').click(); assert(e.$('local-history').textContent.includes('自己寫 完成')); assert(!e.$('local-history').textContent.includes('自己試')); e.$('teacher-close').click();
   for (const copy of ['今節嘅腳印', '呢度記錄今次點樣練', '帶返去紙上試一試', '放低平板']) assert(!visibleText(e.document).includes(copy));
-  assert(visibleText(e.document).includes('自己完成') || visibleText(e.document).includes('有提示完成')); assert(visibleText(e.document).includes('紀錄只儲存'));
+  assert(visibleText(e.document).includes('自己完成') || visibleText(e.document).includes('有提示完成'));
 });
 
 test('v4 guided retry returns to a fresh independent page without a demo route', async () => {
@@ -1595,7 +1595,7 @@ test('v4 guided retry returns to a fresh independent page without a demo route',
   const guidedAttempt = e.snapshot().active.attemptId; sendApp(e, 'RETRY');
   await waitFor(() => e.snapshot().active.phase === 'recall' && e.$('writer').style.visibility === '');
   assert.notEqual(e.snapshot().active.attemptId, guidedAttempt); assert.deepEqual(e.snapshot().attempts.at(-1).help, []);
-  assert.equal(e.$('practice-title').textContent, '自己寫'); assert.equal(e.$('previous-step').textContent, '← 返回選字');
+  assert.equal(e.$('practice-title').textContent, '自己寫'); assert.equal(e.$('previous-step').textContent, '← 返回選擇字詞');
   assert(!visibleText(e.document).includes('睇筆順')); e.$('previous-step').click(); assert.equal(e.snapshot().active.phase, 'choose-word');
 });
 
@@ -1603,7 +1603,7 @@ test('student menus remove generic descriptions and keep privacy notices', () =>
   const e = environment(source('index.html'));
   assert.equal(e.$('start-practice').textContent, '練習'); assert.equal(e.$('start-quiz').textContent, '小挑戰');
   assert(!e.$('class-dialog').textContent.includes('交卷後可查看自己的原卷'));
-  assert(e.$('class-dialog').textContent.includes('暱稱（唔好用真名）')); assert(e.$('class-switch-note').textContent.includes('清除'));
+  assert(e.$('class-dialog').textContent.includes('暱稱（請勿使用真名）')); assert(e.$('class-switch-note').textContent.includes('清除'));
   assert.equal(e.$('rest'), undefined); assert(e.$('class-storage').textContent.includes('可能遺失'));
 });
 
@@ -1629,8 +1629,8 @@ test('v4 custom word stays generic and teacher tools do not reveal writing hints
   const e = await purposeApp(); assert(['loading', 'recall'].includes(e.snapshot().active.phase)); assert.equal(e.snapshot().wordChoices.w0.purpose, null); assert.equal(e.$('task-picture'), undefined);
   await e.enter(); e.$('teacher-open').click(); assert.equal(e.snapshot().attempts[0].help.length, 0); assert.equal(e.$('teacher-dialog').open, true); assert.equal(e.$('teacher-words').value.length > 0, true);
   e.$('teacher-close').click(); await waitFor(() => e.$('writer').style.visibility === ''); await e.finish();
-  assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); e.$('main-next').click(); assert.equal(e.snapshot().active.phase, 'word-complete'); assert(e.$('work-card').textContent.includes('我嘅詞語作品')); assert.equal(walk(e.$('work-card')).filter(node => node.nodeName === 'img').length, 0);
-  assert(!visibleText(e.document).includes('我嘅詞語作品'));
+  assert.equal(e.$('quiz-mark').getAttribute('hidden'), null); e.$('main-next').click(); assert(e.$('work-card').textContent.includes('我的詞語作品')); assert.equal(walk(e.$('work-card')).filter(node => node.nodeName === 'img').length, 0);
+  assert(!visibleText(e.document).includes('我的詞語作品'));
 });
 
 test('independent writing keeps the complete target word without stroke hints and uses the shorter record title', async () => {
@@ -1639,7 +1639,7 @@ test('independent writing keeps the complete target word without stroke hints an
   assert.equal(e.$('word-title').textContent, '粗');
   assert.equal(e.$('practice-title').textContent, '自己寫');
   assert.equal(e.$('practice-instruction').hidden, true);
-  assert.equal(e.$('writer').getAttribute('aria-label'), '無字形提示嘅書寫格');
+  assert.equal(e.$('writer').getAttribute('aria-label'), '沒有字形提示的書寫格');
   assert(!walk(e.$('writer')).some(node => node.className === 'stroke-direction' && node.style.display !== 'none'));
   await e.finish(); e.$('main-next').click(); e.$('task-next').click();
   assert.equal(e.$('summary-title').textContent, '我的紀錄');
@@ -1648,7 +1648,7 @@ test('independent writing keeps the complete target word without stroke hints an
 test('v4 Back retries the completed occurrence and work-card Back retries its last position', async () => {
   for (const route of ['independent', 'guided']) {
     const e = await purposeApp('粗');
-    assert.equal(e.$('previous-step').textContent, '← 返回選字'); e.$('previous-step').click();
+    assert.equal(e.$('previous-step').textContent, '← 返回選擇字詞'); e.$('previous-step').click();
     assert.equal(e.snapshot().active.phase, 'choose-word'); assert(e.$('choose-title').className.includes('sr-only')); assert.equal(e.$('choose-view').getAttribute('aria-labelledby'), 'choose-title');
     assert(!visibleText(e.document).includes('想先寫邊個字')); e.$('word-cards').childNodes[0].click();
     await e.enter(route); await e.finish();
@@ -1665,7 +1665,7 @@ test('historical v4 purpose UI is a read-only route alias with preserved saved c
   for (const [text, choice] of [['粗', undefined], ['來', undefined], ['粗', { purpose: 'intro', route: 'guided' }], ['粗', { purpose: 'label', route: null }], ['粗', { purpose: null, route: null }]]) {
     const e = await purposeApp(text, [0], { choice });
     assert.equal(e.snapshot().active.phase, 'choose-purpose'); assert.deepEqual(e.snapshot().wordChoices, choice ? { w0: choice } : {});
-    assert.deepEqual(e.$('task-options').childNodes.map(button => button.textContent), ['自己寫']); assert.equal(e.$('previous-step').textContent, '← 返回選字');
+    assert.deepEqual(e.$('task-options').childNodes.map(button => button.textContent), ['自己寫']); assert.equal(e.$('previous-step').textContent, '← 返回選擇字詞');
     const before = JSON.stringify(e.snapshot()); e.voices.changed(); assert.equal(JSON.stringify(e.snapshot()), before);
     await e.enter(); assert.equal(e.snapshot().wordChoices.w0.purpose, choice ? choice.purpose : text === '粗' ? 'label' : null);
     e.$('teacher-end').click(); assert(currentSession.validateSnapshot(e.snapshot()));
