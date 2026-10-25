@@ -207,7 +207,7 @@
       engine.data = data;
       await writer.setCharacter(character);
       if (!alive) return;
-      await Promise.all(Object.entries({ strokeColor: '#214b3b', radicalColor: '#214b3b', outlineColor: '#d7ddd4', highlightColor: '#ba642d' }).map(([key, color]) => writer.updateColor(key, (quiz || practice && ['strokeColor', 'radicalColor'].includes(key)) ? 'rgba(33,75,59,0)' : color, { duration: 0 })));
+      await Promise.all(Object.entries({ strokeColor: '#214b3b', radicalColor: '#214b3b', outlineColor: '#d7ddd4', highlightColor: '#ba642d' }).map(([key, color]) => writer.updateColor(key, practice && options.phase === 'recall' && ['strokeColor', 'radicalColor'].includes(key) ? '#aeb9b0' : (quiz || practice && ['strokeColor', 'radicalColor'].includes(key)) ? 'rgba(33,75,59,0)' : color, { duration: 0 })));
       if (!alive) return;
       await Promise.all([writer.hideCharacter({ duration: 0 }), writer.hideOutline({ duration: 0 })]);
       if (!alive) return;
