@@ -73,12 +73,19 @@
     async function close() { visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; official = null; activeLocal = null; onClose(); }
     function drawList() {
       page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
-      const list = node('div', '', 'assessment-choices');
+      const list = node('div', '', 'word-cards assessment-choices');
       A.positions(record.run.assignment).forEach((position, index) => {
         const answer = record.run.answers[index], label = answer.status === 'draft' ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交';
-        list.append(button(titleFor(position, index) + ' · ' + label, () => {
+        const title = titleFor(position, index) + ' · ' + label;
+        const card = button('', () => {
           record = { ...record, run: A.transition(record.run, { type: 'SELECT', index }) }; drawWriting();
-        }));
+        });
+        const listen = record.run.assignment.mode === 'listen' && !isChallenge();
+        card.className = 'word-card assessment-choice-card' + (listen ? ' assessment-choice-listen' : ''); card.setAttribute('aria-label', title);
+        const word = node('span', listen ? '第 ' + (index + 1) + ' 題' : position.word, 'word-name');
+        card.append(word);
+        if (!listen) { const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = position.word + '圖片'; photo.className = 'word-photo'; card.append(photo); }
+        card.append(node('span', '第 ' + (position.index + 1) + ' 字 · ' + label, 'stamp')); list.append(card);
       });
       panel.append(list, message(error));
       if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
