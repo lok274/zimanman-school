@@ -274,7 +274,7 @@
       const button = document.createElement('button'); button.className = 'word-card'; button.disabled = done;
       const content = textNode('span', '', 'word-name'); renderWordLabel(content, word, target.index);
       button.append(content, visualCue(word.text));
-      if (done) button.append(textNode('span', pending ? '有字待練' : '完成今次練習', 'stamp'));
+      if (done) button.append(textNode('span', pending ? '有字待練' : '完成本次練習', 'stamp'));
       button.addEventListener('click', () => event('CHOOSE_WORD', { wordId: word.id, purpose: defaultPurpose(word) })); container.append(button);
     });
     $('choice-summary').textContent = localMode ? '返回選擇組別' : '返回首頁';
