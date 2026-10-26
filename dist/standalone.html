@@ -121,7 +121,6 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-footer button { min-height:72px; min-width:200px; font-size:24px; }
 .assessment-writing { display:grid; grid-template-columns:minmax(0,1fr) minmax(330px,.66fr); align-items:center; gap:20px; max-width:1180px; margin:auto; }
 .assessment-paper { position:relative; width:min(100%,calc(100dvh - 180px)); aspect-ratio:1; border:2px solid #a4b5a6; border-radius:12px; background:#fffef8; justify-self:center; overflow:hidden; }
-.assessment-demo { position:absolute; inset:0; pointer-events:none; opacity:.65; }
 .freehand-ink { display:block; width:100%; height:100%; aspect-ratio:1; touch-action:none; user-select:none; -webkit-user-select:none; }
 .assessment-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .assessment-controls .button { min-height:64px; font-size:24px; line-height:1.25; padding:8px; }
@@ -131,9 +130,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-completed { position:absolute; right:10px; bottom:10px; border-radius:8px; padding:2px 10px; font-size:18px; color:#214b3b; background:#e9eddf; }
 .assessment-choice-card:disabled { opacity:1; }
 .assessment-controls .assessment-status:empty { display:none; }
-.assessment-controls:has(.assessment-context)>p:not(.assessment-status) { display:none; }
 .assessment-status { min-height:1.5em; margin:4px 0; font-size:16px; }
-.assessment-context { width:100%; height:100px; object-fit:contain; }
 .assessment-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:22px 0; }
 .assessment-panel:has(> .word-cards) { display:flex; flex-direction:column; gap:8px; padding:10px 16px max(10px,env(safe-area-inset-bottom)); }
 .assessment-panel:has(> .word-cards) .assessment-heading { flex:none; margin:0; }
@@ -147,21 +144,10 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-choices .assessment-choice-listen { grid-template-rows:minmax(0,1fr); }
 .assessment-choices .assessment-choice-listen .word-name { grid-column:1/-1; font-size:min(96px,calc(100cqi / 5),50cqb); }
 .review-answers { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px; }
-.review-answer,.assessment-workcard { border:1px solid #bac9b9; border-radius:12px; padding:16px; background:#fffef8; }
 .review-paper { width:100%; max-width:280px; aspect-ratio:1; border:1px solid #d4ddd6; background:white; }
 .review-answer label { display:block; margin:12px 0; }
 .review-answer select { font:inherit; min-height:44px; }
 .teacher-correct { color:#16752f; font-size:22px; font-weight:700; }
-.assessment-summary-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0; }
-.assessment-summary-actions .button,.assessment-pagination .button { min-height:64px; font-size:24px; }
-.assessment-pagination { display:flex; align-items:center; justify-content:center; gap:16px; margin:12px 0; }
-.assessment-workcards { display:grid; gap:20px; }
-.assessment-workcard { display:grid; grid-template-columns:minmax(130px,.45fr) minmax(0,1fr); align-items:center; gap:8px 18px; }
-.assessment-workcard>img { grid-row:1/4; width:100%; max-height:180px; object-fit:contain; }
-.assessment-workcard>h2,.assessment-workcard>p { margin:0; }
-.assessment-introduction { display:flex; align-items:center; gap:6px; }
-.assessment-word-ink { display:flex; flex:1; min-width:0; gap:6px; }
-.assessment-word-ink .review-paper { width:min(23%,110px); flex:1 1 0; max-width:110px; }
 .assessment-board { margin:24px 0; }
 @media (min-width:600px) and (orientation:portrait) {
   .assessment-choices.word-cards { grid-template-columns:minmax(0,1fr); }
@@ -175,17 +161,29 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
   .assessment-writing { grid-template-columns:minmax(0,1fr) minmax(260px,1fr); gap:12px; }
   .assessment-controls { gap:8px; }
   .assessment-footer { padding:10px 14px; }
-  .assessment-context { height:90px; }
   .assessment-choices { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .assessment-summary-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (max-width:480px) {
   .assessment-writing { grid-template-columns:1fr; }
   .assessment-paper { width:min(100%,calc(100dvh - 390px)); }
-  .assessment-workcard { grid-template-columns:1fr; }
-  .assessment-workcard>img { grid-row:auto; max-height:90px; }
   .assessment-status { grid-column:1 / -1; }
   .assessment-choices { grid-template-columns:1fr; }
+}
+
+.review-answer { border:1px solid #bac9b9; border-radius:12px; padding:16px; background:#fffef8; }
+.assessment-writer { position:absolute; inset:0; touch-action:none; user-select:none; -webkit-user-select:none; }
+.assessment-writer>svg { position:absolute; inset:0; width:100%; height:100%; }
+.assessment-writer .start-overlay { pointer-events:none; z-index:1; }
+.assessment-correct { color:#16752f; font-size:64px; font-weight:700; margin:0; text-align:center; }
+.assessment-board table { width:100%; max-width:900px; margin:auto; border-collapse:collapse; font-size:24px; }
+.assessment-board th,.assessment-board td { padding:12px; text-align:left; border-bottom:1px solid #d4ddd6; }
+.assessment-board .is-me { background:#e4eddd; }
+@media (min-width:600px) and (orientation:portrait) {
+  .assessment-writing { grid-template-columns:1fr; gap:10px; }
+  .assessment-paper { width:min(100%,calc(100dvh - 400px)); }
+  .assessment-controls { width:100%; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .assessment-controls .primary { grid-column:auto; }
+  .assessment-controls .assessment-status { grid-column:1/-1; }
 }
 
 </style>
@@ -723,7 +721,97 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const run = start(assigned, runId, now);
     return { ...run, version: 3, presentationMode: 'copy', legacyElapsedMs: 0, wordProgress: run.assignment.entries.map((entry, index) => ({ wordId: 'w' + index, phase: 'unstarted', elapsedMs: 0, timeKnown: true })), answers: run.answers.map(answer => ({ ...answer, hintUsed: false })) };
   }
-  function actualMode(run) { return run.version === 3 ? run.presentationMode : run.assignment.mode; }
+  const policy = 'locked-strokes-0.9-v1';
+  function startLocked(assigned, runId, now = Date.now()) {
+    const run = startWords(assigned, runId, now);
+    delete run.legacyElapsedMs;
+    return { ...run, version: 4, policy, answers: run.answers.map(answer => ({ ...answer, expectedStrokes: null })) };
+  }
+  function lockedInk(strokes, count) {
+    if (!Array.isArray(strokes) || strokes.length > 64) throw new Error('筆跡資料無效。');
+    return strokes.map(stroke => {
+      if (!Array.isArray(stroke) || stroke.length < 2 || stroke.length > 16384) throw new Error('筆跡資料無效。');
+      return stroke.map(point => {
+        if (++count.n > limits.points) throw new Error('筆跡超出容量，原稿仍然保留。');
+        if (!Array.isArray(point) || point.length !== 2 || point.some(n => !Number.isSafeInteger(n) || n < 0 || n > limits.coordinate)) throw new Error('筆跡座標無效。');
+        return [...point];
+      });
+    });
+  }
+  function targetCount(value) { return Number.isInteger(value) && value > 0 && value <= 64; }
+  function completeAnswer(answer) { return targetCount(answer.expectedStrokes) && answer.strokes.length === answer.expectedStrokes; }
+  function boardTime(milliseconds) { return Math.round(milliseconds / 100) * 100; }
+  function validateAutomatic(assigned, run, counts) {
+    const canonical = assignment(assigned.entries, assigned.mode), expected = positions(canonical), count = { n: 0 };
+    if (run?.version !== 4 || run.policy !== policy || run.presentationMode !== 'copy' || typeof run.runId !== 'string' || !/^[\w-]{1,100}$/.test(run.runId) || run.phase !== 'sealed' || JSON.stringify(run.assignment) !== JSON.stringify(canonical) || !Number.isSafeInteger(run.startedAt) || run.startedAt < 0 || !Number.isSafeInteger(run.elapsedMs) || run.elapsedMs < 0 || run.elapsedMs > limits.duration || !Array.isArray(run.answers) || run.answers.length !== expected.length || !Array.isArray(run.wordProgress) || run.wordProgress.length !== canonical.entries.length) throw new Error('小挑戰紀錄或題目不一致。');
+    const wordProgress = run.wordProgress.map((word, index) => {
+      if (!word || word.wordId !== 'w' + index || word.phase !== 'submitted' || word.timeKnown !== true || !Number.isSafeInteger(word.elapsedMs) || word.elapsedMs < 0 || word.elapsedMs > limits.duration) throw new Error('詞語用時紀錄無效。');
+      return { wordId: word.wordId, phase: 'submitted', elapsedMs: word.elapsedMs, timeKnown: true };
+    });
+    if (wordProgress.reduce((sum, word) => sum + word.elapsedMs, 0) !== run.elapsedMs) throw new Error('詞語用時紀錄不一致。');
+    const answers = run.answers.map((answer, index) => {
+      if (!answer || answer.occurrenceId !== expected[index].id || answer.status !== 'submitted' || typeof answer.hintUsed !== 'boolean' || !targetCount(answer.expectedStrokes) || counts && answer.expectedStrokes !== counts[expected[index].character]) throw new Error('請先完成每個字的筆順。');
+      const strokes = lockedInk(answer.strokes, count);
+      if (strokes.length !== answer.expectedStrokes) throw new Error('請先完成每個字的筆順。');
+      return { occurrenceId: answer.occurrenceId, status: 'submitted', strokes, hintUsed: answer.hintUsed, expectedStrokes: answer.expectedStrokes };
+    });
+    const result = { version: 4, policy, runId: run.runId, assignment: canonical, presentationMode: 'copy', startedAt: run.startedAt, elapsedMs: run.elapsedMs, phase: 'sealed', wordProgress, answers };
+    if (new TextEncoder().encode(JSON.stringify(result)).length > limits.bytes) throw new Error('筆跡超出容量，原稿仍然保留。');
+    return result;
+  }
+  function lockedTransition(run, event) {
+    if (run.phase !== 'writing') throw new Error('原卷已封存。');
+    const next = structuredClone(run), answer = next.answers[next.cursor], group = wordAt(next), word = next.wordProgress[group.wordIndex];
+    if (event.type === 'SELECT') {
+      if (!Number.isInteger(event.index) || !next.answers[event.index]) throw new Error('題目無效。');
+      next.cursor = event.index;
+    } else if (event.type === 'DATA_READY') {
+      if (!targetCount(event.count) || answer.expectedStrokes !== null && answer.expectedStrokes !== event.count || answer.strokes.length > event.count) throw new Error('字形資料不一致，原稿仍然保留。');
+      answer.expectedStrokes = event.count;
+    } else if (event.type === 'START_WORD') {
+      if (word.phase === 'submitted' || !targetCount(answer.expectedStrokes)) throw new Error('請先載入字形。');
+      word.phase = 'writing';
+    } else if (event.type === 'SEAL') {
+      next.phase = 'sealed'; return validateAutomatic(next.assignment, next);
+    } else if (event.type === 'NEXT_CHARACTER') {
+      if (answer.status !== 'submitted' || next.cursor + 1 >= group.end) throw new Error('請先交答案。');
+      next.cursor++;
+    } else {
+      if (word.phase !== 'writing' || answer.status !== 'draft') throw new Error('請先按開始。');
+      if (event.type === 'TIME') {
+        if (!Number.isSafeInteger(event.elapsedMs) || event.elapsedMs < 0) throw new Error('計時紀錄無效。');
+        const elapsed = Math.min(event.elapsedMs, limits.duration - next.elapsedMs); word.elapsedMs += elapsed; next.elapsedMs += elapsed;
+      } else if (event.type === 'STROKE_ACCEPTED') {
+        if (!targetCount(answer.expectedStrokes) || event.strokeIndex !== answer.strokes.length || answer.strokes.length >= answer.expectedStrokes) throw new Error('筆順紀錄不一致，原稿仍然保留。');
+        answer.strokes.push(event.stroke); checkLockedInk(next);
+      } else if (event.type === 'UNDO') answer.strokes.pop();
+      else if (event.type === 'HINT') answer.hintUsed = true;
+      else if (['WRITING_COMPLETE', 'SUBMIT_CHARACTER'].includes(event.type)) {
+        if (!completeAnswer(answer)) throw new Error('請先完成此字的筆順。');
+        if (event.type === 'SUBMIT_CHARACTER') {
+          answer.status = 'submitted';
+          if (next.answers.slice(group.start, group.end).every(item => item.status === 'submitted')) word.phase = 'submitted';
+        }
+      } else throw new Error('小挑戰操作無效。');
+    }
+    return next;
+  }
+  function checkLockedInk(run) {
+    const count = { n: 0 };
+    for (const answer of run.answers) {
+      lockedInk(answer.strokes, count);
+      if (answer.strokes.length && (!targetCount(answer.expectedStrokes) || answer.strokes.length > answer.expectedStrokes)) throw new Error('筆順紀錄不一致。');
+    }
+    if (new TextEncoder().encode(JSON.stringify(run)).length + 2048 > limits.bytes) throw new Error('筆跡超出容量，原稿仍然保留。');
+  }
+  function timeRanks(rows) {
+    let rank = 0;
+    return rows.slice().sort((a, b) => a.elapsedMs - b.elapsedMs || a.alias.localeCompare(b.alias)).map((row, i, sorted) => {
+      if (!i || row.elapsedMs !== sorted[i - 1].elapsedMs) rank = i + 1;
+      return { ...row, rank };
+    });
+  }
+  function actualMode(run) { return [3, 4].includes(run.version) ? run.presentationMode : run.assignment.mode; }
   function wordAt(run, index = run.cursor) {
     let start = 0;
     for (let wordIndex = 0; wordIndex < run.assignment.entries.length; wordIndex++) {
@@ -782,6 +870,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     return result;
   }
   function transition(run, event) {
+    if (run.version === 4) return lockedTransition(run, event);
     if (run.phase !== 'writing') throw new Error('原卷已封存。');
     const next = structuredClone(run), answer = next.answers[next.cursor];
     if (run.version === 3) {
@@ -822,6 +911,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     return next;
   }
   function checkInk(run) {
+    if (run.version === 4) return checkLockedInk(run);
     const count = { n: 0 };
     for (const answer of run.answers) ink(answer.strokes, count);
     const terminal = envelope({ ...run, elapsedMs: limits.duration, ...(run.version === 3 ? { wordProgress: run.wordProgress.map(word => ({ ...word, phase: 'submitted', elapsedMs: limits.duration })) } : {}) }, run.answers.map(answer => ({ occurrenceId: answer.occurrenceId, status: ['draft', 'ready'].includes(answer.status) ? 'submitted' : answer.status, strokes: answer.strokes, ...(run.version === 3 ? { hintUsed: answer.hintUsed } : {}) })));
@@ -846,7 +936,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       return { ...row, rank };
     });
   }
-  const api = { limits, assignment, positions, start, startWords, actualMode, wordAt, upgradeWords, transition, checkInk, validateSubmission, review, unmarked, ranks };
+  const api = { policy, startLocked, validateAutomatic, completeAnswer, boardTime, timeRanks, limits, assignment, positions, start, startWords, actualMode, wordAt, upgradeWords, transition, checkInk, validateSubmission, review, unmarked, ranks };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.BishunAssessment = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -911,15 +1001,27 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const records = await transaction('readonly', store => store.getAll());
       return records.filter(record => record.key.startsWith('local:') && record.kind === 'official' && record.run?.phase === 'sealed' && record.expiresAt > Date.now()).sort((a, b) => b.run.startedAt - a.run.startedAt);
     }
-    async function activeLocal() {
+    async function activeLocal(version) {
       const records = await transaction('readonly', store => store.getAll()), now = Date.now();
       const pointers = new Set(records.filter(record => record.key.startsWith('local:') && record.runKey && record.expiresAt > now).map(record => record.runKey));
-      return records.filter(record => pointers.has(record.key) && record.expiresAt > now).sort((a, b) => b.run.startedAt - a.run.startedAt)[0] || null;
+      return records.filter(record => pointers.has(record.key) && record.expiresAt > now && (version === undefined || record.run?.version === version)).sort((a, b) => b.run.startedAt - a.run.startedAt)[0] || null;
     }
     async function release(scope, runKey) {
       await transaction('readwrite', store => {
         const request = store.get(scope);
         request.onsuccess = () => { if (request.result?.runKey === runKey) store.delete(scope); };
+      });
+    }
+    async function replacePointer(scope, expectedKey, runKey, expiresAt, guard = () => {}) {
+      const db = await database(); guard();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'), request = store.get(scope); let failure;
+        request.onsuccess = () => {
+          try { guard(); if (request.result?.runKey === expectedKey) store.put({ key: scope, runKey, expiresAt }); }
+          catch (problem) { failure = problem; tx.abort(); }
+        };
+        tx.oncomplete = resolve;
+        tx.onabort = tx.onerror = () => reject(failure || tx.error || new Error('原卷指標未能保存。'));
       });
     }
     async function initialize(scope, candidate, guard = () => {}) {
@@ -946,7 +1048,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         cursor.onsuccess = () => { const item = cursor.result; if (!item) return; if (item.value.expiresAt <= now) item.delete(); item.continue(); };
       });
     }
-    return { get, put, putMany, initialize, remove, localOriginals, activeLocal, release, purge };
+    return { get, put, putMany, initialize, remove, localOriginals, activeLocal, release, replacePointer, purge };
   }
   const api = { create };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -985,36 +1087,6 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
     for (const stroke of strokes) svg.append(line(stroke)); container.replaceChildren(svg); return svg;
   }
-  function capture(container, strokes, onStroke, hint = null) {
-    const svg = render(container, strokes, '自由書寫格', hint), active = { pointer: null, points: [], path: null, started: 0 };
-    let locked = false;
-    function point(event) {
-      const rect = svg.getBoundingClientRect(), bound = n => Math.max(0, Math.min(10000, Math.round(n)));
-      return [bound((event.clientX - rect.left) / rect.width * 10000), bound((event.clientY - rect.top) / rect.height * 10000), Math.min(86400000, Math.max(0, Math.round(performance.now() - active.started)))];
-    }
-    function add(event) {
-      const samples = event.getCoalescedEvents?.();
-      for (const sample of samples?.length ? samples : [event]) active.points.push(point(sample));
-      active.path.setAttribute('d', path(active.points));
-    }
-    function end(event) {
-      if (active.pointer !== event.pointerId) return;
-      add(event); commit();
-    }
-    function commit() {
-      if (active.pointer === null) return;
-      const stroke = active.points; active.pointer = null; active.points = []; active.path = null; onStroke(stroke);
-    }
-    svg.addEventListener('pointerdown', event => {
-      if (locked || active.pointer !== null || event.button !== 0) return;
-      event.preventDefault(); active.pointer = event.pointerId; active.started = performance.now(); active.path = line([]); svg.append(active.path); add(event);
-      svg.setPointerCapture(event.pointerId);
-    });
-    svg.addEventListener('pointermove', event => { if (event.pointerId === active.pointer) { event.preventDefault(); add(event); } });
-    svg.addEventListener('pointerup', end);
-    for (const name of ['pointercancel', 'lostpointercapture']) svg.addEventListener(name, event => { if (event.pointerId === active.pointer) commit(); });
-    return { lock(value) { locked = value; }, active() { return active.pointer !== null; }, flush: commit, dispose() { locked = true; container.replaceChildren(); } };
-  }
   function replay(container, strokes) {
     const svg = render(container, []); let stopped = false, frameId;
     const points = strokes.reduce((total, stroke) => total + stroke.length, 0), duration = Math.max(600, Math.min(6000, points * 8)), started = performance.now();
@@ -1028,78 +1100,9 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     frameId = requestAnimationFrame(tick);
     return () => { stopped = true; cancelAnimationFrame(frameId); };
   }
-  let demoEngine = null;
-  function demo(container, character, strokeIndex, onDone, onError) {
-    // Hanzi Writer retains document listeners, so all hints share one stable target.
-    if (!demoEngine) { const layer = document.createElement('div'); layer.className = 'assessment-demo'; layer.setAttribute('aria-hidden', 'true'); demoEngine = { layer, writer: null, data: null, ready: Promise.resolve(), cancel: null }; }
-    const engine = demoEngine, layer = engine.layer, controller = new AbortController();
-    engine.cancel?.(); container.append(layer);
-    let alive = true, observer = null;
-    function cancel() { if (!alive) return; alive = false; controller.abort(); observer?.disconnect(); engine.writer?.pauseAnimation(); layer.remove(); engine.cancel = null; }
-    engine.cancel = cancel;
-    Promise.resolve().then(async () => {
-      if (!root.BishunWriting || !root.HanziWriter) throw new Error('筆順未能播放。');
-      const data = await root.BishunWriting.loadCharacter(character, controller.signal);
-      if (!alive) return;
-      const size = container.getBoundingClientRect().width;
-      if (!engine.writer) engine.writer = new root.HanziWriter(layer, { width: size, height: size, padding: size * .1, showCharacter: false, showOutline: false, strokeColor: '#48735b', strokeAnimationSpeed: .45, delayBetweenStrokes: 520, charDataLoader: (value, loaded) => loaded(engine.data) });
-      engine.ready = engine.ready.catch(() => {}).then(() => { if (!alive) return; engine.data = data; engine.writer.updateDimensions({ width: size, height: size, padding: size * .1 }); return engine.writer.setCharacter(character); });
-      await engine.ready;
-      if (!alive) return;
-      if (root.ResizeObserver) { observer = new root.ResizeObserver(() => { const width = container.getBoundingClientRect().width; engine.writer.updateDimensions({ width, height: width, padding: width * .1 }); }); observer.observe(container); }
-      await engine.writer.animateStroke(Math.min(Math.max(0, strokeIndex), data.strokes.length - 1));
-      if (alive) { cancel(); onDone(); }
-    }).catch(() => { if (alive) { cancel(); onError('筆順未能播放，請繼續書寫。'); } });
-    return cancel;
-  }
-  const api = { render, capture, replay, demo };
+  const api = { render, replay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.BishunFreehand = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-</script>
-  <script>
-(function (root) {
-  'use strict';
-  function node(tag, text, className) { const item = document.createElement(tag); if (text) item.textContent = text; if (className) item.className = className; return item; }
-  function mount(container, data, onSave) {
-    const A = root.BishunAssessment, F = root.BishunFreehand, positions = A.positions(data.run.assignment);
-    let marks = structuredClone(data.marks), revision = data.revision, stopReplay = null, disposed = false;
-    const status = node('p', '', 'review-status'); status.setAttribute('role', 'status');
-    const rows = node('div', '', 'review-answers');
-    data.run.answers.forEach((answer, index) => {
-      const position = positions[index], row = node('section', '', 'review-answer');
-      row.append(node('h3', position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'));
-      const word = data.run.wordProgress?.[A.wordAt(data.run, index).wordIndex];
-      if (word && A.wordAt(data.run, index).start === index) row.append(node('p', (word.timeKnown ? '詞語用時 ' : '續寫用時 ') + (word.elapsedMs / 1000).toFixed(1) + ' 秒'));
-      if (answer.hintUsed) row.append(node('p', '有提示'));
-      const paper = node('div', '', 'review-paper'); F.render(paper, answer.strokes); row.append(paper);
-      row.append(node('p', answer.status === 'skipped' ? '跳過，保留原筆跡' : '已提交原筆跡'));
-      const replay = node('button', '重播原筆跡', 'button secondary');
-      replay.addEventListener('click', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }); row.append(replay);
-      const label = node('label', '字形 '), select = node('select'); select.setAttribute('aria-label', '第 ' + (index + 1) + ' 題字形');
-      for (const [value, text] of [['pending', '待批改'], ['correct', 'O 正確'], ['practice', '再練習']]) { const option = node('option', text); option.value = value; select.append(option); }
-      select.value = marks[index].correct === null ? 'pending' : marks[index].correct ? 'correct' : 'practice';
-      select.addEventListener('change', () => { marks[index].correct = select.value === 'pending' ? null : select.value === 'correct'; });
-      label.append(select); row.append(label);
-      const note = node('label', '筆順需要練習 '), checkbox = node('input'); checkbox.type = 'checkbox'; checkbox.checked = marks[index].strokePractice;
-      checkbox.addEventListener('change', () => { marks[index].strokePractice = checkbox.checked; }); note.append(checkbox); row.append(note); rows.append(row);
-    });
-    const save = node('button', '保存批改', 'button primary');
-    save.addEventListener('click', async () => {
-      if (save.disabled) return; save.disabled = true;
-      try {
-        const result = await onSave({ marks: structuredClone(marks), revision });
-        if (disposed) return;
-        revision = result.revision; marks = structuredClone(result.marks);
-        status.textContent = result.score === null ? '已保存，仍有待批改項目。' : '已保存。字形正確 ' + result.score + ' / ' + marks.length;
-      } catch (error) { if (!disposed) status.textContent = error.message; }
-      finally { if (!disposed) save.disabled = false; }
-    });
-    container.replaceChildren(node('p', (A.actualMode(data.run) === 'copy' ? '看字寫' : '聽詞寫') + ' · 書寫時間 ' + ((data.elapsedMs ?? data.run.elapsedMs) / 1000).toFixed(1) + ' 秒 · 批改版本 ' + revision), rows, save, status);
-    return () => { disposed = true; stopReplay?.(); };
-  }
-  root.BishunAssessmentReview = { mount };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -1120,6 +1123,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         if (value.join && (!/^[A-Z2-9]{8}$/.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
         if (value.pending && (!value.member || value.pending.runId !== value.boundRunId || !root.BishunQuizResults.evaluate(value.member.assignment.entries, value.pending).terminal)) throw new Error('Invalid pending result');
         if (value.receipt && (!value.member || typeof value.receipt.runId !== 'string' || (value.member.assignment.version === 2 ? value.receipt.official !== true : typeof value.receipt.ranked !== 'boolean'))) throw new Error('Invalid saved receipt');
+        if (value.receipt?.version === 4) validateAutomaticReceipt(value.receipt);
         saved = value;
       }
     } catch { storageOkay = false; }
@@ -1192,7 +1196,12 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     async function refresh() {
       if (!accepted || !saved.member || !saved.receipt || busy) return;
       try {
-        const data = await request('/' + saved.member.code + '/board', 'GET', undefined, saved.member.token);
+        const automatic = saved.receipt.version === 4;
+        const data = await request('/' + saved.member.code + (automatic ? '/automatic-board' : '/board'), 'GET', undefined, saved.member.token);
+        if (automatic) {
+          validateAutomaticBoard(data); board = { ...data, automatic: true, personalBest: data.rows.find(row => row.memberId === saved.member.memberId) || null };
+          message = '班級榜已更新。'; notify(); return;
+        }
         if (saved.member.assignment.version === 2) {
           validateReviewedBoard(data);
           board = { ...data, reviewed: true, personalBest: data.rows.find(row => row.alias === saved.member.alias) || null };
@@ -1220,7 +1229,33 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (receipt.runId !== run.runId || receipt.official !== true || run.version === 3 && receipt.version !== 3) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
       saved.receipt = receipt; persist(); notify(); return receipt;
     }
-    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed,
+    function validateAutomaticReceipt(receipt, run) {
+      if (!receipt || receipt.version !== 4 || receipt.policy !== root.BishunAssessment.policy || receipt.official !== true || typeof receipt.runId !== 'string' || !/^[\w-]{1,100}$/.test(receipt.runId) || !Number.isSafeInteger(receipt.elapsedMs) || receipt.elapsedMs < 0 || receipt.elapsedMs > root.BishunAssessment.limits.duration || receipt.elapsedMs % 100 || run && (receipt.runId !== run.runId || receipt.elapsedMs !== root.BishunAssessment.boardTime(run.elapsedMs))) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
+      return receipt;
+    }
+    function validateAutomaticBoard(data) {
+      if (data.version !== 4 || data.policy !== root.BishunAssessment.policy || !Number.isSafeInteger(data.expiresAt) || !Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => !row || typeof row.memberId !== 'string' || typeof row.alias !== 'string' || Array.from(row.alias).length > 20 || typeof row.isMe !== 'boolean' || !Number.isInteger(row.rank) || row.rank < 1 || !Number.isSafeInteger(row.elapsedMs) || row.elapsedMs < 0 || row.elapsedMs > root.BishunAssessment.limits.duration || row.elapsedMs % 100)) throw new Error('排行榜回應無效。');
+      return data;
+    }
+    async function submitAutomatic(run) {
+      const canonical = root.BishunAssessment.validateAutomatic(saved.member.assignment, run);
+      const receipt = validateAutomaticReceipt(await reviewedRequest('automatic-answers', 'PUT', canonical), canonical);
+      saved.receipt = receipt;
+      if (!persist()) throw new Error('班級已收卷，但本頁未能保存回條，請重試。');
+      notify(); return receipt;
+    }
+    async function ownAutomaticAnswer() {
+      const result = await reviewedRequest('automatic-answers', 'GET');
+      if (result.answer) {
+        const run = root.BishunAssessment.validateAutomatic(saved.member.assignment, result.answer.run);
+        const receipt = validateAutomaticReceipt(result.answer.receipt, run);
+        saved.receipt = receipt; persist(); notify();
+        return { ...result, answer: { run, receipt } };
+      }
+      if (result.answer !== null) throw new Error('原卷回應無效。');
+      return result;
+    }
+    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed, submitAutomatic, ownAutomaticAnswer, automaticBoard: async () => validateAutomaticBoard(await reviewedRequest('automatic-board', 'GET')),
       ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: async () => validateReviewedBoard(await reviewedRequest('board', 'GET')) };
   }
   const api = { create, storageKey };
@@ -1232,326 +1267,300 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   <script>
 (function (root) {
   'use strict';
-  function create({ classroom, onClose, onPractice, store = root.BishunAssessmentStore.create() }) {
-    const A = root.BishunAssessment, F = root.BishunFreehand, C = root.BishunContent;
+  function create({ classroom, onClose, store = root.BishunAssessmentStore.create() }) {
+    const A = root.BishunAssessment, W = root.BishunWriting, C = root.BishunContent;
     const node = (tag, text = '', className = '') => { const el = document.createElement(tag); el.textContent = text; if (className) el.className = className; return el; };
     const panel = node('section', '', 'assessment-panel'); panel.id = 'assessment-view'; panel.hidden = true;
-    panel.setAttribute('aria-label', '自由書寫小挑戰'); document.body.append(panel);
-    let context = null, activeLocal = null, record = null, official = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0, segmentStart = null, runningWord = null, timerFrame = null, pad = null, stopReplay = null, stopReview = null, stopDemo = null, demoActive = false, expiryTimer = null, visible = false;
+    panel.setAttribute('aria-label', '筆順小挑戰'); document.body.append(panel);
+    const target = node('div', '', 'assessment-writer'); target.setAttribute('aria-label', '按筆順書寫');
     const siblings = [...document.body.children].filter(el => el !== panel && el.tagName !== 'SCRIPT');
+    let context = null, record = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0;
+    let segmentStart = null, runningWord = null, timerFrame = null, pad = null, ready = false, data = null, loadController = null, generation = 0, hintActive = false, expiryTimer = null, poll = null, boardGeneration = 0, pollsLeft = 120, visible = false;
     function conceal(value) { for (const el of siblings) { el.inert = value; if (value) el.setAttribute('aria-hidden', 'true'); else el.removeAttribute('aria-hidden'); } }
     function status(text) { const el = panel.querySelector('[data-status]'); if (el) el.textContent = text.replaceAll('測驗', '小挑戰'); }
     function current(owner, value) {
       if (!owner || owner !== context || !visible) throw Object.assign(new Error('此小挑戰已關閉。'), { stale: true });
       if (owner.expiresAt <= Date.now() || value?.expiresAt <= Date.now()) throw Object.assign(new Error('小挑戰已到期，請老師開新一班。'), { stale: true });
     }
+    function stopBoard() { clearTimeout(poll); poll = null; boardGeneration++; if (context?.member) classroom.cancelRequests(); }
     function armExpiry() {
       clearTimeout(expiryTimer); const owner = context;
       expiryTimer = setTimeout(async () => {
         if (owner !== context) return;
-        clock(false); context = null; busy = false; dispose(); record = null; official = null; shell('小挑戰已到期'); panel.append(message('請老師開新一班。')); footer(close);
-        try { await store.purge(Date.now()); } catch { if (!context && visible) status('原稿已停止顯示。裝置未能清理，恢復儲存後會再試。'); }
+        clock(false); stopBoard(); context = null; busy = false; record = null; shell('小挑戰已到期'); panel.append(message('請老師開新一班。')); footer(close);
+        try { await store.purge(Date.now()); } catch { if (!context && visible) status('原稿已停止顯示。恢復儲存後會再清理。'); }
       }, Math.max(0, Math.min(owner.expiresAt, record?.expiresAt || owner.expiresAt) - Date.now()));
     }
     async function persist(value = record, owner = context) {
       current(owner, value);
-      if (!value) return;
       const saved = await store.put({ ...value, revision: owner.revisions.get(value.key) ?? value.revision ?? 0 }, () => current(owner, value));
-      current(owner, value); owner.revisions.set(value.key, saved.revision); error = '';
-      return saved;
+      current(owner, value); owner.revisions.set(value.key, saved.revision); error = ''; return saved;
+    }
+    function writingAllowed() {
+      if (!record || record.run.phase !== 'writing' || page !== 'writing' || document.hidden || busy || error || !ready) return false;
+      const group = A.wordAt(record.run);
+      return runningWord === record.run.wordProgress[group.wordIndex].wordId && record.run.answers[record.run.cursor].status === 'draft';
     }
     function clock(resume) {
       if (segmentStart !== null && record?.run.phase === 'writing') record = { ...record, run: A.transition(record.run, { type: 'TIME', elapsedMs: Math.max(0, Math.round(performance.now() - segmentStart)) }) };
       segmentStart = resume && writingAllowed() ? performance.now() : null;
     }
-    function writingAllowed() { return !busy && !error && page === 'writing' && !document.hidden && record?.run.phase === 'writing' && record.run.version === 3 && record.run.wordProgress[A.wordAt(record.run).wordIndex].wordId === runningWord && record.run.answers[record.run.cursor].status !== 'submitted'; }
     function timerText() {
       const word = record.run.wordProgress[A.wordAt(record.run).wordIndex];
-      const milliseconds = Math.min(A.limits.duration, word.elapsedMs + (segmentStart === null ? 0 : Math.max(0, performance.now() - segmentStart)));
-      const seconds = Math.floor(milliseconds / 1000); return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+      const seconds = Math.floor(Math.min(A.limits.duration, word.elapsedMs + (segmentStart === null ? 0 : Math.max(0, performance.now() - segmentStart))) / 1000);
+      return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
     }
     function startTimer(output) {
       const owner = context;
       function tick() { if (owner !== context || page !== 'writing' || !visible) return; output.textContent = timerText(); timerFrame = requestAnimationFrame(tick); }
       tick();
     }
+    function saveFailure(problem) { clock(false); error = problem.message || '原稿未能保存，請保持頁面開啟再試。'; pad?.suspend(); status(error); updateControls(); showRetry(); }
     function queueCheckpoint() {
       const snapshot = record, owner = context; checkpointing++;
-      pending = pending.catch(() => {}).then(() => persist(snapshot, owner)).catch(problem => { if (owner === context && !problem.stale) { clock(false); error = problem.message || '原稿未能保存，請保持頁面開啟再試。'; pad?.lock(true); status(error); showSaveRetry(); } }).finally(() => { checkpointing--; });
+      pending = pending.catch(() => {}).then(() => persist(snapshot, owner)).catch(problem => { if (owner === context && !problem.stale) saveFailure(problem); }).finally(() => { checkpointing--; });
     }
-    function cancelDemo() { stopDemo?.(); stopDemo = null; demoActive = false; }
-    function dispose() { cancelDemo(); cancelAnimationFrame(timerFrame); timerFrame = null; pad?.dispose(); pad = null; stopReplay?.(); stopReplay = null; stopReview?.(); stopReview = null; }
+    function disposePad() { generation++; loadController?.abort(); loadController = null; pad?.dispose(); pad = null; ready = false; hintActive = false; target.style.visibility = ''; }
+    function dispose() { disposePad(); cancelAnimationFrame(timerFrame); timerFrame = null; }
     async function action(fn, checkpoint = false) {
       if (busy) return;
       const owner = context;
-      clock(false); busy = true; pad?.flush(); pad?.lock(true);
+      clock(false); if (hintActive) { generation++; hintActive = false; } busy = true; pad?.suspend();
       try { if (owner) { await pending; current(owner, record); if (checkpoint && record?.run.phase === 'writing') await persist(record, owner); } await fn(owner); }
-      catch (problem) { if (owner === context && !problem.stale) { error = problem.message || '未能保存原稿，請保持頁面開啟再試。'; status(error); showSaveRetry(); } }
-      finally { if (owner === context) { busy = false; clock(true); pad?.lock(!writingAllowed() || demoActive); } }
+      catch (problem) { if (owner === context && !problem.stale) { if (page === 'writing') saveFailure(problem); else { error = problem.message; status(error); showRetry(); } } }
+      finally { if (owner === context) { busy = false; if (page === 'writing' && data && !hintActive) mountPad(); clock(true); updateControls(); } }
     }
     function button(text, fn, kind = 'secondary', checkpoint = false) { const el = node('button', text, 'button ' + kind); el.addEventListener('click', () => action(fn, checkpoint)); return el; }
-    function showSaveRetry() {
-      const controls = panel.querySelector('.assessment-controls');
-      if (error && record?.run.phase === 'writing' && controls && !controls.querySelector('[data-retry]')) {
-        const retry = button('重試保存', async () => { await persist(); drawWriting(); }, 'primary'); retry.setAttribute('data-retry', ''); controls.append(retry);
-        const submit = controls.querySelector('[data-submit]'); if (submit) submit.hidden = true;
+    function message(text) { const el = node('p', text.replaceAll('測驗', '小挑戰'), 'assessment-status'); el.setAttribute('role', 'status'); el.setAttribute('data-status', ''); return el; }
+    function shell(title) { dispose(); panel.replaceChildren(); const heading = node('header', '', 'assessment-heading'); heading.append(node('h1', title)); panel.append(heading); }
+    function footer(fn, label = '← 返回') { const el = node('footer', '', 'assessment-footer'); el.append(button(label, fn, 'secondary', true)); panel.append(el); }
+    function showRetry() {
+      const container = panel.querySelector('.assessment-controls') || panel.querySelector('.assessment-board');
+      if (!error || !container || container.querySelector('[data-retry]')) return;
+      const retry = button(page === 'writing' ? '重試保存及載入' : '重試', async () => {
+        if (page === 'writing') { await persist(); drawWriting(); }
+        else { error = ''; drawBoard(); loadBoard(); }
+      }, 'primary'); retry.setAttribute('data-retry', ''); container.append(retry);
+    }
+    function updateControls() {
+      if (page !== 'writing' || !record) return;
+      const answer = record.run.answers[record.run.cursor], started = runningWord === record.run.wordProgress[A.wordAt(record.run).wordIndex].wordId;
+      for (const key of ['submit', 'hint-button', 'undo', 'start']) {
+        const control = panel.querySelector('[data-' + key + ']');
+        if (control) control.disabled = busy || !!error || !ready || (key === 'submit' ? !started || !A.completeAnswer(answer) : key === 'hint-button' ? !started || A.completeAnswer(answer) : key === 'undo' ? !started || !answer.strokes.length : false);
       }
     }
-    function message(text) { const el = node('p', text.replaceAll('測驗', '小挑戰'), 'assessment-status'); el.setAttribute('role', 'status'); el.setAttribute('data-status', ''); return el; }
-    function shell(title) {
-      dispose(); panel.replaceChildren();
-      const heading = node('header', '', 'assessment-heading'); heading.append(node('h1', title));
-      panel.append(heading); return panel;
-    }
-    function footer(fn, label = '← 返回') { const el = node('footer', '', 'assessment-footer'); el.append(button(label, fn, 'secondary', true)); panel.append(el); }
-    function isChallenge() { return record?.kind === 'challenge'; }
-    function titleFor(position, index) { return A.actualMode(record.run) === 'listen' ? '第 ' + (index + 1) + ' 題 · 詞語第 ' + (position.index + 1) + ' 字' : position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'; }
-    function positionGroups() {
-      const positions = A.positions(record.run.assignment); let offset = 0;
-      return record.run.assignment.entries.map((entry, wordIndex) => {
-        const count = entry.selectedIndexes.length, group = { entry, wordIndex, start: offset, positions: positions.slice(offset, offset + count), answers: record.run.answers.slice(offset, offset + count) };
-        offset += count; return group;
-      });
-    }
-    function answerLabel(answer) { return ['draft', 'ready'].includes(answer.status) ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交'; }
     function speak(position) {
-      const owner = context;
       const synth = root.speechSynthesis, voice = synth?.getVoices().find(item => /yue|zh[-_]HK/i.test(item.lang));
       if (!synth || !voice) { status('裝置未提供粵語聲音，請老師讀出題目。'); return; }
-      const text = position.character + '。寫第 ' + (position.index + 1) + ' 個字。';
-      synth.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.voice = voice; utterance.lang = voice.lang; utterance.rate = 0.85;
-      utterance.onerror = () => { if (owner === context) status('聲音未能播放，請老師讀出題目。'); }; synth.speak(utterance);
+      synth.cancel(); const utterance = new SpeechSynthesisUtterance(position.character + '。寫第 ' + (position.index + 1) + ' 個字。'); utterance.voice = voice; utterance.lang = voice.lang; utterance.rate = 0.85;
+      const owner = context; utterance.onerror = () => { if (owner === context) status('聲音未能播放，請老師讀出題目。'); }; synth.speak(utterance);
     }
-    async function close() { visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; official = null; activeLocal = null; onClose(); }
+    async function close() {
+      if (context && !context.member && record?.run.phase === 'sealed') { const owner = context; await store.release(owner.scope, record.key); current(owner, record); }
+      stopBoard(); visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; onClose();
+    }
     function drawList() {
-      clock(false); runningWord = null; page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
-      const list = node('div', '', 'word-cards assessment-choices');
-      const listen = A.actualMode(record.run) === 'listen' && !isChallenge();
-      positionGroups().forEach(group => {
-        const position = group.positions[0], index = group.start, title = group.positions.map((item, groupIndex) => titleFor(item, index + groupIndex) + ' · ' + answerLabel(group.answers[groupIndex])).join('；');
-        const card = button('', () => {
-          const next = group.answers.findIndex(answer => answer.status === 'draft');
-          record = { ...record, run: A.transition(record.run, { type: 'SELECT', index: group.start + (next < 0 ? 0 : next) }) }; drawWriting();
-        });
-        card.className = 'word-card assessment-choice-card' + (listen ? ' assessment-choice-listen' : ''); card.setAttribute('aria-label', title);
-        card.style.setProperty('--word-length', String(listen ? 2 : Array.from(group.entry.text).length));
-        const word = node('span', listen ? '第 ' + (group.wordIndex + 1) + ' 題' : group.entry.text, 'word-name');
-        card.append(word);
-        if (!listen) { const photo = node('img'); photo.src = C.photos[group.entry.text]; photo.alt = group.entry.text + '圖片'; photo.className = 'word-photo'; card.append(photo); }
-        if (group.answers.every(answer => answer.status === 'submitted')) { card.disabled = true; card.append(node('span', '已完成', 'assessment-completed')); }
+      clock(false); runningWord = null; page = 'list'; data = null; shell('小挑戰');
+      const list = node('div', '', 'word-cards assessment-choices'); let offset = 0;
+      record.run.assignment.entries.forEach(entry => {
+        const start = offset, answers = record.run.answers.slice(start, start + entry.selectedIndexes.length); offset += answers.length;
+        const card = button('', () => { const next = answers.findIndex(answer => answer.status === 'draft'); record = { ...record, run: A.transition(record.run, { type: 'SELECT', index: start + Math.max(0, next) }) }; drawWriting(); });
+        card.className = 'word-card assessment-choice-card'; card.style.setProperty('--word-length', String(Array.from(entry.text).length)); card.append(node('span', entry.text, 'word-name'));
+        if (C.photos[entry.text]) { const photo = node('img'); photo.src = C.photos[entry.text]; photo.alt = entry.text + '圖片'; photo.className = 'word-photo'; card.append(photo); }
+        if (answers.every(answer => answer.status === 'submitted')) { card.disabled = true; card.append(node('span', '已完成', 'assessment-completed')); }
         list.append(card);
       });
-      panel.append(list, message(error));
-      if (record.run.answers.every(answer => answer.status === 'submitted')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
-      footer(isChallenge() ? async () => { record = official; drawSummary(); } : close, isChallenge() ? '← 返回原卷' : '← 返回課程');
+      panel.append(list, message(error)); footer(close, '← 返回課程');
+    }
+    function mountPad() {
+      if (!data || page !== 'writing' || !record) return;
+      clock(false); disposePad(); const token = generation, owner = context, index = record.run.cursor, answer = record.run.answers[index], position = A.positions(record.run.assignment)[index];
+      const selectedData = data; ready = true; const locked = !writingAllowed() || answer.status === 'submitted' || A.completeAnswer(answer); ready = false;
+      const valid = () => owner === context && page === 'writing' && generation === token && record?.run.cursor === index;
+      pad = W.mount(target, position.character, selectedData, {
+        phase: 'assessment', token, currentStroke: answer.strokes.length, acceptedInk: answer.strokes, locked,
+        isCurrent: () => valid() && writingAllowed() && !hintActive,
+        onReady() { if (!valid()) return; ready = true; clock(true); updateControls(); },
+        onError(problem) { if (valid()) saveFailure(problem); },
+        onEvent(event) {
+          if (!valid() || !writingAllowed() || hintActive) return false;
+          if (event.type === 'STROKE_MISSED') { status('↻ 請重新書寫此筆。'); return true; }
+          try {
+            clock(true); record = { ...record, run: A.transition(record.run, event) };
+            if (event.type === 'STROKE_ACCEPTED') { queueCheckpoint(); status(''); updateControls(); }
+            return true;
+          } catch (problem) { saveFailure(problem); return false; }
+        }
+      });
+    }
+    async function loadPad() {
+      const owner = context, token = generation, selected = record, position = A.positions(record.run.assignment)[record.run.cursor];
+      loadController = new AbortController(); status('載入字形…');
+      try {
+        const loaded = await W.loadCharacter(position.character, loadController.signal);
+        current(owner, selected); if (token !== generation || page !== 'writing') return;
+        const next = { ...record, run: A.transition(record.run, { type: 'DATA_READY', count: loaded.strokes.length }) };
+        if (record.run.answers[record.run.cursor].expectedStrokes === null) { await persist(next, owner); current(owner, next); if (token !== generation) return; record = next; }
+        data = loaded; status(error); mountPad();
+      } catch (problem) { if (owner === context && token === generation && !problem.stale) saveFailure(new Error('字形暫未能載入，原稿仍然保留。' + problem.message)); }
     }
     function drawWriting() {
-      page = 'writing'; const index = record.run.cursor, position = A.positions(record.run.assignment)[index], answer = record.run.answers[index];
-      shell(position.word);
+      clock(false); page = 'writing'; data = null;
+      const index = record.run.cursor, position = A.positions(record.run.assignment)[index], answer = record.run.answers[index];
+      shell(position.word + ' · 第 ' + (position.index + 1) + ' 字');
       const area = node('div', '', 'assessment-writing'), paper = node('div', '', 'assessment-paper'), controls = node('div', '', 'assessment-controls');
-      area.append(paper, controls); panel.append(area);
-      if (isChallenge()) {
-        const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = '情境圖片'; photo.className = 'assessment-context'; controls.append(photo);
-      }
+      paper.append(target); area.append(paper, controls); panel.append(area);
+      const timer = node('output', timerText(), 'assessment-timer'); timer.setAttribute('aria-label', '詞語用時'); controls.append(timer); startTimer(timer);
       controls.append(button('聽題目', () => speak(position)));
-      if (['draft', 'ready'].includes(answer.status)) {
-        const group = A.wordAt(record.run), word = record.run.wordProgress[group.wordIndex], started = runningWord === word.wordId;
-        const timer = node('output', timerText(), 'assessment-timer'); timer.setAttribute('aria-label', '詞語用時'); controls.append(timer); startTimer(timer);
-        pad = F.capture(paper, answer.strokes, stroke => {
-          clock(!busy);
-          record = { ...record, run: A.transition(record.run, { type: 'STROKE', stroke }) };
-          const undo = controls.querySelector('[data-undo]'); if (undo) undo.disabled = false;
-          queueCheckpoint();
-          try { A.checkInk(record.run); } catch (problem) { error = problem.message; status(error); }
-        }, position.character);
-        pad.lock(!writingAllowed());
-        const advance = async () => {
-          const last = index + 1 === group.end;
-          const next = { ...record, run: A.transition(record.run, { type: last ? 'SUBMIT_WORD' : 'NEXT_CHARACTER' }) }; await persist(next); record = next;
-          if (last) drawList(); else drawWriting();
-        };
-        const primary = started ? button(index + 1 === group.end ? '交答案' : '下一個字', advance, 'primary large') : button('開始', async () => {
-          const next = { ...record, run: A.transition(record.run, { type: 'START_WORD' }) }; await persist(next); record = next; runningWord = word.wordId; drawWriting();
-        }, 'primary large');
-        primary.setAttribute('data-submit', '');
-        const hint = button('提示', async () => {
-          cancelDemo();
-          const next = { ...record, run: A.transition(record.run, { type: 'HINT' }) }; await persist(next); record = next;
-          demoActive = true; pad.lock(true);
-          stopDemo = F.demo(paper, position.character, record.run.answers[record.run.cursor].strokes.length, () => { stopDemo = null; demoActive = false; pad?.lock(!writingAllowed()); }, text => { stopDemo = null; demoActive = false; status(text); pad?.lock(!writingAllowed()); });
-        });
-        hint.disabled = !started;
-        const undo = button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }); undo.disabled = !started || !answer.strokes.length; undo.setAttribute('data-undo', '');
-        controls.append(primary, hint, undo);
+      if (answer.status === 'submitted') {
+        controls.append(node('p', 'O', 'assessment-correct'));
+        controls.append(button('下一個字', async () => {
+          const group = A.wordAt(record.run);
+          if (record.run.answers.every(item => item.status === 'submitted')) await seal();
+          else if (index + 1 === group.end) drawList();
+          else { const next = { ...record, run: A.transition(record.run, { type: 'NEXT_CHARACTER' }) }; await persist(next); record = next; drawWriting(); }
+        }, 'primary large'));
       } else {
-        F.render(paper, answer.strokes); controls.append(node('p', answer.status === 'skipped' ? '已跳過，原筆跡保留。' : '已提交，等老師批改。'));
-        controls.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }));
+        const word = record.run.wordProgress[A.wordAt(record.run).wordIndex], started = runningWord === word.wordId;
+        const primary = started ? button('交答案', async () => {
+          const next = { ...record, run: A.transition(record.run, { type: 'SUBMIT_CHARACTER' }) }; await persist(next); record = next; drawWriting();
+        }, 'primary large') : button('開始', async () => {
+          const next = { ...record, run: A.transition(record.run, { type: 'START_WORD' }) }; await persist(next); record = next; runningWord = word.wordId;
+          drawWriting();
+        }, 'primary large'); primary.setAttribute(started ? 'data-submit' : 'data-start', '');
+        const hint = button('提示', async () => {
+          record = { ...record, run: A.transition(record.run, { type: 'HINT' }) }; await persist();
+          const owner = context, token = generation; hintActive = true; busy = false; clock(true);
+          pad.hint().then(() => { if (owner === context && token === generation && page === 'writing') { hintActive = false; mountPad(); } }).catch(problem => { if (owner === context && token === generation) { hintActive = false; saveFailure(problem); } });
+        }); hint.setAttribute('data-hint-button', '');
+        const undo = button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; await persist(); drawWriting(); }); undo.setAttribute('data-undo', '');
+        controls.append(primary, hint, undo);
       }
-      controls.append(message(error)); showSaveRetry();
-      footer(drawList, '← 返回選題');
-      clock(true);
+      controls.append(message(error)); showRetry(); updateControls(); footer(drawList, '← 返回選題'); loadPad();
     }
     async function seal() {
-      const run = A.transition(record.run, { type: 'SEAL', elapsedMs: record.run.elapsedMs });
-      const next = { ...record, run, review: { marks: A.unmarked(run.assignment), revision: 0, score: null } };
-      await persist(next); record = next;
-      if (isChallenge()) { drawWorkCard(); return; }
-      official = record; drawSummary(); if (context.member) await upload();
+      const next = { ...record, run: A.transition(record.run, { type: 'SEAL' }) }; await persist(next); record = next; drawBoard(); loadBoard();
     }
-    async function upload() {
-      const selected = record, owner = context;
-      status('原稿已保存，交卷中…');
+    function drawBoard() {
+      clock(false); stopBoard(); page = 'board'; runningWord = null; data = null; shell(context.member ? '班級排行榜' : '本機排行榜');
+      const section = node('section', '', 'assessment-board'); section.append(node('div', '', 'assessment-board-rows'), message(error)); panel.append(section); showRetry(); footer(close, '← 返回課程');
+    }
+    function renderBoard(rows) {
+      const container = panel.querySelector('.assessment-board-rows'); if (!container) return;
+      container.replaceChildren();
+      if (!rows.length) { container.append(node('p', '尚未有完成紀錄。')); return; }
+      const table = node('table'), heading = node('tr');
+      for (const label of ['名次', context.member ? '暱稱' : '紀錄', '時間（秒）']) { const cell = node('th', label); cell.setAttribute('scope', 'col'); heading.append(cell); } table.append(heading);
+      for (const row of rows) { const tr = node('tr', '', row.isMe ? 'is-me' : ''); for (const value of [row.rank, row.alias, (row.elapsedMs / 1000).toFixed(1)]) tr.append(node('td', String(value))); table.append(tr); }
+      container.append(table);
+    }
+    async function adoptOfficial(answer, owner) {
+      const run = A.validateAutomatic(record.run.assignment, answer.run), oldKey = record.key;
+      const next = { key: owner.scope + ':' + run.runId + ':received', kind: 'official', expiresAt: owner.expiresAt, run, receipt: answer.receipt };
+      const existing = await store.get(next.key); current(owner, existing || next);
+      const saved = existing || await persist(next, owner);
+      await store.replacePointer(owner.scope, oldKey, saved.key, saved.expiresAt, () => current(owner, saved)); current(owner, saved);
+      record = saved;
+    }
+    async function loadBoard() {
+      const owner = context, token = ++boardGeneration; clearTimeout(poll); poll = null;
+      const valid = () => owner === context && token === boardGeneration && page === 'board' && !document.hidden && visible;
+      if (!valid()) return;
       try {
-        const receipt = await classroom.submitReviewed(selected.run);
-        current(owner, selected);
-        const next = { ...selected, receipt }; await persist(next, owner); record = next; official = next; drawSummary();
-      } catch (problem) {
-        if (owner !== context || problem.stale) return;
-        error = '原稿仍保留，尚未交妥。' + problem.message; drawSummary();
-      }
-    }
-    function drawSummary() {
-      page = 'summary'; shell('原卷紀錄');
-      const ready = !context.member || record.receipt, review = record.review;
-      panel.append(node('p', !ready ? '原稿已封存，等候交卷。' : review?.score === null || !review ? '已交卷，等老師批改。' : '字形正確 ' + review.score + ' / ' + record.run.answers.length));
-      const actions = node('div', '', 'assessment-summary-actions');
-      actions.append(button('查看原筆跡', () => drawOriginal(0)));
-      if (context.member) {
-        if (!record.receipt) actions.append(button('重試交卷', upload, 'primary'));
-        actions.append(button('更新批改及班級榜', refresh));
-      } else {
-        actions.append(button('老師批改', drawReview, 'primary'), button('本機原卷', localOriginals));
-        actions.append(button('下一位同學', async owner => { if (activeLocal) await store.release(activeLocal.scope, activeLocal.runKey); current(owner); await close(); }, 'secondary', true));
-      }
-      if (ready) {
-        if (record.run.assignment.entries.some(entry => C.purposes[entry.text])) actions.append(button('情境小挑戰', challenge));
-        actions.append(button('跟住練習', async () => { const assigned = record.run.assignment; await close(); onPractice(assigned); }, 'secondary', true));
-      }
-      panel.append(actions, message(error)); footer(close, '← 返回課程');
-    }
-    function pagination(index, count, draw) {
-      const navigation = node('nav', '', 'assessment-pagination'); navigation.setAttribute('aria-label', '逐項查看');
-      const previous = button('上一項', () => draw(index - 1)), next = button('下一項', () => draw(index + 1));
-      previous.disabled = index === 0; next.disabled = index === count - 1;
-      navigation.append(previous, node('span', (index + 1) + ' / ' + count), next); return navigation;
-    }
-    function drawOriginal(index) {
-      page = 'original'; shell(titleFor(A.positions(record.run.assignment)[index], index));
-      const answer = record.run.answers[index], mark = record.review?.marks[index];
-      const area = node('div', '', 'assessment-writing'), paper = node('div', '', 'assessment-paper'), controls = node('div', '', 'assessment-controls');
-      F.render(paper, answer.strokes);
-      controls.append(node('p', mark?.correct === true ? 'O 正確' : mark?.correct === false ? '再練習' : '待批改', mark?.correct === true ? 'teacher-correct' : ''));
-      if (mark?.strokePractice) controls.append(node('p', '筆順需要練習'));
-      if (answer.status === 'skipped') controls.append(node('p', '已跳過，保留原筆跡'));
-      controls.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }), pagination(index, record.run.answers.length, drawOriginal));
-      controls.append(message(error)); area.append(paper, controls); panel.append(area); footer(drawSummary, '← 返回原卷');
-    }
-    async function refresh() {
-      const owner = context, data = await classroom.ownAnswer(); current(owner, record);
-      if (data.answer) {
-        const different = record.run.runId !== data.answer.run.runId || JSON.stringify(record.run.answers) !== JSON.stringify(data.answer.run.answers);
-        const next = { ...record, ...(different ? { key: owner.scope + ':' + data.answer.run.runId + ':received', revision: 0, run: data.answer.run } : {}), receipt: { runId: data.answer.run.runId, official: true }, review: { marks: data.answer.marks, score: data.answer.score, revision: data.answer.revision } };
-        await persist(next, owner);
-        if (different) { await store.putMany([{ key: owner.scope, runKey: next.key, expiresAt: next.expiresAt }], () => current(owner, next)); current(owner, next); }
-        record = next; official = next;
-      }
-      const board = await classroom.reviewedBoard(); current(owner, record);
-      drawSummary(); const section = node('section', '', 'assessment-board'); section.append(node('h2', '班級榜'));
-      if (!board.published) section.append(node('p', '等老師公布。'));
-      let mode;
-      for (const row of board.rows) {
-        if (row.mode && row.mode !== mode) { section.append(node('h3', row.mode === 'copy' ? '看字寫' : '聽詞寫')); mode = row.mode; }
-        section.append(node('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
-      }
-      if (board.published && !board.rows.length) section.append(node('p', '未有完成批改的原卷。'));
-      panel.querySelector('.assessment-footer').before(section);
-    }
-    function drawReview() {
-      page = 'review'; shell('老師批改原卷'); const content = node('div'), owner = context, selected = record; panel.append(content);
-      stopReview = root.BishunAssessmentReview.mount(content, { run: record.run, ...record.review }, async changes => {
-        current(owner, selected);
-        if (record.key !== selected.key) throw Object.assign(new Error('已切換原卷。'), { stale: true });
-        const result = A.review(selected.run.assignment, changes.marks);
-        const next = { ...record, review: { ...result, revision: record.review.revision + 1 } }; await persist(next, owner); record = next; official = next; return next.review;
-      }); footer(drawSummary, '← 返回原卷');
-    }
-    async function localOriginals() {
-      const owner = context, originals = await store.localOriginals(); current(owner, record); page = 'history'; shell('本機原卷');
-      const list = node('div', '', 'assessment-choices');
-      originals.forEach((saved, index) => {
-        const label = new Date(saved.run.startedAt).toLocaleString('zh-HK') + ' · ' + (A.actualMode(saved.run) === 'copy' ? '看字寫' : '聽詞寫') + ' · ' + saved.run.answers.length + ' 字 · ' + (index + 1);
-        list.append(button(label, async () => {
-          const original = await store.get(saved.key); current(owner, original); if (!original) throw new Error('原卷已到期。');
-          owner.revisions.set(original.key, original.revision || 0); record = original; official = original; armExpiry(); drawReview();
-        }));
-      });
-      panel.append(list, message('本機原卷保留 24 小時。')); footer(drawSummary, '← 返回原卷');
-    }
-    async function challenge() {
-      const owner = context; official = record;
-      const key = official.key + ':challenge', saved = await store.get(key);
-      current(owner, saved || official);
-      if (saved) { owner.revisions.set(saved.key, saved.revision || 0); record = saved; }
-      else {
-        const entries = official.run.assignment.entries.filter(entry => C.purposes[entry.text]).map(entry => ({ text: entry.text, selectedIndexes: Array.from(entry.text, (_, index) => index) }));
-        const assignment = A.assignment(entries, 'listen');
-        record = { key, kind: 'challenge', expiresAt: official.expiresAt, run: A.startWords(assignment, crypto.randomUUID()) };
-        await persist();
-      }
-      if (record.run.version === 2 && record.run.phase === 'writing') { const next = { ...record, run: A.upgradeWords(record.run) }; await persist(next); record = next; }
-      if (record.run.phase === 'sealed') drawWorkCard(); else drawList();
-    }
-    function drawWorkCard(index = 0) {
-      page = 'card'; shell('我的情境作品卡'); const list = node('div', '', 'assessment-workcards'), positions = A.positions(record.run.assignment);
-      const entries = record.run.assignment.entries, entry = entries[index];
-      const card = node('section', '', 'assessment-workcard'), image = node('img'); image.src = C.photos[entry.text]; image.alt = '作品情境圖片';
-      card.append(image, node('h2', C.purposes[entry.text].label, 'sr-only'));
-      const ink = node('div', '', 'assessment-word-ink'), introduction = node('div', '', 'assessment-introduction');
-      positions.forEach((position, answerIndex) => { if (position.word === entry.text) { const paper = node('div', '', 'review-paper'); F.render(paper, record.run.answers[answerIndex].strokes); ink.append(paper); } });
-      introduction.append(node('span', C.purposes[entry.text].intro[0]), ink, node('span', C.purposes[entry.text].intro[1])); card.append(introduction); list.append(card);
-      panel.append(list, pagination(index, entries.length, drawWorkCard), message(error)); footer(() => { record = official; drawSummary(); }, '← 返回原卷');
+        if (owner.member) {
+          if (!record.receipt) {
+            status('原稿已保存，交卷中…');
+            try {
+              const receipt = await classroom.submitAutomatic(record.run); current(owner, record); if (!valid()) return;
+              record = await persist({ ...record, receipt }, owner);
+            } catch (problem) {
+              if (problem.code !== 'FIRST_SUBMISSION') throw problem;
+              const result = await classroom.ownAutomaticAnswer(); current(owner, record); if (!valid()) return;
+              if (!result.answer) throw new Error('原卷暫未能讀取。');
+              await adoptOfficial(result.answer, owner);
+            }
+          }
+          const board = await classroom.automaticBoard(); current(owner, record); if (!valid()) return;
+          renderBoard(board.rows); error = ''; status(pollsLeft ? '' : '自動更新已暫停，重新開啟可更新。');
+          if (pollsLeft > 0) poll = setTimeout(() => { poll = null; pollsLeft--; loadBoard(); }, 5000);
+        } else {
+          const originals = await store.localOriginals(); current(owner, record); if (!valid()) return;
+          const same = originals.filter(saved => saved.run.version === 4 && saved.run.policy === A.policy && A.actualMode(saved.run) === A.actualMode(record.run) && JSON.stringify(saved.run.assignment) === JSON.stringify(record.run.assignment)).sort((a, b) => a.run.startedAt - b.run.startedAt || a.key.localeCompare(b.key));
+          const rows = same.map((saved, index) => ({ alias: '紀錄 ' + (index + 1), elapsedMs: A.boardTime(A.validateAutomatic(record.run.assignment, saved.run).elapsedMs), isMe: saved.key === record.key }));
+          renderBoard(A.timeRanks(rows)); error = ''; status('');
+        }
+        panel.querySelector('[data-retry]')?.remove();
+      } catch (problem) { if (valid() && !problem.stale) { error = '原稿仍然保留。' + problem.message; status(error); showRetry(); } }
     }
     async function open(assigned, joined = null) {
       if (visible) return;
-      const assignment = A.assignment(assigned.entries, assigned.mode), scope = joined ? 'class:' + joined.code + ':' + joined.memberId : 'local:' + JSON.stringify(assignment);
+      const assignment = A.assignment(assigned.entries, assigned.mode), scope = joined ? 'class:v4:' + joined.code + ':' + joined.memberId : 'local:v4:' + JSON.stringify(assignment);
       const owner = Object.freeze({ scope, member: joined ? Object.freeze({ ...joined }) : null, expiresAt: joined?.expiresAt || Date.now() + 86400000, revisions: new Map() });
-      visible = true; context = owner; activeLocal = null; busy = false; error = ''; record = null; official = null; pending = Promise.resolve(); segmentStart = null; runningWord = null;
-      panel.hidden = false; conceal(true); shell('小挑戰'); panel.append(message('載入原稿…')); footer(close, '← 返回課程');
-      armExpiry();
+      visible = true; context = owner; busy = false; error = ''; record = null; pending = Promise.resolve(); segmentStart = null; runningWord = null; pollsLeft = 120;
+      panel.hidden = false; conceal(true); shell('小挑戰'); panel.append(message('載入原稿…')); footer(close, '← 返回課程'); armExpiry();
       try {
-        await store.purge(); current(owner);
-        const pointer = await store.get(scope); current(owner);
+        await store.purge(); current(owner); const pointer = await store.get(scope); current(owner);
         let saved = pointer ? await store.get(pointer.runKey) : null; current(owner, saved);
         if (!saved && joined) {
-          const result = await classroom.ownAnswer(); current(owner);
-          if (result.answer) {
-            const answer = result.answer;
-            saved = { key: scope + ':' + answer.run.runId, expiresAt: joined.expiresAt, kind: 'official', run: answer.run, receipt: { runId: answer.run.runId, official: true }, review: { marks: answer.marks, score: answer.score, revision: answer.revision } };
-          }
+          const result = await classroom.ownAutomaticAnswer(); current(owner);
+          if (result.answer) { const run = A.validateAutomatic(assignment, result.answer.run); saved = { key: scope + ':' + run.runId, expiresAt: joined.expiresAt, kind: 'official', run, receipt: result.answer.receipt }; }
         }
-        if (!saved) {
-          const run = A.startWords(assignment, crypto.randomUUID());
-          saved = { key: scope + ':' + run.runId, expiresAt: joined?.expiresAt || Date.now() + 86400000, kind: 'official', run };
-        }
-        saved = await store.initialize(scope, saved, () => current(owner, saved)); current(owner, saved);
-        owner.revisions.set(saved.key, saved.revision || 0);
-        if (saved.run.version === 2 && saved.run.phase === 'writing') { saved = { ...saved, run: A.upgradeWords(saved.run) }; saved = await persist(saved, owner); }
-        if (!joined) activeLocal = Object.freeze({ scope, runKey: saved.key });
-        record = saved; official = saved;
-        armExpiry();
-        if (saved.run.phase === 'sealed') drawSummary(); else drawList();
-      } catch (problem) { if (owner === context && !problem.stale) { error = problem.message; status(error); } }
+        if (!saved) { const run = A.startLocked(assignment, crypto.randomUUID()); saved = { key: scope + ':' + run.runId, expiresAt: joined?.expiresAt || Date.now() + 86400000, kind: 'official', run }; }
+        saved = await store.initialize(scope, saved, () => current(owner, saved)); current(owner, saved); owner.revisions.set(saved.key, saved.revision || 0); record = saved; armExpiry();
+        if (saved.run.phase === 'sealed') { drawBoard(); await loadBoard(); }
+        else if (saved.run.answers.every(answer => answer.status === 'submitted')) await seal();
+        else drawList();
+      } catch (problem) { if (owner === context && !problem.stale) { error = problem.message; status(error); const retry = button('重試載入', async () => { await close(); await open(assigned, joined); }); panel.append(retry); } }
     }
-    function pauseWriting() { if (visible) { clock(false); cancelDemo(); pad?.flush(); pad?.lock(true); if (record?.run.phase === 'writing') queueCheckpoint(); } }
-    function resumeWriting() { if (visible && !document.hidden) { clock(true); pad?.lock(!writingAllowed()); } }
-    document.addEventListener('visibilitychange', () => { if (document.hidden) pauseWriting(); else resumeWriting(); });
-    root.addEventListener('pagehide', pauseWriting);
-    root.addEventListener('pageshow', resumeWriting);
-    root.addEventListener('beforeunload', event => { if (visible && (error || checkpointing || pad?.active())) { event.preventDefault(); event.returnValue = ''; } });
-    return { open, active: () => visible, hasLocal: async () => !!await store.activeLocal(),
-      async resumeLocal() { const saved = await store.activeLocal(); if (saved) await open(saved.run.assignment); return !!saved; } };
+    function pause() { if (!visible) return; clock(false); stopBoard(); disposePad(); if (record?.run.phase === 'writing') queueCheckpoint(); }
+    function resume() { if (!visible || document.hidden) return; if (page === 'board') loadBoard(); else if (page === 'writing') { if (data) mountPad(); else drawWriting(); } }
+    document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else resume(); });
+    root.addEventListener('pagehide', pause); root.addEventListener('pageshow', resume);
+    root.addEventListener('beforeunload', event => { if (visible && (error || checkpointing)) { event.preventDefault(); event.returnValue = ''; } });
+    return { open, active: () => visible, hasLocal: async () => !!await store.activeLocal(4), async resumeLocal() { const saved = await store.activeLocal(4); if (saved) await open(saved.run.assignment); return !!saved; } };
   }
   root.BishunAssessmentUI = { create };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+  <script>
+(function (root) {
+  'use strict';
+  function validateCharacter(character, raw) {
+    const data = raw && raw.data ? raw.data : raw;
+    if (!/^\p{Script=Han}$/u.test(character) || !data || (data.character && data.character !== character) || !Array.isArray(data.strokes) || !data.strokes.length || data.strokes.length > 64 || !Array.isArray(data.medians) || data.medians.length !== data.strokes.length) throw new Error('字形資料不完整。');
+    let size = 0;
+    data.strokes.forEach(path => {
+      if (typeof path !== 'string' || path.length > 150000 || !/^[Mm]/.test(path) || !/^[MmLlQqTtCcSsVvHhZzAa0-9+.,\s-]+$/.test(path)) throw new Error('筆畫資料無效。');
+      const numbers = path.match(/[+-]?(?:\d*\.)?\d+/g) || [];
+      if (!numbers.length || numbers.some(n => !Number.isFinite(Number(n)) || Math.abs(Number(n)) > 8192)) throw new Error('筆畫座標無效。');
+      size += path.length;
+    });
+    if (size > 1200000 || data.medians.some(points => !Array.isArray(points) || points.length < 2 || points.length > 2000 || points.some(p => !Array.isArray(p) || p.length !== 2 || p.some(n => !Number.isFinite(n) || Math.abs(n) > 8192)))) throw new Error('筆畫座標無效。');
+    return { strokes: data.strokes, medians: data.medians, radStrokes: Array.isArray(data.radStrokes) ? data.radStrokes.filter(n => Number.isInteger(n) && n >= 0 && n < data.strokes.length) : [] };
+  }
+  async function loadCharacter(character, signal, registry = root.BishunCharacters || {}, dataUrl = root.BishunContent?.dataUrl) {
+    if (!/^\p{Script=Han}$/u.test(character)) throw new Error('請使用單一中文字。');
+    if (Object.prototype.hasOwnProperty.call(registry, character)) return validateCharacter(character, registry[character]);
+    // shortcut: 草 requires the reviewed ten-stroke asset; never fall back to the nine-stroke upstream file.
+    if (character === '草') throw new Error('呢個字嘅香港筆順資料尚未備妥。');
+    const response = await fetch(dataUrl + encodeURIComponent(character) + '.json', { signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
+    if (!response.ok) throw new Error('暫時未能載入呢個字。');
+    const declared = Number(response.headers.get('content-length'));
+    if (declared > 2000000) throw new Error('字形資料過大。');
+    const reader = response.body && response.body.getReader();
+    let text = '';
+    if (reader) {
+      const decoder = new TextDecoder(); let bytes = 0;
+      while (true) { const result = await reader.read(); if (result.done) break; bytes += result.value.byteLength; if (bytes > 2000000) { await reader.cancel(); throw new Error('字形資料過大。'); } text += decoder.decode(result.value, { stream: true }); }
+      text += decoder.decode();
+    } else { text = await response.text(); if (text.length > 2000000) throw new Error('字形資料過大。'); }
+    return validateCharacter(character, JSON.parse(text));
+  }
+  const api = { validateCharacter, loadCharacter };
+  root.BishunCharacterData = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 </script>
@@ -1598,38 +1607,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const cue = initialCue(data.medians[stroke]);
     return { label: part[1], instruction: '寫' + part[2] + '。由橙點開始，' + (cue ? '向' + cue.direction + '起筆，慢慢寫。' : '跟住提示慢慢寫。') };
   }
-  function validateCharacter(character, raw) {
-    const data = raw && raw.data ? raw.data : raw;
-    if (!/^\p{Script=Han}$/u.test(character) || !data || (data.character && data.character !== character) || !Array.isArray(data.strokes) || !data.strokes.length || data.strokes.length > 64 || !Array.isArray(data.medians) || data.medians.length !== data.strokes.length) throw new Error('字形資料不完整。');
-    let size = 0;
-    data.strokes.forEach(path => {
-      if (typeof path !== 'string' || path.length > 150000 || !/^[Mm]/.test(path) || !/^[MmLlQqTtCcSsVvHhZzAa0-9+.,\s-]+$/.test(path)) throw new Error('筆畫資料無效。');
-      const numbers = path.match(/[+-]?(?:\d*\.)?\d+/g) || [];
-      if (!numbers.length || numbers.some(n => !Number.isFinite(Number(n)) || Math.abs(Number(n)) > 8192)) throw new Error('筆畫座標無效。');
-      size += path.length;
-    });
-    if (size > 1200000 || data.medians.some(points => !Array.isArray(points) || points.length < 2 || points.length > 2000 || points.some(p => !Array.isArray(p) || p.length !== 2 || p.some(n => !Number.isFinite(n) || Math.abs(n) > 8192)))) throw new Error('筆畫座標無效。');
-    return { strokes: data.strokes, medians: data.medians, radStrokes: Array.isArray(data.radStrokes) ? data.radStrokes.filter(n => Number.isInteger(n) && n >= 0 && n < data.strokes.length) : [] };
-  }
-  async function loadCharacter(character, signal) {
-    if (!/^\p{Script=Han}$/u.test(character)) throw new Error('請使用單一中文字。');
-    const registry = root.BishunCharacters || {};
-    if (Object.prototype.hasOwnProperty.call(registry, character)) return validateCharacter(character, registry[character]);
-    // shortcut: 草 requires the reviewed ten-stroke asset; never fall back to the nine-stroke upstream file.
-    if (character === '草') throw new Error('呢個字嘅香港筆順資料尚未備妥。');
-    const response = await fetch(root.BishunContent.dataUrl + encodeURIComponent(character) + '.json', { signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
-    if (!response.ok) throw new Error('暫時未能載入呢個字。');
-    const declared = Number(response.headers.get('content-length'));
-    if (declared > 2000000) throw new Error('字形資料過大。');
-    const reader = response.body && response.body.getReader();
-    let text = '';
-    if (reader) {
-      const decoder = new TextDecoder(); let bytes = 0;
-      while (true) { const result = await reader.read(); if (result.done) break; bytes += result.value.byteLength; if (bytes > 2000000) { await reader.cancel(); throw new Error('字形資料過大。'); } text += decoder.decode(result.value, { stream: true }); }
-      text += decoder.decode();
-    } else { text = await response.text(); if (text.length > 2000000) throw new Error('字形資料過大。'); }
-    return validateCharacter(character, JSON.parse(text));
-  }
+  const { validateCharacter, loadCharacter } = root.BishunCharacterData || require('./character-data.js');
   let practiceSession = null, partial = null;
   const originals = new Map();
   function resetPractice(sessionId) { practiceSession = sessionId; partial = null; originals.clear(); }
@@ -1670,17 +1648,17 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   // Hanzi Writer keeps document listeners, so each stable target owns one engine.
   const engines = new WeakMap();
   function mount(element, character, data, options) {
-    const quiz = options.phase === 'quiz', identity = options.identity;
+    const quiz = options.phase === 'quiz', assessment = options.phase === 'assessment', identity = options.identity;
     const practice = !!identity && ['guided', 'recall'].includes(options.phase);
     const componentGuided = options.phase === 'guided' && !!activePart(character, data, options.currentStroke || 0);
     const guidedComplete = options.complete || options.phase === 'guided' && options.currentStroke === data.strokes.length;
     let alive = true, suspended = false, mounted = false, currentStroke = options.currentStroke || 0, paused = false, playing = false, demoRun = 0;
-    const size = Math.round(element.getBoundingClientRect().width) || 360;
+    const size = Math.round(element.getBoundingClientRect().width) || 360, padding = n => assessment ? n * .1 : 24;
     let engine = engines.get(element);
     if (!engine) {
       engine = { data, ready: Promise.resolve() };
       engine.writer = new root.HanziWriter(element, {
-        width: size, height: size, padding: 24, showCharacter: false, showOutline: false,
+        width: size, height: size, padding: padding(size), showCharacter: false, showOutline: false,
         strokeColor: '#214b3b', outlineColor: '#d7ddd4', drawingColor: '#214b3b', highlightColor: '#ba642d', drawingWidth: 8,
         strokeAnimationSpeed: 0.45, delayBetweenStrokes: 520, strokeFadeDuration: 140, strokeHighlightSpeed: 0.65,
         showHintAfterMisses: false, highlightOnComplete: false, markStrokeCorrectAfterMisses: false, acceptBackwardsStrokes: false, leniency: 1.65,
@@ -1693,10 +1671,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const current = () => alive && !suspended && generation === engine.generation && (!options.isCurrent || options.isCurrent()) && (!practice || practiceSession === identity.sessionId && sameAttempt(partial, identity));
     if (practice && !sameAttempt(partial, identity)) partial = { ...identity, strokes: [] };
     if (!quiz || engine.inkToken !== options.token) { engine.inkToken = quiz ? options.token : null; engine.ink = []; }
-    const ink = practice ? partial.strokes : engine.ink;
+    const ink = assessment ? (options.acceptedInk || []).map(stroke => stroke.map(point => ({ x: (point[0] - 1000) / 7.8125, y: (8031.25 - point[1]) / 7.8125 }))) : practice ? partial.strokes : engine.ink;
     function fail(error) {
       if (!alive || suspended) return;
-      suspended = true; writer.cancelQuiz(); element.style.visibility = 'hidden';
+      suspended = true; writer.cancelQuiz(); element.style.visibility = assessment ? '' : 'hidden';
       if (options.onError) options.onError(error);
     }
     element.style.visibility = 'hidden';
@@ -1744,7 +1722,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     function placeStart() {
       const n = Math.round(element.getBoundingClientRect().width) || size;
       overlay.setAttribute('viewBox', '0 0 ' + n + ' ' + n);
-      group.setAttribute('transform', root.HanziWriter.getScalingTransform(n, n, 24).transform);
+      group.setAttribute('transform', root.HanziWriter.getScalingTransform(n, n, padding(n)).transform);
       const p = data.medians[currentStroke] && data.medians[currentStroke][0];
       dot.style.display = startVisible && p ? '' : 'none';
       if (p) { dot.setAttribute('cx', p[0]); dot.setAttribute('cy', p[1]); }
@@ -1761,48 +1739,52 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     placeStart();
     engine.ready = engine.ready.then(async () => {
       if (!alive) return;
-      if ((quiz || practice) && (practice && practiceSession !== identity.sessionId || ink.length !== currentStroke)) throw new Error('原有筆跡未能還原，請重新試一次。');
+      if ((quiz || practice || assessment) && (practice && practiceSession !== identity.sessionId || ink.length !== currentStroke)) throw new Error('原有筆跡未能還原，請重新試一次。');
       engine.data = data;
       await writer.setCharacter(character);
       if (!alive) return;
-      await Promise.all(Object.entries({ strokeColor: '#214b3b', radicalColor: '#214b3b', outlineColor: '#d7ddd4', highlightColor: '#ba642d' }).map(([key, color]) => writer.updateColor(key, practice && options.phase === 'recall' && ['strokeColor', 'radicalColor'].includes(key) ? '#aeb9b0' : (quiz || practice && ['strokeColor', 'radicalColor'].includes(key)) ? 'rgba(33,75,59,0)' : color, { duration: 0 })));
+      await Promise.all(Object.entries({ strokeColor: '#214b3b', radicalColor: '#214b3b', outlineColor: '#d7ddd4', highlightColor: assessment ? '#48735b' : '#ba642d' }).map(([key, color]) => writer.updateColor(key, (assessment || practice && options.phase === 'recall') && ['strokeColor', 'radicalColor'].includes(key) ? '#aeb9b0' : (quiz || practice && ['strokeColor', 'radicalColor'].includes(key)) ? 'rgba(33,75,59,0)' : color, { duration: 0 })));
       if (!alive) return;
       await Promise.all([writer.hideCharacter({ duration: 0 }), writer.hideOutline({ duration: 0 })]);
       if (!alive) return;
       if (!componentGuided && !guidedComplete && (options.phase === 'guided' || help.some(item => item.kind === 'outline'))) await writer.showOutline({ duration: 0 });
       if (guidedComplete && !practice) await writer.showCharacter({ duration: 0 });
       if (!alive) return;
-      writer.updateDimensions({ width: size, height: size, padding: 24 }); placeStart();
-      if (!suspended && !guidedComplete && ['guided', 'recall', 'quiz'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke, leniency: practice ? options.phase === 'recall' ? 0.9 : 1 : 1.65,
+      writer.updateDimensions({ width: size, height: size, padding: padding(size) }); placeStart();
+      if (!suspended && !guidedComplete && !options.locked && ['guided', 'recall', 'quiz', 'assessment'].includes(options.phase)) await writer.quiz({ quizStartStrokeNum: currentStroke, leniency: assessment ? 0.9 : practice ? options.phase === 'recall' ? 0.9 : 1 : 1.65,
         onCorrectStroke: event => { if (!current()) return;
-          if (quiz || practice) {
+          if (quiz || practice || assessment) {
             const points = event.drawnPath && event.drawnPath.points;
             if (event.strokeNum !== currentStroke || !Array.isArray(points) || points.length < 2 || points.length > 16384 || points.some(point => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || Math.abs(point.x) > 8192 || Math.abs(point.y) > 8192)) { fail(new Error('筆跡資料無效，請重新試一次。')); return; }
-            if (practice) {
+            if (assessment) {
+              const stroke = points.map(point => [Math.round(1000 + point.x * 7.8125), Math.round(8031.25 - point.y * 7.8125)]);
+              if (options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum, stroke }) !== true) { suspended = true; writer.cancelQuiz(); return; }
+              ink.push(stroke.map(point => ({ x: (point[0] - 1000) / 7.8125, y: (8031.25 - point[1]) / 7.8125 })));
+            } else if (practice) {
               const accepted = options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }, installNext => editAcceptedInk({ path: boundedStroke(points) }, event.strokeNum, installNext));
               if (!accepted) { suspended = true; writer.cancelQuiz(); return; }
             } else ink.push(points.map(point => ({ x: point.x, y: point.y })));
             drawInk();
           }
-          currentStroke = event.strokeNum + 1; directionVisible = false; drawFocus(); placeStart(); if (!practice) options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
+          currentStroke = event.strokeNum + 1; directionVisible = false; drawFocus(); placeStart(); if (!practice && !assessment) options.onEvent({ type: 'STROKE_ACCEPTED', token: options.token, strokeIndex: event.strokeNum }); },
         onMistake: event => { if (current()) { if (componentGuided) { directionVisible = true; placeStart(); } options.onEvent({ type: 'STROKE_MISSED', token: options.token, strokeIndex: event.strokeNum }); } },
         onComplete: () => {
           if (!current()) return;
-          if (practice) {
+          if (practice || assessment) {
             if (currentStroke !== data.strokes.length || ink.length !== currentStroke) { fail(new Error('原有筆跡未能還原，請重新試一次。')); return; }
-            originals.set(identity.occurrenceId, { ...identity, strokes: ink.slice() });
+            if (practice) originals.set(identity.occurrenceId, { ...identity, strokes: ink.slice() });
           }
           options.onEvent({ type: 'WRITING_COMPLETE', token: options.token, at: Date.now() });
         }
       });
-      if (practice && options.phase === 'recall' && alive && !suspended) await writer.showCharacter({ duration: 0 });
+      if ((assessment || practice && options.phase === 'recall') && alive && !suspended) await writer.showCharacter({ duration: 0 });
       if (alive && !suspended) { mounted = true; element.style.visibility = ''; if (options.onReady) options.onReady(); }
     }).catch(fail);
     function ready(action) { engine.ready.then(() => { if (alive && !suspended) action(); }).catch(fail); }
     const observer = new ResizeObserver(() => {
       if (!alive) return;
       const n = Math.round(element.getBoundingClientRect().width);
-      if (n > 0) { writer.updateDimensions({ width: n, height: n, padding: 24 }); placeStart(); }
+      if (n > 0) { writer.updateDimensions({ width: n, height: n, padding: padding(n) }); placeStart(); }
     }); observer.observe(element);
     function demoDone(run, result) {
       if (!alive || suspended || run !== demoRun) return;
@@ -1811,6 +1793,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
     return {
       editAcceptedInk,
+      hint() {
+        if (!assessment || !mounted || !alive || currentStroke >= data.strokes.length) return Promise.resolve();
+        suspended = true; writer.cancelQuiz();
+        return writer.highlightStroke(currentStroke);
+      },
       play() {
         if (!alive || options.phase !== 'watch') return;
         if (paused) { ready(() => writer.resumeAnimation()); paused = false; playing = true; }
@@ -1872,8 +1859,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   const Q = globalThis.BishunQuizResults;
   const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
   const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
-  const assessment = globalThis.BishunAssessmentUI?.create({ classroom, onClose: goHome,
-    onPractice: assigned => startSession(S.createSession({ id: id(), entries: assigned.entries, startedAt: Date.now(), mode: 'practice' })) });
+  const assessment = globalThis.BishunAssessmentUI?.create({ classroom, onClose: goHome });
   function assessmentMode() { return $('assessment-mode')?.value || 'copy'; }
   function refreshLocalResume() { if (assessment) assessment.hasLocal().then(found => { $('resume-assessment').hidden = !found; }).catch(() => {}); }
   if (assessment) {

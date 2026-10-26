@@ -20,7 +20,7 @@ index.html
   ├─ quiz-results.js         小挑戰結果、排行榜分數資料
   ├─ assessment.js           小挑戰題目及提交規則
   ├─ assessment-store.js     小挑戰原稿的本機保存
-  ├─ freehand.js              自由書寫取樣及筆跡資料
+  ├─ freehand.js              原筆跡呈現及重播
   ├─ assessment-review.js     老師批改、公布結果和重播資料
   ├─ classroom.js             班級 API、暱稱、收卷及權限邊界
   ├─ assessment-ui.js         小挑戰畫面及操作控制器
@@ -103,44 +103,19 @@ const next = BishunSession.transition(state, {
 
 `writing.js` 不決定學生是否完成整個詞語，也不保存班級資料。它只處理「這一格如何顯示及回報事件」。
 
-### 3.4 `freehand.js`：自由書寫資料
+### 3.4 `freehand.js`：原筆跡呈現
 
-小挑戰不使用逐畫配對，而是保存學生真正畫下的取樣點：
-
-```js
-{
-  id: 'attempt-id',
-  position: 2,
-  strokes: [
-    [{ x: 0.12, y: 0.28, t: 14 }, ...]
-  ],
-  outcome: 'submitted'
-}
-```
-
-它只負責：
-
-- 將觸控點轉成可保存資料
-- 保留原始筆跡
-- 一次撤回最後一筆
-- 驗證點的範圍、順序及數量
-
-字形是否正確由老師在 `assessment-review.js` 批改，不在這個模組猜測。
+此模組只呈現及重播已保存的筆跡，供新版唯讀原卷和歷史老師批改使用。新的小挑戰由 `writing.js` 的 `assessment` 階段處理輸入，不再掛上另一組自由書寫指標事件。
 
 ### 3.5 `assessment.js`：小挑戰規則
 
-它定義小挑戰的題目和不可變規則：
+`startLocked()` 建立版本 4 原卷，保留版本 2 題目設定，並記錄實際模式 `copy` 及 `locked-strokes-0.9-v1` 政策。每個答案的 `strokes` 陣列就是已接納筆順前綴；`expectedStrokes` 由驗證字形載入。每筆只有原始正規化 `[x,y]` 座標，不虛構逐點時間。
 
-- 版本 2 題目設定保持不變；新版本 3 原卷用 `presentationMode: 'copy'` 記錄實際看字寫，`actualMode(run)` 保留舊聽詞寫原卷的標示
-- 每頁一個字
-- `START_WORD` 開始逐詞計時，`NEXT_CHARACTER` 只標為 `ready`，`SUBMIT_WORD` 原子提交同詞所有指定字位；新介面不提供跳過
-- `wordProgress` 每詞保存 `phase`、`elapsedMs` 和 `timeKnown`；`answers[].hintUsed` 只在學生按提示時設為真
-- 第一份完整原卷才是正式成績
-- 後續補練不覆蓋正式原卷
+`DATA_READY` 設定目標筆數，`START_WORD` 開始詞語。`STROKE_ACCEPTED` 必須正好接在現有前綴後面，並先通過容量檢查。`WRITING_COMPLETE` 與 `SUBMIT_CHARACTER` 都要求前綴長度等於目標筆數。提交後顯示 O，`NEXT_CHARACTER` 才移至同詞下一字。未提交前可 `UNDO` 最後一筆。`SEAL` 再核對全部字及詞語時間。
 
-這些規則必須保持純函式化，方便測試，也避免 UI 按鈕直接改寫原稿。
+版本 2/3 讀取及驗證器保留，新版不升級或覆寫舊自由書寫原稿。`boardTime()` 將全份用時一次四捨五入至 100 ms，`timeRanks()` 只按該值排名，相同值並列。
 
-`startWords()` 建立新原卷。`upgradeWords()` 只轉換未封存的版本 2 原稿，保留筆跡及 `legacyElapsedMs`，不猜測舊詞語分別用了多久。已封存原卷不改寫。`assessment-ui.js` 用 `performance.now()` 累積前景區段；開始意圖只放在執行期，回選單或冷啟動後必須再按開始。`freehand.js` 固定呈現淡色完整字形，`demo(container, character, strokeIndex, onDone, onError)` 另用可取消圖層示範一筆，完成便移除圖層並恢復書寫。caller 從當前原卷讀取筆數作為索引，`demo()` 載入 `writing.js` 已驗證的筆順後，把索引限制在目標字範圍；超出時重播最後一筆。這只定位提示，不判斷正確，也不修改原筆跡或作答狀態。
+`character-data.js` 由瀏覽器與 Worker 共用，驗證筆順路徑及中線。Worker 建置時從已校訂資產產生筆數，外部資料僅暫存有限筆數，不保留整份字形圖。`writing.js` 使用同一穩定 DOM 目標及 0.9 寬容度；控制器先同步接納事件，配對器才前進。重載、提示及擦除從已保存前綴還原原筆跡。
 
 ### 3.6 `assessment-store.js`：本機原稿保存
 
@@ -165,7 +140,7 @@ const next = BishunSession.transition(state, {
 }
 ```
 
-排行榜只使用 `shape: 'correct'` 的數量。筆順需要補練則另外記錄，避免把「寫得出」和「筆順需要教」混成一個分數。
+歷史老師批改排行榜只使用 `shape: 'correct'` 的數量。筆順需要補練則另外記錄，避免把「寫得出」和「筆順需要教」混成一個分數。
 
 ### 3.8 `classroom.js`：班級服務邊界
 
@@ -174,7 +149,7 @@ const next = BishunSession.transition(state, {
 - 建立和加入班級
 - 保存班級碼、暱稱及瀏覽器憑證
 - 上傳已提交原卷
-- 讀取老師公布的排行榜
+- 讀取新版自動時間榜，保留舊版老師公布榜的協定
 - 處理 24 小時到期和權限錯誤
 
 學生頁不應直接呼叫 `fetch()` 讀班級 API；需要班級資料時，呼叫 `BishunClassroom` 的方法。這樣可集中處理重試、過期和錯誤訊息。
@@ -186,8 +161,7 @@ const next = BishunSession.transition(state, {
 ```js
 const assessment = BishunAssessmentUI.create({
   classroom,
-  onClose: goHome,
-  onPractice: startPracticeFromAssignment
+  onClose: goHome
 });
 ```
 
@@ -214,9 +188,9 @@ app.js 建立 session
   ↓
 session.js 回傳 active.phase = recall
   ↓
-writing.js 建立自由書寫格
+writing.js 建立筆順配對書寫格
   ↓
-學生觸控 → freehand.js 收集取樣點
+學生觸控 → Hanzi Writer 配對當前一筆並回傳取樣點
   ↓
 app.js 發出 STROKE_ACCEPTED / STROKE_MISSED
   ↓
@@ -232,17 +206,17 @@ localStorage 保存練習摘要
 ```text
 學生按「交答案」
   ↓
-assessment.js 一次提交整個詞語的指定字位
+assessment.js 檢查完整筆順並提交當前一字
   ↓
 assessment-store.js 先保存原筆跡
   ↓
 assessment-ui.js 返回詞語選單並顯示「已完成」
   ↓
-老師在 review 畫面批改
+Worker 檢查版本 4 原卷及可信字庫筆數
   ↓
-assessment-review.js 保存字形判斷
+automatic_submissions 保留第一份新版原卷
   ↓
-assessment.js 按實際題型分組，只用已確認的正確字數排名
+assessment.js 按全份前景時間排名，顯示時間相同則並列
 ```
 
 ## 5. 依賴方向
