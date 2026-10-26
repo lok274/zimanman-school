@@ -293,7 +293,8 @@ function demoVendor(e) {
   e.context.HanziWriter = class {
     constructor(layer, options) { this.layer = layer; this.options = options; plays.engines++; }
     async setCharacter(character) { const play = { layer: this.layer, character, options: this.options, completion: deferred(), paused: false }; this.options.charDataLoader(character, data => { play.data = clone(data); }); plays.push(play); this.play = play; }
-    animateCharacter() { return this.play.completion.promise; }
+    animateCharacter() { assert.fail('Hint must not play the whole character'); }
+    animateStroke(index) { this.play.strokeIndex = index; return this.play.completion.promise; }
     pauseAnimation() { if (this.play) this.play.paused = true; }
     updateDimensions() {}
   };
@@ -335,7 +336,7 @@ test('Hint uses corrected data, preserves ink and fixed glyph, counts foreground
   for (const [index, character] of Array.from('草密來').entries()) {
     time += 1000; await e.stroke(); const before = clone(e.record().run.answers[index].strokes);
     await e.click('提示'); const play = plays.at(-1);
-    assert.equal(play.character, character); assert.deepEqual(play.data.strokes, clone(e.context.BishunCharacters[character].strokes));
+    assert.equal(play.character, character); assert.equal(play.strokeIndex, 1); assert.deepEqual(play.data.strokes, clone(e.context.BishunCharacters[character].strokes));
     assert(e.panel.querySelector('[data-hint]')); await e.stroke(); assert.deepEqual(e.record().run.answers[index].strokes, before);
     time += 2000; play.completion.resolve(); await tick(); assert(!e.panel.querySelector('.assessment-demo'));
     assert(e.panel.querySelector('[data-hint]')); assert.equal(e.record().run.answers[index].hintUsed, true);
@@ -347,6 +348,34 @@ test('Hint uses corrected data, preserves ink and fixed glyph, counts foreground
   await e.click('交整份小挑戰'); await e.click('老師批改');
   assert.match(e.panel.textContent, /看字寫/); assert.equal(e.panel.all().filter(item => item.tagName === 'P' && item.textContent === '有提示').length, 3);
   assert.match(e.panel.textContent, /詞語用時 9.0 秒/);
+});
+
+test('one-stroke Hint follows current ink, repeats until writing, rewinds after Undo and returns control immediately', async () => {
+  const e = boot(), plays = demoVendor(e); await e.ui.open(e.assigned); await begin(e);
+  await e.click('提示'); assert.equal(plays.at(-1).strokeIndex, 0);
+  await e.stroke(); assert.equal(e.record().run.answers[0].strokes.length, 0);
+  plays.at(-1).completion.resolve(); await tick();
+  assert(!e.panel.querySelector('.assessment-demo')); assert(e.panel.querySelector('[data-hint]'));
+  await e.stroke(); assert.equal(e.record().run.answers[0].strokes.length, 1);
+  assert.equal(e.record().run.answers[0].status, 'draft'); assert.equal(e.record().run.answers[0].hintUsed, true);
+  const ink = clone(e.record().run.answers[0].strokes);
+  await e.click('提示'); const previous = plays.at(-1); assert.equal(previous.strokeIndex, 1);
+  await e.click('提示'); const repeated = plays.at(-1); assert.equal(repeated.strokeIndex, 1);
+  assert(previous.paused); previous.completion.resolve(); await tick(); assert(e.panel.querySelector('.assessment-demo'));
+  await e.stroke(); assert.deepEqual(e.record().run.answers[0].strokes, ink);
+  repeated.completion.resolve(); await tick();
+  assert(!e.panel.querySelector('.assessment-demo')); assert(e.panel.querySelector('[data-hint]'));
+  await e.click('擦掉前一筆'); assert.equal(e.record().run.answers[0].strokes.length, 0);
+  await e.click('提示'); assert.equal(plays.at(-1).strokeIndex, 0);
+  plays.at(-1).completion.resolve(); await tick();
+  const count = e.context.BishunCharacters.鬍.strokes.length;
+  for (let index = 0; index <= count; index++) await e.stroke();
+  await e.click('提示'); assert.equal(plays.at(-1).strokeIndex, count - 1);
+  const excess = clone(e.record().run.answers[0].strokes);
+  plays.at(-1).completion.resolve(); await tick();
+  assert.deepEqual(e.record().run.answers[0].strokes, excess); assert.equal(e.record().run.answers[0].status, 'draft');
+  await e.stroke(); assert.equal(e.record().run.answers[0].strokes.length, excess.length + 1);
+  assert.equal(plays.engines, 1);
 });
 
 test('Hint cancellation on repeat, next, background and close ignores late success and retains the original strokes', async () => {

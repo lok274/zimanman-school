@@ -146,7 +146,7 @@
           cancelDemo();
           const next = { ...record, run: A.transition(record.run, { type: 'HINT' }) }; await persist(next); record = next;
           demoActive = true; pad.lock(true);
-          stopDemo = F.demo(paper, position.character, () => { stopDemo = null; demoActive = false; pad?.lock(!writingAllowed()); }, text => { stopDemo = null; demoActive = false; status(text); pad?.lock(!writingAllowed()); });
+          stopDemo = F.demo(paper, position.character, record.run.answers[record.run.cursor].strokes.length, () => { stopDemo = null; demoActive = false; pad?.lock(!writingAllowed()); }, text => { stopDemo = null; demoActive = false; status(text); pad?.lock(!writingAllowed()); });
         });
         hint.disabled = !started;
         const undo = button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }); undo.disabled = !started || !answer.strokes.length; undo.setAttribute('data-undo', '');
