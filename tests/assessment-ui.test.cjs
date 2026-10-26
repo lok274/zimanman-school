@@ -78,7 +78,7 @@ test('new word challenge shows the fixed full model even for a legacy listen ass
   assert.equal(e.previous.inert, true); assert.equal(e.previous.attributes['aria-hidden'], 'true');
   await begin(e); await e.click('聽題目');
   assert(e.panel.querySelector('[data-hint]')); assert.equal(e.record().run.presentationMode, 'copy'); assert.equal(e.record().run.assignment.mode, 'listen');
-  assert.match(e.spoken[0], /鬍鬚/); assert.match(e.spoken[0], /第 1 個字/);
+  assert.equal(e.spoken[0], '鬍。寫第 1 個字。');
   await e.stroke();
   assert.equal(e.record().run.answers[0].strokes[0].length, 3);
   assert.deepEqual(e.record().run.answers[0].strokes[0].map(point => point.slice(0, 2)), [[400, 600], [8400, 9400], [8600, 9600]]);
@@ -135,8 +135,10 @@ test('local first original, word submissions, teacher grading, revision and chal
   await e.click('← 返回原卷'); await e.click('查看原筆跡'); assert(e.panel.textContent.includes('O 正確')); await e.click('← 返回原卷');
   await e.click('情境小挑戰'); await begin(e);
   assert(!e.panel.textContent.includes('替圖片寫標籤，向同學介紹。')); assert(e.panel.all().some(item => item.tagName === 'IMG' && item.src === 'images/beard.webp'));
-  await e.click('聽題目'); assert.match(e.spoken.at(-1), /第 1 個字/);
-  await e.stroke(); await e.click('下一個字'); await e.stroke(); await e.click('交答案'); await e.click('完成作品卡');
+  await e.click('聽題目'); assert.equal(e.spoken.at(-1), '鬍。寫第 1 個字。');
+  await e.stroke(); await e.click('下一個字');
+  await e.click('聽題目'); assert.equal(e.spoken.at(-1), '鬚。寫第 2 個字。');
+  await e.stroke(); await e.click('交答案'); await e.click('完成作品卡');
   assert.match(e.panel.textContent, /我的情境作品卡/); assert(!e.panel.textContent.includes('給同學看的圖片介紹'));
   assert.equal(e.panel.querySelector('h2').className, 'sr-only'); assert(e.panel.all().some(item => item.attributes.d?.includes('8400 9400')));
   assert(e.panel.all().some(item => item.tagName === 'IMG' && item.src === 'images/beard.webp'));
