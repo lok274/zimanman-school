@@ -131,13 +131,16 @@ const next = BishunSession.transition(state, {
 
 它定義小挑戰的題目和不可變規則：
 
-- 看字寫或聽詞寫
+- 版本 2 題目設定保持不變；新版本 3 原卷用 `presentationMode: 'copy'` 記錄實際看字寫，`actualMode(run)` 保留舊聽詞寫原卷的標示
 - 每頁一個字
-- 提交、跳過、完成和待批改狀態
+- `START_WORD` 開始逐詞計時，`NEXT_CHARACTER` 只標為 `ready`，`SUBMIT_WORD` 原子提交同詞所有指定字位；新介面不提供跳過
+- `wordProgress` 每詞保存 `phase`、`elapsedMs` 和 `timeKnown`；`answers[].hintUsed` 只在學生按提示時設為真
 - 第一份完整原卷才是正式成績
 - 後續補練不覆蓋正式原卷
 
 這些規則必須保持純函式化，方便測試，也避免 UI 按鈕直接改寫原稿。
+
+`startWords()` 建立新原卷。`upgradeWords()` 只轉換未封存的版本 2 原稿，保留筆跡及 `legacyElapsedMs`，不猜測舊詞語分別用了多久。已封存原卷不改寫。`assessment-ui.js` 用 `performance.now()` 累積前景區段；開始意圖只放在執行期，回選單或冷啟動後必須再按開始。`freehand.js` 固定呈現淡色完整字形，`demo()` 另用可取消圖層播放 `writing.js` 已驗證的筆順，不修改原筆跡或作答狀態。
 
 ### 3.6 `assessment-store.js`：本機原稿保存
 
@@ -229,17 +232,17 @@ localStorage 保存練習摘要
 ```text
 學生按「交答案」
   ↓
-assessment.js 封存該字的狀態
+assessment.js 一次提交整個詞語的指定字位
   ↓
 assessment-store.js 先保存原筆跡
   ↓
-assessment-ui.js 顯示「已交」
+assessment-ui.js 返回詞語選單並顯示「已完成」
   ↓
 老師在 review 畫面批改
   ↓
 assessment-review.js 保存字形判斷
   ↓
-quiz-results.js 只用已確認的正確字數排名
+assessment.js 按實際題型分組，只用已確認的正確字數排名
 ```
 
 ## 5. 依賴方向

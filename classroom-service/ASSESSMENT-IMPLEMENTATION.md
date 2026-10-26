@@ -4,6 +4,8 @@ Implementation date is 2026-10-24. Base was `b520f1cd4e9eb4409e3383e92a42857e138
 
 ## Implemented behavior
 
+The 2026-10-26 word-flow update uses version 3 originals while preserving version 2 assignments. Every new response shows a fixed pale full glyph and records `presentationMode: 'copy'`, including responses to old listen assignments. `actualMode(run)` keeps sealed version 2 listen originals distinct. Start gates handwriting and per-word foreground timing; intermediate characters stay `ready` until atomic whole-word submission returns to a completed card. There is no skip. Hint plays the corrected bundled stroke order on a cancellable transparent layer without changing ink or submitting. Teachers see hint usage and per-word time. Unknown pre-upgrade word times remain unknown. New transport requires a version 3 receipt. Boards rank actual modes separately using SQL JSON scalar extraction, without loading all originals into Worker memory. The dated paragraphs and verification below describe the earlier release.
+
 ## Release correction ownership plan
 
 The exclusive correction checkout starts at `58fdf1d`. Each open gets an immutable context containing its scope, member and expiry. Async continuations and store transactions must still own that context before mutating storage or the view. Expiry and close invalidate it. Historical review changes the displayed record without changing the active local pupil pointer.

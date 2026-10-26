@@ -1,6 +1,6 @@
 # Classroom service
 
-The Worker serves the teacher page and stores assignments, anonymous memberships, original handwriting and teacher reviews in D1 binding `DB`. The student app is static. New teacher-created classes use assessment version 2 with `copy` or `listen` mode.
+The Worker serves the teacher page and stores assignments, anonymous memberships, original handwriting and teacher reviews in D1 binding `DB`. The student app is static. Assignments retain version 2 and their immutable `copy` or `listen` mode. New version 3 originals record the actual displayed mode as `presentationMode: 'copy'`; historical version 2 originals keep their original mode. New teacher choices offer 看字寫 only.
 
 ## Build and export
 
@@ -24,21 +24,25 @@ All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Con
 | --- | --- | --- |
 | `POST /` | Same-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns class code, assignment and expiry. |
 | `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken}`; returns membership and assignment. |
-| `PUT /:code/answers` | Current member | Accepts one complete sealed original; returns `{runId,official:true}`. |
+| `PUT /:code/answers` | Current member | Accepts one complete sealed original; returns `{runId,official:true,version:3}` for version 3, or the legacy receipt without version. |
 | `GET /:code/answers` | Current member | Returns only that member's original, marks and revision, or `answer:null`. Aggregate elapsed time is omitted. |
 | `GET /:code/reviews` | Same-origin owner | Lists members, submission status, scores, revisions and elapsed time. |
 | `GET /:code/reviews/:memberId` | Same-origin owner | Returns the original ink and review for that member. |
 | `PUT /:code/reviews/:memberId` | Same-origin owner | Accepts `{revision,marks}`; updates marks, score and revision atomically. |
 | `POST /:code/publication` | Same-origin owner | Makes completed teacher grades visible on the class board. |
-| `GET /:code/board` | Member who submitted | Returns publication state and rows containing only alias, score and rank. |
+| `GET /:code/board` | Member who submitted | Returns publication state and rows containing only alias, score, actual mode and rank. |
 | `DELETE /:code` | Same-origin owner | Deletes the class and cascades memberships, originals and publication. |
 | `POST /cleanup` | Public maintenance | Deletes at most 10 server-time expired classes; returns `{cleaned:true}`. |
 
 The original has version, run ID, canonical assignment, start time, elapsed milliseconds, sealed phase, and one answer per selected position. Each answer has `occurrenceId`, `submitted` or `skipped` status, and ordered strokes. Each stroke is an ordered array of `[x,y,relativeMs]` points. Coordinates are integers from 0 to 10000. Point times must be finite, nonnegative, monotonic within the stroke and at most 24 hours. A submitted answer needs ink; a skipped answer preserves any partial ink.
 
+Version 3 adds `presentationMode: 'copy'`, `legacyElapsedMs`, `wordProgress` and boolean `answers[].hintUsed`. Each word record has `wordId`, terminal `phase: 'submitted'`, `elapsedMs` and boolean `timeKnown`. The aggregate equals legacy time plus the word times and cannot exceed 24 hours. New words use `START_WORD`, intermediate `NEXT_CHARACTER` and atomic `SUBMIT_WORD`; every selected character needs ink and there is no skip. Old unsealed drafts preserve ink and the old aggregate on upgrade; unknown old per-word durations stay unknown and only measured continuation is reported. Sealed originals are not upgraded. Version 3 is deliberate: an old validator must reject the payload rather than silently strip timing or hint metadata. The client requires the version 3 acknowledgement before accepting its receipt.
+
+The pupil grid always shows a fixed pale full glyph. Hint plays cancellable stroke order using the reviewed bundled data and retains the actual ink; it never recognizes or submits an answer. Word timing runs only after explicit Start in the foreground writing page, including deliberate Hint viewing. Menu visits and cold loads require Start again. Runtime intent and wall-clock extrapolation are never stored.
+
 A unique member key makes the first valid original official. The insert checks quotas and expiry in the same SQL statement. Exact run ID and canonical hash retries return the same receipt. A changed payload gives `409 CONFLICT`; a later run gives `409 FIRST_SUBMISSION`. Pupil ink is never changed by grading.
 
-Marks have `occurrenceId`, `correct` of true, false or null, and a separate boolean `strokePractice`. Any null keeps the total pending and unranked. A complete review counts true shape marks only. Time and stroke-order notes do not affect rank. Equal scores share competition ranks such as 1, 1, 3. First publication is explicit. Later review updates immediately affect that published board. A stale review revision returns `409 REVIEW_CHANGED`.
+Marks have `occurrenceId`, `correct` of true, false or null, and a separate boolean `strokePractice`. Any null keeps the total pending and unranked. A complete review counts true shape marks only. Time, hints and stroke-order notes do not affect rank. Actual modes rank separately; equal scores share competition ranks such as 1, 1, 3. The SQL board query extracts only mode from the JSON, without loading ink into Worker memory. First publication is explicit. Later review updates immediately affect that published board. A stale review revision returns `409 REVIEW_CHANGED`.
 
 Legacy version 1 classes keep their existing aggregate `runs/:runId` and `teacher-board` contracts for compatibility. New reviewed classes reject these routes. Legacy scores are not converted into teacher marks.
 
@@ -74,7 +78,7 @@ node --test tests/*.test.cjs
 node dist/data/self-check.mjs
 ```
 
-The Worker tests apply all migrations to Node's SQLite database. They verify immutable concurrent submissions, revision conflicts, private access, CORS, byte quotas, ties, expiry and cleanup cascades. UI tests exercise pointer capture, saved drafts, retry behavior, hidden listen answers, local review and separate challenge cards through a simulated DOM. They do not certify physical tablet or stylus behavior.
+The Worker tests apply all migrations to Node's SQLite database. They verify immutable concurrent submissions, metadata round trips, actual-mode ranking, revision conflicts, private access, CORS, byte quotas, ties, expiry and cleanup cascades. UI tests exercise pointer capture, explicit Start, per-word submission and timing, fixed glyphs, cancellable hints, saved drafts, retry behavior, local review and separate challenge cards through a simulated DOM. They do not certify physical tablet or stylus behavior.
 
 With the pinned development tools available, run a real local Worker and D1:
 
