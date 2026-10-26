@@ -82,11 +82,11 @@
       });
     }
     function answerLabel(answer) { return ['draft', 'ready'].includes(answer.status) ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交'; }
-    function speak(position, contextual = false) {
+    function speak(position) {
       const owner = context;
       const synth = root.speechSynthesis, voice = synth?.getVoices().find(item => /yue|zh[-_]HK/i.test(item.lang));
       if (!synth || !voice) { status('裝置未提供粵語聲音，請老師讀出題目。'); return; }
-      const text = (contextual ? C.cue(position.word)[0] : position.word + '。' + C.cue(position.word)[0]) + '寫第 ' + (position.index + 1) + ' 個字。';
+      const text = position.character + '。寫第 ' + (position.index + 1) + ' 個字。';
       synth.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.voice = voice; utterance.lang = voice.lang; utterance.rate = 0.85;
       utterance.onerror = () => { if (owner === context) status('聲音未能播放，請老師讀出題目。'); }; synth.speak(utterance);
     }
@@ -121,7 +121,7 @@
       if (isChallenge()) {
         const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = '情境圖片'; photo.className = 'assessment-context'; controls.append(photo);
       }
-      controls.append(button('聽題目', () => speak(position, isChallenge())));
+      controls.append(button('聽題目', () => speak(position)));
       if (['draft', 'ready'].includes(answer.status)) {
         const group = A.wordAt(record.run), word = record.run.wordProgress[group.wordIndex], started = runningWord === word.wordId;
         const timer = node('output', timerText(), 'assessment-timer'); timer.setAttribute('aria-label', '詞語用時'); controls.append(timer); startTimer(timer);
