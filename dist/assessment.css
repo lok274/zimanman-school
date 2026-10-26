@@ -16,10 +16,10 @@
 .assessment-status { min-height:1.5em; margin:4px 0; font-size:16px; }
 .assessment-context { width:100%; height:100px; object-fit:contain; }
 .assessment-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:22px 0; }
-.assessment-choices.word-card { min-height:250px; grid-template-columns:repeat(2,minmax(0,1fr)); }
-.assessment-choices.word-card .word-photo { width:min(100%,240px); height:auto; aspect-ratio:1; justify-self:center; }
-.assessment-choices.word-card .word-name { font-size:clamp(48px,7vw,100px); align-self:center; }
-.assessment-choices.word-card .stamp { grid-column:1/-1; }
+.assessment-choices .word-card { grid-template-columns:minmax(0,1fr); grid-template-rows:1fr auto; gap:8px; min-height:300px; padding:12px; }
+.assessment-choices .word-card .word-name { font-size:clamp(32px,calc(180px / var(--word-length)),100px); align-self:center; }
+.assessment-choices .word-card .word-photo { width:min(100%,max(140px,calc(100dvh - 440px)),240px); height:auto; aspect-ratio:1; justify-self:center; }
+.assessment-choices .word-card .stamp { grid-row:3; }
 .review-answers { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px; }
 .review-answer,.assessment-workcard { border:1px solid #bac9b9; border-radius:12px; padding:16px; background:#fffef8; }
 .review-paper { width:100%; max-width:280px; aspect-ratio:1; border:1px solid #d4ddd6; background:white; }
