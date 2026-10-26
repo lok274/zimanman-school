@@ -140,7 +140,7 @@ const next = BishunSession.transition(state, {
 
 這些規則必須保持純函式化，方便測試，也避免 UI 按鈕直接改寫原稿。
 
-`startWords()` 建立新原卷。`upgradeWords()` 只轉換未封存的版本 2 原稿，保留筆跡及 `legacyElapsedMs`，不猜測舊詞語分別用了多久。已封存原卷不改寫。`assessment-ui.js` 用 `performance.now()` 累積前景區段；開始意圖只放在執行期，回選單或冷啟動後必須再按開始。`freehand.js` 固定呈現淡色完整字形，`demo()` 另用可取消圖層播放 `writing.js` 已驗證的筆順，不修改原筆跡或作答狀態。
+`startWords()` 建立新原卷。`upgradeWords()` 只轉換未封存的版本 2 原稿，保留筆跡及 `legacyElapsedMs`，不猜測舊詞語分別用了多久。已封存原卷不改寫。`assessment-ui.js` 用 `performance.now()` 累積前景區段；開始意圖只放在執行期，回選單或冷啟動後必須再按開始。`freehand.js` 固定呈現淡色完整字形，`demo(container, character, strokeIndex, onDone, onError)` 另用可取消圖層示範一筆，完成便移除圖層並恢復書寫。caller 從當前原卷讀取筆數作為索引，`demo()` 載入 `writing.js` 已驗證的筆順後，把索引限制在目標字範圍；超出時重播最後一筆。這只定位提示，不判斷正確，也不修改原筆跡或作答狀態。
 
 ### 3.6 `assessment-store.js`：本機原稿保存
 

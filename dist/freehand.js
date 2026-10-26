@@ -72,7 +72,7 @@
     return () => { stopped = true; cancelAnimationFrame(frameId); };
   }
   let demoEngine = null;
-  function demo(container, character, onDone, onError) {
+  function demo(container, character, strokeIndex, onDone, onError) {
     // Hanzi Writer retains document listeners, so all hints share one stable target.
     if (!demoEngine) { const layer = document.createElement('div'); layer.className = 'assessment-demo'; layer.setAttribute('aria-hidden', 'true'); demoEngine = { layer, writer: null, data: null, ready: Promise.resolve(), cancel: null }; }
     const engine = demoEngine, layer = engine.layer, controller = new AbortController();
@@ -90,7 +90,7 @@
       await engine.ready;
       if (!alive) return;
       if (root.ResizeObserver) { observer = new root.ResizeObserver(() => { const width = container.getBoundingClientRect().width; engine.writer.updateDimensions({ width, height: width, padding: width * .1 }); }); observer.observe(container); }
-      await engine.writer.animateCharacter();
+      await engine.writer.animateStroke(Math.min(Math.max(0, strokeIndex), data.strokes.length - 1));
       if (alive) { cancel(); onDone(); }
     }).catch(() => { if (alive) { cancel(); onError('筆順未能播放，請繼續書寫。'); } });
     return cancel;
