@@ -1,6 +1,7 @@
 (function (root) {
   'use strict';
   const storageKey = 'bishun:classroom:v1';
+  const codePattern = /^(?:[1-9]\d{2}|[A-Z2-9]{8})$/;
   function validateAssignment(value) { return value.version === 2 ? root.BishunAssessment.assignment(value.entries, value.mode) : root.BishunQuizResults.assignment(value.entries); }
   function create({ origin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} }) {
     let saved = {}, accepted = false, generation = 0, controller = null, busy = false, message = '', board = null, storageOkay = true;
@@ -9,9 +10,9 @@
       if (raw && raw.length < 300000) {
         const value = JSON.parse(raw);
         if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Invalid saved classroom');
-        if (value.member && (!/^[A-Z2-9]{8}$/.test(value.member.code) || !/^[a-f0-9]{64}$/.test(value.member.token) || typeof value.member.memberId !== 'string' || typeof value.member.alias !== 'string' || !Number.isFinite(value.member.expiresAt))) throw new Error('Invalid saved membership');
+        if (value.member && (!codePattern.test(value.member.code) || !/^[a-f0-9]{64}$/.test(value.member.token) || typeof value.member.memberId !== 'string' || typeof value.member.alias !== 'string' || !Number.isFinite(value.member.expiresAt))) throw new Error('Invalid saved membership');
         if (value.member) validateAssignment(value.member.assignment);
-        if (value.join && (!/^[A-Z2-9]{8}$/.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
+        if (value.join && (!codePattern.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
         if (value.pending && (!value.member || value.pending.runId !== value.boundRunId || !root.BishunQuizResults.evaluate(value.member.assignment.entries, value.pending).terminal)) throw new Error('Invalid pending result');
         if (value.receipt && (!value.member || typeof value.receipt.runId !== 'string' || (value.member.assignment.version === 2 ? value.receipt.official !== true : typeof value.receipt.ranked !== 'boolean'))) throw new Error('Invalid saved receipt');
         if (value.receipt?.version === 4) validateAutomaticReceipt(value.receipt);
@@ -44,7 +45,7 @@
     async function join(code, alias) {
       if (busy) return;
       code = code.trim().toUpperCase(); alias = alias.normalize('NFC').trim();
-      if (!/^[A-Z2-9]{8}$/.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 8 位班級碼和 1 至 20 字暱稱。'; notify(); return; }
+      if (!codePattern.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 3 位數字班級碼和 1 至 20 字暱稱。'; notify(); return; }
       if (!saved.join || saved.join.code !== code || saved.join.body.alias !== alias) {
         const token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join('');
         saved = { join: { code, body: { requestId: crypto.randomUUID(), alias, memberToken: token } } };

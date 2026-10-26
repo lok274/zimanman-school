@@ -61,7 +61,8 @@ async function body(request, maximum = 262144) {
 }
 function key(value) { if (typeof value !== 'string' || !keyPattern.test(value)) fail(400, 'INVALID_ID', '紀錄編號無效。'); return value; }
 function canonicalAssignment(data) { try { if (data.version !== undefined && ![1, 2].includes(data.version)) throw new Error('測驗版本不支援。'); return data.version === 2 ? A.assignment(data.entries, data.mode) : Q.assignment(data.entries); } catch (error) { fail(400, 'INVALID_ASSIGNMENT', error.message); } }
-function roomReply(room) { return { code: room.code, assignment: JSON.parse(room.assignment_json), expiresAt: room.expires_at }; }
+function joinExpiresAt(room) { return /^\d{3}$/.test(room.code) ? room.expires_at - 85500000 : room.expires_at; }
+function roomReply(room) { return { code: room.code, assignment: JSON.parse(room.assignment_json), joinExpiresAt: joinExpiresAt(room), expiresAt: room.expires_at }; }
 async function roomFor(db, code) {
   const room = await db.prepare('SELECT * FROM classes WHERE code = ?').bind(code).first();
   if (!room) fail(404, 'CLASS_NOT_FOUND', '搵唔到呢個班級，請核對班級碼。');
@@ -120,9 +121,8 @@ async function api(request, env, url) {
     const existing = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
     if (existing) { if (existing.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (existing.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(existing); }
     await cleanup(db);
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const code = [...crypto.getRandomValues(new Uint8Array(8))].map(n => alphabet[n % alphabet.length]).join('');
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const code = String(100 + crypto.getRandomValues(new Uint32Array(1))[0] % 900);
       const now = Date.now();
       await db.prepare(`INSERT OR IGNORE INTO classes(code, owner_id, assignment_json, expires_at, request_id, payload_hash)
         SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM classes WHERE owner_id = ? AND expires_at > ?) < 10
@@ -138,7 +138,7 @@ async function api(request, env, url) {
     fail(503, 'TRY_AGAIN', '暫未能建立班級，請重試。');
   }
   const [code, action, runId] = route;
-  if (!/^[A-Z2-9]{8}$/.test(code || '') || route.length > 3) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
+  if (!/^(?:[1-9]\d{2}|[A-Z2-9]{8})$/.test(code || '') || route.length > 3) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
   const room = await roomFor(db, code);
   const assigned = JSON.parse(room.assignment_json);
   if (route.length === 1 && request.method === 'DELETE') {
@@ -256,10 +256,12 @@ async function api(request, env, url) {
     if (typeof data.memberToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.memberToken)) fail(400, 'INVALID_TOKEN', '參加身份無效。');
     const tokenHash = await hash(data.memberToken), aliasKey = alias.toLocaleLowerCase('en-US'), payloadHash = await hash(JSON.stringify({ alias, tokenHash }));
     await db.prepare(`INSERT OR IGNORE INTO members(id, code, alias, alias_key, token_hash, request_id, payload_hash)
-      SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM members WHERE code = ?) < 100 AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)`)
-      .bind(crypto.randomUUID(), code, alias, aliasKey, tokenHash, requestId, payloadHash, code, code, Date.now()).run();
+      SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM members WHERE code = ?) < 100
+      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND (length(code) = 8 OR expires_at - 85500000 > ?))`)
+      .bind(crypto.randomUUID(), code, alias, aliasKey, tokenHash, requestId, payloadHash, code, code, Date.now(), Date.now()).run();
     const saved = await db.prepare('SELECT * FROM members WHERE code = ? AND request_id = ?').bind(code, requestId).first();
     if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同加入編號已有另一份資料。'); return { ...roomReply(room), memberId: saved.id, alias: saved.alias }; }
+    if (joinExpiresAt(room) <= Date.now()) fail(410, 'JOIN_CLOSED', '班級加入時間已過，已加入同學仍可繼續。');
     const taken = await db.prepare('SELECT id FROM members WHERE code = ? AND alias_key = ?').bind(code, aliasKey).first();
     if (taken) fail(409, 'ALIAS_TAKEN', '呢個暱稱已有人用，請用另一個；同名唔會接管原有紀錄。');
     fail(429, 'MEMBER_LIMIT', '班級已滿或身份已使用，請聯絡老師。');

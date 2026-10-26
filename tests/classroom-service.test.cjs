@@ -80,6 +80,60 @@ test('join retries retain capability and aliases refuse takeover under concurren
   assert.equal((await e.join(code, '小月', 'same')).data.error.code, 'CONFLICT');
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 1);
 });
+test('new three-digit classes close admission at fifteen minutes but keep existing members for a day', async t => {
+  const e = setup(t), now = Date.now(), originalNow = Date.now;
+  Date.now = () => now;
+  try {
+    const room = (await e.create()).data;
+    assert.match(room.code, /^[1-9]\d{2}$/);
+    assert.equal(room.joinExpiresAt, now + 900000);
+    assert.equal(room.expiresAt, now + 86400000);
+    e.sqlite.prepare('UPDATE classes SET expires_at = ? WHERE code = ?').run(now + 85500001, room.code);
+    const token = randomBytes(32).toString('hex');
+    const admitted = await e.join(room.code, '準時', 'lost-response', token);
+    assert.equal(admitted.status, 200);
+    e.sqlite.prepare('UPDATE classes SET expires_at = ? WHERE code = ?').run(now + 85500000, room.code);
+    assert.equal((await e.join(room.code, '遲到')).data.error.code, 'JOIN_CLOSED');
+    const retry = await e.join(room.code, '準時', 'lost-response', token);
+    assert.equal(retry.status, 200);
+    assert.equal(retry.data.memberId, admitted.data.memberId);
+    assert.equal((await e.join(room.code, '改名', 'lost-response', token)).data.error.code, 'CONFLICT');
+    assert.equal((await e.submit(room.code, token, e.evidence())).status, 200);
+    assert.equal((await e.call('/' + room.code + '/board', 'GET', undefined, { authorization: 'Bearer ' + token })).status, 200);
+    assert.equal((await e.call('/' + room.code + '/teacher-board', 'GET', undefined, teacherHeaders)).status, 200);
+    assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 1);
+  } finally { Date.now = originalNow; }
+});
+test('a collision retries without recycling a live code and legacy eight-character rooms retain admission', async t => {
+  const e = setup(t), random = globalThis.crypto.getRandomValues;
+  const picks = [0, 0, 1];
+  globalThis.crypto.getRandomValues = array => {
+    if (array instanceof Uint32Array) { array[0] = picks.shift() ?? 2; return array; }
+    return random.call(globalThis.crypto, array);
+  };
+  let first, second;
+  try { first = (await e.create('first')).data; second = (await e.create('second')).data; }
+  finally { delete globalThis.crypto.getRandomValues; }
+  assert.equal(first.code, '100'); assert.equal(second.code, '101');
+  const now = Date.now();
+  e.sqlite.prepare('INSERT INTO classes(code,owner_id,assignment_json,expires_at,request_id,payload_hash) SELECT ?,owner_id,assignment_json,?, ?,payload_hash FROM classes WHERE code = ?')
+    .run('ABCDEFGH', now + 60000, 'legacy', first.code);
+  const joined = await e.join('ABCDEFGH', '舊班同學');
+  assert.equal(joined.status, 200); assert.equal(joined.data.joinExpiresAt, joined.data.expiresAt);
+  for (const code of ['000', '099', '12', '1000', 'ABC12345']) assert.equal((await e.join(code, '錯碼')).status, 404);
+});
+test('a six-word forty-eight-position challenge keeps its complete assignment in a numeric class', async t => {
+  const e = setup(t);
+  const words = ['一二三四五六七八', '九十甲乙丙丁戊己', '庚辛壬癸子丑寅卯', '辰巳午未申酉戌亥', '天地玄黃宇宙洪荒', '日月盈昃辰宿列張'];
+  const full = words.map(text => ({ text, selectedIndexes: Array.from({ length: 8 }, (_, index) => index) }));
+  const created = await e.call('', 'POST', { requestId: 'full-class', version: 2, mode: 'copy', entries: full }, teacherHeaders);
+  assert.equal(created.status, 200);
+  assert.match(created.data.code, /^[1-9]\d{2}$/);
+  assert.deepEqual(created.data.assignment.entries, full);
+  const joined = await e.join(created.data.code, '小星');
+  assert.equal(joined.status, 200);
+  assert.deepEqual(joined.data.assignment.entries, full);
+});
 test('atomic class, member and run quotas hold at their concurrent boundaries', async t => {
   const e = setup(t);
   for (let i = 0; i < 9; i++) assert.equal((await e.create('class-' + i)).status, 200);

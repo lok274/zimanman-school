@@ -139,10 +139,10 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-panel:has(> .word-cards) .assessment-status:empty { display:none; }
 .assessment-panel:has(> .word-cards) .assessment-footer { position:static; flex:none; padding:8px 0 0; }
 .assessment-choices.word-cards { flex:1; min-height:0; grid-auto-rows:minmax(0,1fr); gap:10px; margin:0; }
-.assessment-choices .word-card { container-type:size; grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:6px; min-height:0; min-width:0; padding:8px; }
-.assessment-choices .word-card .word-name { grid-column:1; grid-row:1; flex-wrap:nowrap; white-space:nowrap; font-size:min(160px,calc((100cqi - 8px) / var(--word-length)),30cqb); line-height:1.1; align-self:center; }
-.assessment-choices .word-card .word-photo { grid-column:1; grid-row:2; width:100%; height:100%; min-height:0; min-width:0; aspect-ratio:auto; object-fit:contain; }
-.assessment-choices .assessment-choice-listen { grid-template-rows:minmax(0,1fr); }
+.assessment-choices .word-card { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:6px; min-height:0; min-width:0; padding:8px; }
+.assessment-choices .word-card .word-name { grid-column:1; grid-row:1; flex-wrap:wrap; white-space:normal; overflow-wrap:anywhere; font-size:clamp(32px,calc(180px / var(--word-length)),100px); line-height:1.35; align-self:center; }
+.assessment-choices .word-card .word-photo { grid-column:1; grid-row:2; width:min(100%,max(140px,calc(100svh - 440px)),240px); height:auto; aspect-ratio:1; object-fit:contain; align-self:center; }
+.assessment-choices .assessment-choice-listen { container-type:size; grid-template-rows:minmax(0,1fr); }
 .assessment-choices .assessment-choice-listen .word-name { grid-column:1/-1; font-size:min(96px,calc(100cqi / 5),50cqb); }
 .review-answers { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px; }
 .review-paper { width:100%; max-width:280px; aspect-ratio:1; border:1px solid #d4ddd6; background:white; }
@@ -152,10 +152,16 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-board { margin:24px 0; }
 @media (min-width:600px) and (orientation:portrait) {
   .assessment-choices.word-cards { grid-template-columns:minmax(0,1fr); }
-  .assessment-choices .word-card { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:minmax(0,1fr); }
-  .assessment-choices .word-card .word-name { font-size:min(160px,calc((50cqi - 8px) / var(--word-length)),74cqb); }
-  .assessment-choices .word-card .word-photo { grid-column:2; grid-row:1; }
+  .assessment-choices .word-card { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto; }
+  .assessment-choices .word-card .word-name { font-size:clamp(32px,calc(280px / var(--word-length)),min(160px,calc((100svh - 420px) / 5))); }
+  .assessment-choices .word-card .word-photo { grid-column:2; grid-row:1; width:min(100%,calc((100svh - 360px) / 3),280px); }
   .assessment-choices .assessment-choice-listen .word-name { font-size:min(96px,calc(100cqi / 5),50cqb); }
+}
+.assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-name { font-size:clamp(24px,calc(120px / var(--word-length)),60px); }
+.assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-photo { width:min(100%,max(80px,calc((100svh - 240px) / 4)),110px); }
+@media (min-width:600px) and (orientation:portrait) {
+  .assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-name { font-size:clamp(24px,calc(180px / var(--word-length)),80px); }
+  .assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-photo { width:min(100%,calc((100svh - 260px) / 6),120px); }
 }
 @media (max-width:650px) {
   .assessment-panel { padding:12px 14px 94px; }
@@ -259,7 +265,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
     <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><div id="teacher-word-options"></div><p id="teacher-selection-total" role="status" aria-live="polite"></p></fieldset>
     <button id="apply-words" class="button primary">套用並返回首頁</button>
     <label class="field-label" for="assessment-mode">測驗題型</label><select id="assessment-mode"><option value="copy">看字寫</option></select>
-    <button id="teacher-class" class="button secondary">用以上範圍開班級測驗 ↗</button>
+    <button id="teacher-class" class="button secondary">用以上範圍開班級小挑戰 →</button>
     <div id="teacher-active" class="teacher-active" hidden><h3>本節練習</h3><button id="teacher-skip" class="button secondary">老師協助，跳過此字</button><button id="teacher-end" class="button quiet">結束本節並查看紀錄</button></div>
     <details id="license-details"><summary>字庫授權及修改說明</summary><p>Copyright 1999 Arphic Technology Co., Ltd. Copyright 2016 Shaunak Kishore. 字庫按 Arphic Public License 提供，並無擔保。你可以按授權條款修改及再分發。</p><p>本版將「草」改為十畫，交換「密」第七、八畫，並調整「來」嘅筆順。初始十一字嘅筆順已對照教育局圖示；字形仍有字庫風格差異。</p><p><details><summary>Arphic Public License 全文</summary><pre class="license-text">ARPHIC PUBLIC LICENSE
 
@@ -357,7 +363,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 </pre></details></p></details>
     <details id="history-details"><summary>本裝置的練習紀錄</summary><div id="local-history"></div></details>
   </dialog>
-  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級小挑戰</h2><button id="class-close" class="icon-button" aria-label="關閉班級小挑戰">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼</label><input id="class-code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（請勿使用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級小挑戰</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次小挑戰</button><button id="class-leave" class="button secondary" hidden>更換使用者</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>查看班級排行榜 →</a><p id="class-switch-note" class="small" hidden>切換使用者會清除參加身份和未交紀錄。請先交卷。</p></dialog>
+  <dialog id="class-dialog" aria-labelledby="class-title"><div class="dialog-heading"><h2 id="class-title">班級小挑戰</h2><button id="class-close" class="icon-button" aria-label="關閉班級小挑戰">×</button></div><div id="class-join-fields"><label class="field-label" for="class-code">班級碼（3 位數字）</label><input id="class-code" maxlength="8" inputmode="numeric" autocomplete="off" autocapitalize="characters" spellcheck="false"><label class="field-label" for="class-alias">暱稱（請勿使用真名）</label><input id="class-alias" maxlength="40" autocomplete="off"><button id="class-join" class="button primary">加入</button></div><p id="class-identity"></p><p id="class-status" role="status"></p><p id="class-storage" class="small" hidden>此頁未能保存參加身份或待交紀錄。關閉或重新整理可能遺失，請先交卷。</p><button id="class-continue" class="button primary" hidden>繼續以此暱稱參加</button><button id="class-start" class="button primary" hidden>開始班級小挑戰</button><button id="class-pending-retry" class="button secondary" hidden>重試交上次小挑戰</button><button id="class-leave" class="button secondary" hidden>更換使用者</button><a id="class-dialog-board-link" class="button secondary" href="leaderboard.html" hidden>查看班級排行榜 →</a><p id="class-switch-note" class="small" hidden>切換使用者會清除參加身份和未交紀錄。請先交卷。</p></dialog>
   <script>
 /**
  * Hanzi Writer v3.5.0 | https://chanind.github.io/hanzi-writer
@@ -1111,6 +1117,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
 (function (root) {
   'use strict';
   const storageKey = 'bishun:classroom:v1';
+  const codePattern = /^(?:[1-9]\d{2}|[A-Z2-9]{8})$/;
   function validateAssignment(value) { return value.version === 2 ? root.BishunAssessment.assignment(value.entries, value.mode) : root.BishunQuizResults.assignment(value.entries); }
   function create({ origin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} }) {
     let saved = {}, accepted = false, generation = 0, controller = null, busy = false, message = '', board = null, storageOkay = true;
@@ -1119,9 +1126,9 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (raw && raw.length < 300000) {
         const value = JSON.parse(raw);
         if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Invalid saved classroom');
-        if (value.member && (!/^[A-Z2-9]{8}$/.test(value.member.code) || !/^[a-f0-9]{64}$/.test(value.member.token) || typeof value.member.memberId !== 'string' || typeof value.member.alias !== 'string' || !Number.isFinite(value.member.expiresAt))) throw new Error('Invalid saved membership');
+        if (value.member && (!codePattern.test(value.member.code) || !/^[a-f0-9]{64}$/.test(value.member.token) || typeof value.member.memberId !== 'string' || typeof value.member.alias !== 'string' || !Number.isFinite(value.member.expiresAt))) throw new Error('Invalid saved membership');
         if (value.member) validateAssignment(value.member.assignment);
-        if (value.join && (!/^[A-Z2-9]{8}$/.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
+        if (value.join && (!codePattern.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
         if (value.pending && (!value.member || value.pending.runId !== value.boundRunId || !root.BishunQuizResults.evaluate(value.member.assignment.entries, value.pending).terminal)) throw new Error('Invalid pending result');
         if (value.receipt && (!value.member || typeof value.receipt.runId !== 'string' || (value.member.assignment.version === 2 ? value.receipt.official !== true : typeof value.receipt.ranked !== 'boolean'))) throw new Error('Invalid saved receipt');
         if (value.receipt?.version === 4) validateAutomaticReceipt(value.receipt);
@@ -1154,7 +1161,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     async function join(code, alias) {
       if (busy) return;
       code = code.trim().toUpperCase(); alias = alias.normalize('NFC').trim();
-      if (!/^[A-Z2-9]{8}$/.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 8 位班級碼和 1 至 20 字暱稱。'; notify(); return; }
+      if (!codePattern.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 3 位數字班級碼和 1 至 20 字暱稱。'; notify(); return; }
       if (!saved.join || saved.join.code !== code || saved.join.body.alias !== alias) {
         const token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join('');
         saved = { join: { code, body: { requestId: crypto.randomUUID(), alias, memberToken: token } } };
@@ -2445,7 +2452,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
       const candidate = sessionCandidate('quiz', draftEntries, draftSelected);
       const assigned = globalThis.BishunAssessment ? globalThis.BishunAssessment.assignment(Q.entriesFromSession(candidate), assessmentMode()) : Q.assignment(Q.entriesFromSession(candidate));
-      window.open(classOrigin + '/teacher#' + encodeURIComponent(JSON.stringify(assigned)), '_blank', 'noopener,noreferrer');
+      window.location.assign(classOrigin + '/teacher#' + encodeURIComponent(JSON.stringify(assigned)));
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
   function selectedOptions() {

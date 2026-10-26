@@ -58,6 +58,19 @@ test('lost join responses retry the exact request ID and pre-generated capabilit
   await e.client.join('abcdefgh', ' 小星 '); fail = false; await e.client.join('ABCDEFGH', '小星');
   assert.equal(e.calls[0].body, e.calls[1].body); assert.match(JSON.parse(e.calls[0].body).memberToken, /^[a-f0-9]{64}$/); assert.equal(e.client.view().accepted, true);
 });
+test('three-digit membership survives reload while malformed and legacy code forms stay distinct', async () => {
+  const numeric = { ...member, code: '123', joinExpiresAt: Date.now() + 900000 };
+  const e = setup(() => response(numeric));
+  for (const code of ['000', '099', '12', '1234', 'ABC12345']) await e.client.join(code, '小星');
+  assert.equal(e.calls.length, 0);
+  await e.client.join(' 123 ', '小星');
+  assert.equal(e.client.view().member.code, '123');
+  const reload = C.create(e.options);
+  assert.equal(reload.view().member.code, '123'); assert.equal(reload.view().needsContinue, true);
+  const legacy = setup(() => response(member));
+  await legacy.client.join('abcdefgh', '小星');
+  assert.equal(legacy.client.view().member.code, 'ABCDEFGH');
+});
 test('network and invalid JSON errors use Chinese copy while server messages survive', async () => {
   const offline = setup(() => { throw new TypeError('Failed to fetch'); });
   await offline.client.join('ABCDEFGH', '小星');
