@@ -20,7 +20,7 @@ test('reviewed transport keeps sealed payloads out of sessionStorage and require
   const run = BishunAssessment.start(reviewedMember.assignment, 'ink-run'); run.phase = 'sealed'; run.answers[0].status = 'submitted'; run.answers[0].strokes = [[[1, 2, 0], [3, 4, 10]]];
   const e = setup(url => response(url.endsWith('/members') ? reviewedMember : url.endsWith('/board') ? { published: true, rows: [{ alias: member.alias, rank: 1, score: 1 }] } : { runId: run.runId, official: true }));
   await e.client.join(member.code, member.alias); await e.client.submitReviewed(run);
-  assert(!e.data.get(C.storageKey).includes('strokes'));
+  assert(!e.data.get(C.storageKey).includes('"strokes":'));
   const reload = C.create(e.options); assert.equal(reload.view().needsContinue, true);
   await assert.rejects(reload.ownAnswer(), /身份/);
   reload.continueMember(); await reload.refresh();
@@ -147,4 +147,32 @@ test('student classroom errors use challenge wording without changing the server
   await e.client.join(member.code, member.alias);
   assert.equal(e.client.view().message, '小挑戰已到期。');
   assert.equal(serverError.error.message, '測驗已到期。');
+});
+
+function lockedRun(assigned) {
+  const A=BishunAssessment;let run=A.startLocked(assigned,'automatic-client',1);
+  for(const event of [{type:'DATA_READY',count:1},{type:'START_WORD'},{type:'STROKE_ACCEPTED',strokeIndex:0,stroke:[[1,2],[3,4]]},{type:'TIME',elapsedMs:1049},{type:'SUBMIT_CHARACTER'},{type:'SEAL'}])run=A.transition(run,event);
+  return run;
+}
+test('automatic transport requires versioned canonical receipt, preserves only receipt in session storage and resumes automatic board',async()=>{
+  const joined={...member,assignment:BishunAssessment.assignment(assignment.entries,'listen')},run=lockedRun(joined.assignment);let receipt={runId:run.runId,official:true};
+  const board={version:4,policy:BishunAssessment.policy,expiresAt:joined.expiresAt,rows:[{memberId:joined.memberId,alias:joined.alias,isMe:true,rank:1,elapsedMs:1000}]};
+  const e=setup(url=>response(url.endsWith('/members')?joined:url.endsWith('/automatic-board')?board:receipt));await e.client.join(member.code,member.alias);
+  await assert.rejects(e.client.submitAutomatic(run),/回應無效/);assert.equal(e.client.view().receipt,null);
+  receipt={version:4,policy:BishunAssessment.policy,runId:run.runId,official:true,elapsedMs:1000};await e.client.submitAutomatic(run);
+  assert(!e.data.get(C.storageKey).includes('"strokes":'));assert(e.calls.filter(call=>call.method==='PUT').every(call=>call.url.endsWith('/automatic-answers')));
+  const reload=C.create(e.options);reload.continueMember();await reload.refresh();assert.equal(reload.view().board.automatic,true);assert.equal(reload.view().board.personalBest.elapsedMs,1000);
+  receipt={...receipt,elapsedMs:1100};await assert.rejects(e.client.submitAutomatic(run),/回應無效/);
+});
+
+test('automatic private cold recovery validates original and cannot restore a switched identity',async()=>{
+  const joined={...member,assignment:BishunAssessment.assignment(assignment.entries,'copy')},run=lockedRun(joined.assignment),receipt={version:4,policy:BishunAssessment.policy,runId:run.runId,official:true,elapsedMs:1000};let finish;
+  const e=setup(url=>url.endsWith('/members')?response(joined):new Promise(resolve=>{finish=resolve;}));await e.client.join(member.code,member.alias);
+  const pending=e.client.ownAutomaticAnswer();e.client.leave();finish(response({answer:{run,receipt}}));await assert.rejects(pending,/身份/);assert.equal(e.client.view().receipt,null);assert.equal(e.client.view().member,null);
+});
+
+test('automatic failed receipt persistence reports recoverable error and never falls back to reviewed routes',async()=>{
+  const joined={...member,assignment:BishunAssessment.assignment(assignment.entries,'copy')},run=lockedRun(joined.assignment),receipt={version:4,policy:BishunAssessment.policy,runId:run.runId,official:true,elapsedMs:1000};
+  const e=setup(url=>response(url.endsWith('/members')?joined:receipt));await e.client.join(member.code,member.alias);e.storage.setItem=()=>{throw new Error('quota');};await assert.rejects(e.client.submitAutomatic(run),/回條/);
+  assert(e.calls.at(-1).url.endsWith('/automatic-answers'));assert.equal(e.calls.filter(call=>call.url.endsWith('/answers')).length,0);
 });

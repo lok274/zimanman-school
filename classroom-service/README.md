@@ -1,22 +1,46 @@
 # Classroom service
 
-The Worker serves the teacher page and stores assignments, anonymous memberships, original handwriting and teacher reviews in D1 binding `DB`. The student app is static. Assignments retain version 2 and their immutable `copy` or `listen` mode. New version 3 originals record the actual displayed mode as `presentationMode: 'copy'`; historical version 2 originals keep their original mode. New teacher choices offer 看字寫 only.
+The Worker serves the teacher page and stores assignments, anonymous memberships, original handwriting and teacher reviews in D1 binding `DB`. The student app is static. Assignments retain version 2 and their immutable `copy` or `listen` mode. New version 4 originals record the actual displayed mode as `presentationMode: 'copy'`; historical version 2 originals keep their original mode. New teacher choices offer 看字寫 only.
 
 ## Build and export
 
-Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. Drizzle schema lives in `schema.js`. Migrations `0000_aspiring_payback.sql` and `0001_clammy_prima.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. Apply all pending migrations before serving the updated Worker.
+Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissions.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. The API also initializes the additive automatic table once per DB binding because Sites packaging does not apply migrations. Failed initialization retries on the next request. The inline DDL is generated from migration 0002.
 
 The canonical shared files are in the repository's `dist/`.
 
 - `quiz-results.js` retains legacy assignment and score behavior.
 - `assessment.js` owns version 2 assignments, original validation, review scores and ties.
 - `content.js` supplies the six default words.
+- `character-data.js` validates and loads bounded glyph data.
+- `data/characters.js` supplies the corrected assets used to generate trusted counts.
 - `freehand.js` and `assessment-review.js` render and replay originals and collect teacher marks.
 - `assessment.css` supplies the shared review layout.
 
-An exported Sites source needs exact copies of all six files under `shared/`. The builder uses them when sibling canonical files are absent. Tests build this isolated export and compare the resulting Worker byte for byte. Do not edit generated `src/quiz-results.js`, `src/assessment.js`, `src/teacher-page.js` or the output bundle. The export owner preserves the managed hosting manifest. Building does not deploy or change Site access.
+An exported Sites source needs exact copies of all eight files under `shared/`. The builder uses them when sibling canonical files are absent. Tests build this isolated export and compare the resulting Worker byte for byte. Do not edit generated `src/quiz-results.js`, `src/assessment.js`, `src/teacher-page.js`, `src/character-data.js`, `src/target-counts.js`, `src/automatic-schema.js` or the output bundle. The export owner preserves the managed hosting manifest. Building does not deploy or change Site access.
 
-## Reviewed HTTP contract
+## Automatic HTTP contract
+
+New v4 originals use the same immutable version 2 assignment. Every new run has `policy: 'locked-strokes-0.9-v1'`, `presentationMode: 'copy'`, ordered answers and per-word foreground time. Each answer stores `expectedStrokes`, `hintUsed`, submitted status and the exact accepted prefix as arrays of integer `[x,y]` points. Coordinates range from 0 to 10000. No per-point times are invented.
+
+| Method and relative path | Authority | Result |
+| --- | --- | --- |
+| `PUT /:code/automatic-answers` | Current member | Validates v4 and stores the first automatic original. |
+| `GET /:code/automatic-answers` | Current member | Returns `{answer:{run,receipt},expiresAt}` or `answer:null`. |
+| `GET /:code/automatic-board` | Member with an automatic submission | Returns `{version:4,policy,expiresAt,rows}`. Rows contain member ID, alias, rounded elapsed time, rank and `isMe`. |
+| `GET /:code/automatic-original/:memberId` | Same-origin owner | Returns the original and receipt without grading controls. |
+
+All paths begin with `/api/v1/classes`. The receipt is `{version:4,policy,runId,official:true,elapsedMs}`. The client requires this receipt and never falls back to old answers. `GET /:code/reviews` additionally returns `automaticRunId` and `automaticElapsedMs` per member. Old scores stay behind the existing publication rule.
+
+The server checks full counts against corrected bundled assets or the pinned external dataset. External loading is sequential per submission, has at most four concurrent fetches across requests, an eight-second timeout and a two-million-byte limit. Only up to 256 custom counts are cached. Unavailable data returns `503 DATA_UNAVAILABLE`, preserving the local retry. These checks validate structure and target counts. They do not independently recognize handwriting geometry or prevent a modified browser from forging evidence.
+
+`automatic_submissions` has a cascading member primary key. Each member can keep one old reviewed original and one new automatic original. Both upload paths atomically sum both tables for class and global ink quotas. Identical canonical retries are idempotent; changed payloads conflict. A first-submission conflict retrieves the member's official automatic original, retains the local sealed alternative, and conditionally replaces only that active pointer.
+
+Timing includes foreground writing, mistakes and Hint. It excludes loading, menus, background, storage failures and result waits. Same-word Next resumes time; menu visits and cold loads require Start. Ranking rounds the aggregate once to 100 ms. Stored, displayed and compared times match, so exact displayed ties share a rank. Local boards compare only matching v4 assignment, positions, actual mode and policy. They read on entry or foreground, without revision writes. Class boards poll metadata every five seconds for at most 120 successful refreshes and stop when hidden, closed or expired.
+
+## Historical reviewed HTTP contract
+
+The remaining reviewed endpoints preserve v2/v3 originals. New challenge UI does not use their grading or publication flow.
+
 
 All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Control: no-store`. Errors have `{error:{code,message}}`. A reviewed assignment is `{version:2,mode,entries:[{text,selectedIndexes}]}`. The class fixes the assignment, including mode and selected positions.
 
@@ -36,7 +60,7 @@ All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Con
 
 The original has version, run ID, canonical assignment, start time, elapsed milliseconds, sealed phase, and one answer per selected position. Each answer has `occurrenceId`, `submitted` or `skipped` status, and ordered strokes. Each stroke is an ordered array of `[x,y,relativeMs]` points. Coordinates are integers from 0 to 10000. Point times must be finite, nonnegative, monotonic within the stroke and at most 24 hours. A submitted answer needs ink; a skipped answer preserves any partial ink.
 
-Version 3 adds `presentationMode: 'copy'`, `legacyElapsedMs`, `wordProgress` and boolean `answers[].hintUsed`. Each word record has `wordId`, terminal `phase: 'submitted'`, `elapsedMs` and boolean `timeKnown`. The aggregate equals legacy time plus the word times and cannot exceed 24 hours. New words use `START_WORD`, intermediate `NEXT_CHARACTER` and atomic `SUBMIT_WORD`; every selected character needs ink and there is no skip. Old unsealed drafts preserve ink and the old aggregate on upgrade; unknown old per-word durations stay unknown and only measured continuation is reported. Sealed originals are not upgraded. Version 3 is deliberate: an old validator must reject the payload rather than silently strip timing or hint metadata. The client requires the version 3 acknowledgement before accepting its receipt.
+Version 3 adds `presentationMode: 'copy'`, `legacyElapsedMs`, `wordProgress` and boolean `answers[].hintUsed`. Each word record has `wordId`, terminal `phase: 'submitted'`, `elapsedMs` and boolean `timeKnown`. The aggregate equals legacy time plus the word times and cannot exceed 24 hours. Historical v3 words use `START_WORD`, intermediate `NEXT_CHARACTER` and atomic `SUBMIT_WORD`; every selected character needs ink and there is no skip. Old unsealed drafts preserve ink and the old aggregate on upgrade; unknown old per-word durations stay unknown and only measured continuation is reported. Sealed originals are not upgraded. Version 3 is deliberate: an old validator must reject the payload rather than silently strip timing or hint metadata. The client requires the version 3 acknowledgement before accepting its receipt.
 
 The pupil grid always shows a fixed pale full glyph. Hint plays cancellable stroke order using the reviewed bundled data and retains the actual ink; it never recognizes or submits an answer. Word timing runs only after explicit Start in the foreground writing page, including deliberate Hint viewing. Menu visits and cold loads require Start again. Runtime intent and wall-clock extrapolation are never stored.
 
@@ -54,13 +78,13 @@ Students create a capability before joining, retain it in sessionStorage, and se
 
 The frontend stores handwriting and sealed retries in IndexedDB, keyed by class, member and run. An atomic scope initializer prevents concurrent tabs from replacing an active pointer. Every completed stroke and destructive navigation checkpoints the original. Failed storage keeps ink visible and blocks progress. A failed upload keeps the sealed original available for the same retry. sessionStorage contains membership and small receipts, never ink payloads.
 
-Local review uses separate local contexts. Only local originals appear in the local teacher list. The explicit next-pupil action is available after sealing, releases the current pointer, and preserves its original for review. It never modifies a class member or official class score.
+Local v4 boards use separate scopes. Back releases only the displayed sealed run pointer and retains its history. Old local drafts remain under their original keys and are not upgraded into accepted progress.
 
 ## Capacity and retention
 
 The reviewed request body is capped at 4 MiB. Canonical original JSON is capped at 1,800,000 bytes. This reserves space below D1's documented 2,000,000-byte maximum string, BLOB or table row for marks and metadata. See [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
 
-The other limits are 200,000 points per original, 256 strokes per character, 48 selected positions, 64 MiB of original JSON per class, and 256 MiB globally. Current draft aggregate limits are checked before each character is locked. An overflowing current stroke stays in the editable local draft; explicit undo can remove it. There is no silent thinning or point truncation. A server quota rejection returns `507 INK_CAPACITY` and leaves the local sealed retry intact. Legacy bodies remain capped at 256 KiB.
+The other limits are 200,000 points per original, 256 strokes per historical character or 64 per v4 character, 48 selected positions, 64 MiB of original JSON per class, and 256 MiB globally. Current draft aggregate limits are checked before each character is locked. A v4 stroke that exceeds capacity is rejected before accepted progress advances; prior accepted ink stays visible. There is no silent thinning or point truncation. A server quota rejection returns `507 INK_CAPACITY` and leaves the local sealed retry intact. Legacy bodies remain capped at 256 KiB.
 
 Class limits remain 100 members, 10 active classes per owner and 100 active classes globally. Classes expire 24 hours after creation. All reads and writes require an unexpired class. Owner deletion cascades immediately. Creation and the public maintenance endpoint each delete at most 10 expired classes. Caller-supplied cutoffs and class selectors do not affect cleanup. Periodic background cleanup has not been enabled. There is no MCP endpoint. Provider backups are outside this application deletion guarantee.
 
@@ -78,7 +102,7 @@ node --test tests/*.test.cjs
 node dist/data/self-check.mjs
 ```
 
-The Worker tests apply all migrations to Node's SQLite database. They verify immutable concurrent submissions, metadata round trips, actual-mode ranking, revision conflicts, private access, CORS, byte quotas, ties, expiry and cleanup cascades. UI tests exercise pointer capture, explicit Start, per-word submission and timing, fixed glyphs, cancellable hints, saved drafts, retry behavior, local review and separate challenge cards through a simulated DOM. They do not certify physical tablet or stylus behavior.
+The Worker tests apply all migrations to Node's SQLite database. They verify immutable concurrent submissions, metadata round trips, actual-mode ranking, revision conflicts, private access, CORS, byte quotas, ties, expiry and cleanup cascades. UI tests exercise locked acceptance, per-character Submit/O/Next, time boards, cancellable one-stroke hints, Undo, recovery, privacy and stale callbacks. Real pinned-vendor tests verify matching, normalized hydration and a stable listener target. They do not certify physical tablet or stylus behavior.
 
 With the pinned development tools available, run a real local Worker and D1:
 

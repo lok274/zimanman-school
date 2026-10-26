@@ -101,17 +101,23 @@ $('refresh').addEventListener('click', async () => {
 });
 function text(tag, value) { const el = document.createElement(tag); el.textContent = value; return el; }
 function showBoard(data) {
-  const section = document.createElement('div');
-  section.append(text('h2', data.published ? '已公布班級榜' : '班級榜尚未公布'));
-  let mode;
-  for (const row of data.rows) {
-    if (row.mode && row.mode !== mode) { section.append(text('h3', row.mode === 'copy' ? '看字寫' : '聽詞寫')); mode = row.mode; }
-    section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+  const section = document.createElement('div'), submitted = data.members?.filter(member => member.runId) || [];
+  const automatic = data.members?.filter(member => member.automaticRunId) || [];
+  if (automatic.length) {
+    section.append(text('h2', '筆順小挑戰排行榜'));
+    for (const row of BishunAssessment.timeRanks(automatic.map(member => ({ alias: member.alias, elapsedMs: member.automaticElapsedMs })))) section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + (row.elapsedMs / 1000).toFixed(1) + ' 秒'));
   }
-  const submitted = data.members?.filter(member => member.runId) || [];
+  if (data.published || submitted.length) {
+    section.append(text('h2', data.published ? '已公布舊版班級榜' : '舊版班級榜尚未公布'));
+    let mode;
+    for (const row of data.rows) {
+      if (row.mode && row.mode !== mode) { section.append(text('h3', row.mode === 'copy' ? '看字寫' : '聽詞寫')); mode = row.mode; }
+      section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+    }
+  }
   const ready = submitted.length > 0 && submitted.every(member => Number.isInteger(member.score));
-  if (!data.published && !ready) section.append(text('p', '請先完成已交原卷的批改。'));
-  $('board').replaceChildren(section); $('publish').disabled = data.published || !ready;
+  if (submitted.length && !data.published && !ready) section.append(text('p', '請先完成已交舊版原卷的批改。'));
+  $('board').replaceChildren(section); $('publish').disabled = data.published || !ready; $('publish').hidden = !data.published && !submitted.length;
 }
 async function refreshReviewed(room) {
   const data = await request('/' + room.code + '/reviews');
@@ -119,7 +125,7 @@ async function refreshReviewed(room) {
   const list = document.createElement('div');
   for (const member of data.members) {
     const row = document.createElement('p');
-    row.append(text('span', member.alias + ' · ' + (!member.runId ? '未交卷' : member.score === null ? '待批改' : member.score + ' 字正確')));
+    row.append(text('span', member.alias + ' · ' + (member.automaticRunId ? '已完成 · ' + (member.automaticElapsedMs / 1000).toFixed(1) + ' 秒' : !member.runId ? '未交卷' : member.score === null ? '待批改' : member.score + ' 字正確')));
     if (member.runId) {
       const button = text('button', '查看／批改原卷');
       button.addEventListener('click', async () => {
@@ -133,6 +139,26 @@ async function refreshReviewed(room) {
             if (draft.room?.code === room.code) await refreshReviewed(room);
             return result;
           });
+        } catch (error) { if (draft.room?.code === room.code) $('status').textContent = error.message; }
+        finally { button.disabled = false; }
+      }); row.append(button);
+    }
+    if (member.automaticRunId) {
+      const button = text('button', '查看筆順小挑戰原卷');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const original = await request('/' + room.code + '/automatic-original/' + member.memberId);
+          if (draft.room?.code !== room.code) return;
+          stopReview?.(); stopReview = null; $('review').hidden = false; $('review').replaceChildren();
+          $('review').append(text('h2', member.alias + ' · ' + (original.receipt.elapsedMs / 1000).toFixed(1) + ' 秒'));
+          const positions = BishunAssessment.positions(original.run.assignment), answers = document.createElement('div'); answers.className = 'review-answers';
+          original.run.answers.forEach((answer, index) => {
+            const card = document.createElement('section'), paper = document.createElement('div'); card.className = 'review-answer'; paper.className = 'review-paper';
+            card.append(text('h3', positions[index].word + ' · 第 ' + (positions[index].index + 1) + ' 字'), paper);
+            BishunFreehand.render(paper, answer.strokes); answers.append(card);
+          });
+          $('review').append(answers);
         } catch (error) { if (draft.room?.code === room.code) $('status').textContent = error.message; }
         finally { button.disabled = false; }
       }); row.append(button);

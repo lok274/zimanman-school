@@ -14,6 +14,7 @@
         if (value.join && (!/^[A-Z2-9]{8}$/.test(value.join.code) || !value.join.body || typeof value.join.body.alias !== 'string' || !/^[\w-]{1,100}$/.test(value.join.body.requestId) || !/^[a-f0-9]{64}$/.test(value.join.body.memberToken))) throw new Error('Invalid saved join');
         if (value.pending && (!value.member || value.pending.runId !== value.boundRunId || !root.BishunQuizResults.evaluate(value.member.assignment.entries, value.pending).terminal)) throw new Error('Invalid pending result');
         if (value.receipt && (!value.member || typeof value.receipt.runId !== 'string' || (value.member.assignment.version === 2 ? value.receipt.official !== true : typeof value.receipt.ranked !== 'boolean'))) throw new Error('Invalid saved receipt');
+        if (value.receipt?.version === 4) validateAutomaticReceipt(value.receipt);
         saved = value;
       }
     } catch { storageOkay = false; }
@@ -86,7 +87,12 @@
     async function refresh() {
       if (!accepted || !saved.member || !saved.receipt || busy) return;
       try {
-        const data = await request('/' + saved.member.code + '/board', 'GET', undefined, saved.member.token);
+        const automatic = saved.receipt.version === 4;
+        const data = await request('/' + saved.member.code + (automatic ? '/automatic-board' : '/board'), 'GET', undefined, saved.member.token);
+        if (automatic) {
+          validateAutomaticBoard(data); board = { ...data, automatic: true, personalBest: data.rows.find(row => row.memberId === saved.member.memberId) || null };
+          message = '班級榜已更新。'; notify(); return;
+        }
         if (saved.member.assignment.version === 2) {
           validateReviewedBoard(data);
           board = { ...data, reviewed: true, personalBest: data.rows.find(row => row.alias === saved.member.alias) || null };
@@ -114,7 +120,33 @@
       if (receipt.runId !== run.runId || receipt.official !== true || run.version === 3 && receipt.version !== 3) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
       saved.receipt = receipt; persist(); notify(); return receipt;
     }
-    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed,
+    function validateAutomaticReceipt(receipt, run) {
+      if (!receipt || receipt.version !== 4 || receipt.policy !== root.BishunAssessment.policy || receipt.official !== true || typeof receipt.runId !== 'string' || !/^[\w-]{1,100}$/.test(receipt.runId) || !Number.isSafeInteger(receipt.elapsedMs) || receipt.elapsedMs < 0 || receipt.elapsedMs > root.BishunAssessment.limits.duration || receipt.elapsedMs % 100 || run && (receipt.runId !== run.runId || receipt.elapsedMs !== root.BishunAssessment.boardTime(run.elapsedMs))) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
+      return receipt;
+    }
+    function validateAutomaticBoard(data) {
+      if (data.version !== 4 || data.policy !== root.BishunAssessment.policy || !Number.isSafeInteger(data.expiresAt) || !Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => !row || typeof row.memberId !== 'string' || typeof row.alias !== 'string' || Array.from(row.alias).length > 20 || typeof row.isMe !== 'boolean' || !Number.isInteger(row.rank) || row.rank < 1 || !Number.isSafeInteger(row.elapsedMs) || row.elapsedMs < 0 || row.elapsedMs > root.BishunAssessment.limits.duration || row.elapsedMs % 100)) throw new Error('排行榜回應無效。');
+      return data;
+    }
+    async function submitAutomatic(run) {
+      const canonical = root.BishunAssessment.validateAutomatic(saved.member.assignment, run);
+      const receipt = validateAutomaticReceipt(await reviewedRequest('automatic-answers', 'PUT', canonical), canonical);
+      saved.receipt = receipt;
+      if (!persist()) throw new Error('班級已收卷，但本頁未能保存回條，請重試。');
+      notify(); return receipt;
+    }
+    async function ownAutomaticAnswer() {
+      const result = await reviewedRequest('automatic-answers', 'GET');
+      if (result.answer) {
+        const run = root.BishunAssessment.validateAutomatic(saved.member.assignment, result.answer.run);
+        const receipt = validateAutomaticReceipt(result.answer.receipt, run);
+        saved.receipt = receipt; persist(); notify();
+        return { ...result, answer: { run, receipt } };
+      }
+      if (result.answer !== null) throw new Error('原卷回應無效。');
+      return result;
+    }
+    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed, submitAutomatic, ownAutomaticAnswer, automaticBoard: async () => validateAutomaticBoard(await reviewedRequest('automatic-board', 'GET')),
       ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: async () => validateReviewedBoard(await reviewedRequest('board', 'GET')) };
   }
   const api = { create, storageKey };

@@ -1,6 +1,40 @@
 import Q from './quiz-results.js';
 import A from './assessment.js';
+import D from './character-data.js';
+import automaticSchema from './automatic-schema.js';
+import { counts, dataUrl } from './target-counts.js';
 import teacherHTML from './teacher-page.js';
+
+const initializations = new WeakMap();
+async function initializeAutomatic(db) {
+  if (!initializations.has(db)) initializations.set(db, db.prepare(automaticSchema).run().catch(error => { initializations.delete(db); throw error; }));
+  await initializations.get(db);
+}
+const customCounts = new Map();
+let countFetches = 0;
+async function trustedCounts(assigned) {
+  const result = {};
+  for (const character of new Set(A.positions(assigned).map(position => position.character))) {
+    if (counts[character]) { result[character] = counts[character]; continue; }
+    if (customCounts.has(character)) { result[character] = customCounts.get(character); continue; }
+    if (countFetches >= 4) fail(503, 'DATA_UNAVAILABLE', '字形暫未能載入，原稿仍然保留，請稍後重試。');
+    countFetches++;
+    try {
+      const data = await D.loadCharacter(character, AbortSignal.timeout(8000), {}, dataUrl);
+      result[character] = data.strokes.length;
+      if (customCounts.size >= 256) customCounts.delete(customCounts.keys().next().value);
+      customCounts.set(character, data.strokes.length);
+    } catch { fail(503, 'DATA_UNAVAILABLE', '字形暫未能載入，原稿仍然保留，請稍後重試。'); }
+    finally { countFetches--; }
+  }
+  return result;
+}
+function automaticReceipt(row) { return { version: 4, policy: A.policy, runId: row.run_id, official: true, elapsedMs: row.elapsed_ms }; }
+function automaticOriginal(row) { return { run: JSON.parse(row.ink_json), receipt: automaticReceipt(row) }; }
+async function automaticBoard(db, room, memberId) {
+  const { results } = await db.prepare('SELECT m.id AS memberId, m.alias, s.elapsed_ms AS elapsedMs FROM members m JOIN automatic_submissions s ON s.member_id = m.id WHERE m.code = ?').bind(room.code).all();
+  return { version: 4, policy: A.policy, expiresAt: room.expires_at, rows: A.timeRanks(results).map(row => ({ ...row, isMe: row.memberId === memberId })) };
+}
 
 const allowedOrigins = new Set(['https://lok274.github.io', 'http://127.0.0.1:4173', 'http://localhost:4173']);
 const keyPattern = /^[\w-]{1,100}$/;
@@ -75,6 +109,7 @@ async function cleanup(db) {
 async function api(request, env, url) {
   const db = env.DB;
   if (!db) fail(503, 'UNAVAILABLE', '班級服務暫未準備好。');
+  await initializeAutomatic(db);
   const route = url.pathname.split('/').filter(Boolean).slice(3);
   if (route.length === 1 && route[0] === 'cleanup' && request.method === 'POST') {
     return cleanup(db);
@@ -111,6 +146,41 @@ async function api(request, env, url) {
     await db.prepare('DELETE FROM classes WHERE code = ? AND owner_id = ?').bind(code, room.owner_id).run();
     return { deleted: true };
   }
+  if (assigned.version === 2 && action === 'automatic-answers' && route.length === 2) {
+    const member = await memberFor(request, db, code);
+    if (request.method === 'GET') {
+      const saved = await db.prepare('SELECT * FROM automatic_submissions WHERE member_id = ?').bind(member.id).first();
+      return { answer: saved ? automaticOriginal(saved) : null, expiresAt: room.expires_at };
+    }
+    if (request.method === 'PUT') {
+      const data = await body(request, A.limits.bodyBytes); let run;
+      try { run = A.validateAutomatic(assigned, data); } catch (error) { fail(400, 'INVALID_INK', error.message); }
+      const targets = await trustedCounts(assigned);
+      try { run = A.validateAutomatic(assigned, run, targets); } catch (error) { fail(400, 'INVALID_INK', error.message); }
+      const json = JSON.stringify(run), bytes = new TextEncoder().encode(json).length, payloadHash = await hash(json);
+      await db.prepare(`INSERT OR IGNORE INTO automatic_submissions(member_id, run_id, payload_hash, ink_json, ink_bytes, elapsed_ms, submitted_at)
+        SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)
+        AND COALESCE((SELECT SUM(s.ink_bytes) FROM (SELECT member_id, ink_bytes FROM reviewed_submissions UNION ALL SELECT member_id, ink_bytes FROM automatic_submissions) s JOIN members m ON s.member_id = m.id WHERE m.code = ?), 0) + ? <= 67108864
+        AND COALESCE((SELECT SUM(ink_bytes) FROM (SELECT ink_bytes FROM reviewed_submissions UNION ALL SELECT ink_bytes FROM automatic_submissions)), 0) + ? <= 268435456`)
+        .bind(member.id, run.runId, payloadHash, json, bytes, A.boardTime(run.elapsedMs), Date.now(), code, Date.now(), code, bytes, bytes).run();
+      const saved = await db.prepare('SELECT * FROM automatic_submissions WHERE member_id = ?').bind(member.id).first();
+      if (!saved) { await roomFor(db, code); fail(507, 'INK_CAPACITY', '班級儲存已滿，原稿仍保留在裝置，請稍後重試。'); }
+      if (saved.run_id !== run.runId) fail(409, 'FIRST_SUBMISSION', '第一份筆順小挑戰已收妥。');
+      if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '原卷編號已有另一份筆跡。');
+      return automaticReceipt(saved);
+    }
+  }
+  if (assigned.version === 2 && action === 'automatic-board' && route.length === 2 && request.method === 'GET') {
+    const member = await memberFor(request, db, code);
+    if (!await db.prepare('SELECT member_id FROM automatic_submissions WHERE member_id = ?').bind(member.id).first()) fail(403, 'FINISH_FIRST', '請先完成小挑戰並交卷。');
+    return automaticBoard(db, room, member.id);
+  }
+  if (assigned.version === 2 && action === 'automatic-original' && route.length === 3 && request.method === 'GET') {
+    await ownerFor(request, room);
+    const saved = await db.prepare('SELECT s.* FROM automatic_submissions s JOIN members m ON m.id = s.member_id WHERE m.code = ? AND m.id = ?').bind(code, key(runId)).first();
+    if (!saved) fail(404, 'ANSWER_NOT_FOUND', '未有原卷。');
+    return automaticOriginal(saved);
+  }
   if (assigned.version === 2 && action === 'answers' && route.length === 2) {
     const member = await memberFor(request, db, code);
     if (request.method === 'GET') {
@@ -124,8 +194,8 @@ async function api(request, env, url) {
       const json = JSON.stringify(run), bytes = new TextEncoder().encode(json).length, payloadHash = await hash(json);
       await db.prepare(`INSERT OR IGNORE INTO reviewed_submissions(member_id, run_id, payload_hash, ink_json, ink_bytes, elapsed_ms, submitted_at, marks_json)
         SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)
-        AND COALESCE((SELECT SUM(s.ink_bytes) FROM reviewed_submissions s JOIN members m ON s.member_id = m.id WHERE m.code = ?), 0) + ? <= 67108864
-        AND COALESCE((SELECT SUM(ink_bytes) FROM reviewed_submissions), 0) + ? <= 268435456`)
+        AND COALESCE((SELECT SUM(s.ink_bytes) FROM (SELECT member_id, ink_bytes FROM reviewed_submissions UNION ALL SELECT member_id, ink_bytes FROM automatic_submissions) s JOIN members m ON s.member_id = m.id WHERE m.code = ?), 0) + ? <= 67108864
+        AND COALESCE((SELECT SUM(ink_bytes) FROM (SELECT ink_bytes FROM reviewed_submissions UNION ALL SELECT ink_bytes FROM automatic_submissions)), 0) + ? <= 268435456`)
         .bind(member.id, run.runId, payloadHash, json, bytes, run.elapsedMs, Date.now(), JSON.stringify(A.unmarked(assigned)), code, Date.now(), code, bytes, bytes).run();
       const saved = await db.prepare('SELECT * FROM reviewed_submissions WHERE member_id = ?').bind(member.id).first();
       if (!saved) { await roomFor(db, code); fail(507, 'INK_CAPACITY', '班級儲存已滿，原稿仍保留在裝置，請老師處理後重試。'); }
@@ -137,7 +207,7 @@ async function api(request, env, url) {
   if (assigned.version === 2 && action === 'reviews') {
     await ownerFor(request, room);
     if (route.length === 2 && request.method === 'GET') {
-      const { results } = await db.prepare('SELECT m.id AS memberId, m.alias, s.run_id AS runId, s.revision, s.score, s.elapsed_ms AS elapsedMs FROM members m LEFT JOIN reviewed_submissions s ON s.member_id = m.id WHERE m.code = ? ORDER BY m.alias').bind(code).all();
+      const { results } = await db.prepare('SELECT m.id AS memberId, m.alias, s.run_id AS runId, s.revision, s.score, s.elapsed_ms AS elapsedMs, a.run_id AS automaticRunId, a.elapsed_ms AS automaticElapsedMs FROM members m LEFT JOIN reviewed_submissions s ON s.member_id = m.id LEFT JOIN automatic_submissions a ON a.member_id = m.id WHERE m.code = ? ORDER BY m.alias').bind(code).all();
       return { members: results, ...await reviewedBoard(db, room) };
     }
     if (route.length === 3) {

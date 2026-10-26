@@ -6,3 +6,7 @@ src/assessment.js
 src/teacher-page.js
 shared/
 *.log
+
+src/automatic-schema.js
+src/character-data.js
+src/target-counts.js

@@ -1,4 +1,6 @@
-# Reviewed assessment implementation record
+# Historical reviewed assessment implementation record
+
+This file records the older freehand releases. Current v4 locked-stroke behavior and export inputs are documented in [README.md](README.md).
 
 Implementation date is 2026-10-24. Base was `b520f1cd4e9eb4409e3383e92a42857e1383763f`. Domain and API unit is `59135e5`; capture, UI and regression unit is `4499aa3`. Publishing and native tablet viewport review belong to the release owner.
 
