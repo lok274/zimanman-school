@@ -139,7 +139,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-panel:has(> .word-cards) .assessment-status:empty { display:none; }
 .assessment-panel:has(> .word-cards) .assessment-footer { position:static; flex:none; padding:8px 0 0; }
 .assessment-choices.word-cards { flex:1; min-height:0; grid-auto-rows:minmax(0,1fr); gap:10px; margin:0; }
-.assessment-choices .word-card { container-type:size; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,.38fr) minmax(0,.62fr); gap:6px; min-height:0; min-width:0; padding:8px; }
+.assessment-choices .word-card { container-type:size; grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:6px; min-height:0; min-width:0; padding:8px; }
 .assessment-choices .word-card .word-name { grid-column:1; grid-row:1; flex-wrap:nowrap; white-space:nowrap; font-size:min(160px,calc((100cqi - 8px) / var(--word-length)),30cqb); line-height:1.1; align-self:center; }
 .assessment-choices .word-card .word-photo { grid-column:1; grid-row:2; width:100%; height:100%; min-height:0; min-width:0; aspect-ratio:auto; object-fit:contain; }
 .assessment-choices .assessment-choice-listen { grid-template-rows:minmax(0,1fr); }
