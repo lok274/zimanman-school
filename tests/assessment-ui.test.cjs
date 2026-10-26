@@ -22,6 +22,7 @@ class Element {
   querySelector(selector) { return this.all().find(item => selector.startsWith('.') ? item.className?.split(' ').includes(selector.slice(1)) : selector.startsWith('[') ? Object.hasOwn(item.attributes, selector.slice(1, -1)) : item.tagName === selector.toUpperCase()); }
   getBoundingClientRect() { return { left: 0, top: 0, width: 500, height: 500 }; }
   setPointerCapture() {}
+  remove() { if (this.parent) this.parent.children = this.parent.children.filter(item => item !== this); this.parent = null; }
   before(item) { const index = this.parent.children.indexOf(this); item.parent = this.parent; this.parent.children.splice(index, 0, item); }
 }
 function memory() {
@@ -40,7 +41,7 @@ function boot({ store = memory(), classroom = null, now = Date.now(), elapsed = 
   const listeners = {}, document = { body, hidden: false, createElement: tag => new Element(tag), createElementNS: (_ns, tag) => new Element(tag), addEventListener(name, fn) { listeners[name] = fn; } };
   const timers = [], calls = { closed: 0, practice: [] }, spoken = [];
   class Clock extends Date { static now() { return now; } }
-  const context = vm.createContext({ document, Date: Clock, structuredClone, TextEncoder, crypto: webcrypto, performance: { now: elapsed }, console, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {},
+  const context = vm.createContext({ document, Date: Clock, structuredClone, TextEncoder, AbortController, crypto: webcrypto, performance: { now: elapsed }, console, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {},
     speechSynthesis: { getVoices: () => [{ lang: 'zh-HK' }], cancel() {}, speak(value) { spoken.push(value.text); } }, SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } } });
   for (const file of ['quiz-results.js', 'assessment.js', 'content.js', 'freehand.js', 'assessment-review.js', 'assessment-ui.js']) vm.runInContext(source(file), context);
   const ui = context.BishunAssessmentUI.create({ store, classroom, onClose() { calls.closed++; }, onPractice(assigned) { calls.practice.push(assigned); } });
@@ -53,28 +54,38 @@ function boot({ store = memory(), classroom = null, now = Date.now(), elapsed = 
   return { ui, context, store, panel, previous, calls, assigned, click, button, stroke, record, spoken, timers, listeners, setNow(value) { now = value; } };
 }
 async function fill(e) {
-  await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke(); await e.click('交答案');
-  await e.stroke(); await e.click('暫時跳過'); await e.click('交整份小挑戰');
+  await begin(e); await e.stroke(); await e.click('下一個字');
+  await e.stroke(); await e.click('交答案'); await e.click('交整份小挑戰');
 }
-test('listen quiz has a free pad with private checkpoints and no visible or accessible answer model', async () => {
+async function chooseFirst(e) { const card = e.panel.all().find(item => item.tagName === 'BUTTON' && item.className?.includes('assessment-choice-card') && !item.disabled); assert(card); await card.click(); await tick(); }
+async function begin(e) { await chooseFirst(e); await e.click('開始'); }
+async function completeWords(e) {
+  while (true) {
+    const card=e.panel.all().find(item=>item.tagName==='BUTTON'&&item.className?.includes('assessment-choice-card')&&!item.disabled);
+    if (!card) return;
+    await card.click(); await new Promise(resolve=>setImmediate(resolve)); await e.click('開始');
+    while (e.button('下一個字')) { await e.stroke(); await e.click('下一個字'); }
+    await e.stroke(); await e.click('交答案');
+  }
+}
+test('new word challenge shows the fixed full model even for a legacy listen assignment and restores private ink', async () => {
   const e = boot(); await e.ui.open(e.assigned);
   const cards = e.panel.all().filter(item => item.tagName === 'BUTTON' && item.className?.includes('assessment-choice-card'));
   assert.equal(cards.length, 1); assert(cards.every(card => card.className.includes('word-card')));
-  assert(cards.every(card => card.className.includes('assessment-choice-listen')));
-  assert(cards.every(card => card.children.find(item => item.className === 'word-name').textContent.startsWith('第 ')));
-  assert(cards.every(card => !card.children.some(item => item.tagName === 'IMG')));
-  assert.equal(cards[0].textContent, '第 1 題');
+  assert(cards.every(card => !card.className.includes('assessment-choice-listen')));
+  assert(cards.every(card => card.children.some(item => item.tagName === 'IMG')));
+  assert.equal(cards[0].textContent, '鬍鬚');
   assert.equal(e.previous.inert, true); assert.equal(e.previous.attributes['aria-hidden'], 'true');
-  assert(!/鬍|鬚/.test(e.panel.textContent));
-  await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.click('聽題目');
+  await begin(e); await e.click('聽題目');
+  assert(e.panel.querySelector('[data-hint]')); assert.equal(e.record().run.presentationMode, 'copy'); assert.equal(e.record().run.assignment.mode, 'listen');
   assert.match(e.spoken[0], /鬍鬚/); assert.match(e.spoken[0], /第 1 個字/);
   await e.stroke();
   assert.equal(e.record().run.answers[0].strokes[0].length, 3);
   assert.deepEqual(e.record().run.answers[0].strokes[0].map(point => point.slice(0, 2)), [[400, 600], [8400, 9400], [8600, 9600]]);
   const reloaded = boot({ store: e.store }); await reloaded.ui.open(reloaded.assigned);
-  await reloaded.click('第 1 題 · 詞語第 1 字 · 未提交');
+  await chooseFirst(reloaded);
   assert(reloaded.panel.all().some(item => item.attributes.d?.includes('8400 9400')));
-  assert(!/鬍|鬚/.test(reloaded.panel.textContent + JSON.stringify(reloaded.panel.all().map(item => item.attributes))));
+  assert(reloaded.panel.querySelector('[data-hint]')); assert(reloaded.button('開始'));
 });
 test('copy quiz uses the practice-style word and photo cards', async () => {
   const e = boot(), assigned = { ...e.assigned, mode: 'copy' }; await e.ui.open(assigned);
@@ -87,30 +98,30 @@ test('copy quiz uses the practice-style word and photo cards', async () => {
   assert.equal(cards[0].style.values['--word-length'], '2');
 });
 test('explicit local resume restores the saved assignment and mode without showing any ink on cold load', async () => {
-  const e = boot(); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke();
+  const e = boot(); await e.ui.open(e.assigned); await begin(e); await e.stroke();
   const reload = boot({ store: e.store }); assert.equal(reload.panel.hidden, true); assert.equal(await reload.ui.hasLocal(), true);
-  assert.equal(await reload.ui.resumeLocal(), true); await reload.click('第 1 題 · 詞語第 1 字 · 未提交');
-  assert(reload.panel.all().some(item => item.attributes.d?.includes('8400 9400'))); assert(!/鬍|鬚/.test(reload.panel.textContent));
+  assert.equal(await reload.ui.resumeLocal(), true); await chooseFirst(reload);
+  assert(reload.panel.all().some(item => item.attributes.d?.includes('8400 9400'))); assert(reload.panel.querySelector('[data-hint]')); assert(reload.button('開始'));
 });
 test('save failure retains visible ink and prevents destructive navigation until retry saves it', async () => {
-  const e = boot(); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
-  e.store.blocked = true; await e.stroke(); await e.click('交答案');
-  assert.match(e.panel.textContent, /儲存空間不足/); assert(e.button('交答案'));
+  const e = boot(); await e.ui.open(e.assigned); await begin(e);
+  e.store.blocked = true; await e.stroke(); await e.click('下一個字');
+  assert.match(e.panel.textContent, /儲存空間不足/); assert(e.button('下一個字'));
   assert(e.panel.all().some(item => item.attributes.d?.includes('8400 9400')));
   assert.equal(e.record().run.answers[0].strokes.length, 0);
-  e.store.blocked = false; await e.click('交答案');
-  assert.equal(e.record().run.answers[0].status, 'submitted'); assert.equal(e.record().run.answers[0].strokes[0].length, 3);
+  e.store.blocked = false; await e.click('重試保存'); await e.click('下一個字');
+  assert.equal(e.record().run.answers[0].status, 'ready'); assert.equal(e.record().run.answers[0].strokes[0].length, 3);
 });
 test('pointer cancellation saves the original partial stroke without appending artificial coordinates', async () => {
-  const e = boot(); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
+  const e = boot(); await e.ui.open(e.assigned); await begin(e);
   const svg = e.panel.all().find(item => item.tagName === 'SVG' && item.listeners.pointerdown);
   await svg.emit('pointerdown', { button: 0, pointerId: 1, clientX: 100, clientY: 150 });
   await svg.emit('pointermove', { pointerId: 1, clientX: 200, clientY: 250 });
   await svg.emit('pointercancel', { pointerId: 1 }); await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(e.record().run.answers[0].strokes[0].map(point => point.slice(0, 2)), [[2000, 3000], [4000, 5000]]);
-  await e.click('暫時跳過'); assert.equal(e.record().run.answers[0].status, 'skipped');
+  await e.click('← 返回選題'); assert.equal(e.record().run.answers[0].status, 'draft');
 });
-test('local first original, skipped ink, teacher grading, revision and challenge stay separate', async () => {
+test('local first original, word submissions, teacher grading, revision and challenge stay separate', async () => {
   const e = boot(); await e.ui.open(e.assigned); await fill(e);
   const original = clone(e.record().run);
   assert.equal(e.record().run.answers[1].strokes.length, 1); assert.equal(e.record().review.score, null);
@@ -122,10 +133,10 @@ test('local first original, skipped ink, teacher grading, revision and challenge
   selects[1].value = 'practice'; await selects[1].emit('change'); await e.click('保存批改');
   assert.equal(e.record().review.score, 1); assert.equal(e.record().review.revision, 2);
   await e.click('← 返回原卷'); await e.click('查看原筆跡'); assert(e.panel.textContent.includes('O 正確')); await e.click('← 返回原卷');
-  await e.click('情境小挑戰'); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
+  await e.click('情境小挑戰'); await begin(e);
   assert(!e.panel.textContent.includes('替圖片寫標籤，向同學介紹。')); assert(e.panel.all().some(item => item.tagName === 'IMG' && item.src === 'images/beard.webp'));
   await e.click('聽題目'); assert.match(e.spoken.at(-1), /第 1 個字/);
-  await e.stroke(); await e.click('交答案'); await e.stroke(); await e.click('交答案'); await e.click('完成作品卡');
+  await e.stroke(); await e.click('下一個字'); await e.stroke(); await e.click('交答案'); await e.click('完成作品卡');
   assert.match(e.panel.textContent, /我的情境作品卡/); assert(!e.panel.textContent.includes('給同學看的圖片介紹'));
   assert.equal(e.panel.querySelector('h2').className, 'sr-only'); assert(e.panel.all().some(item => item.attributes.d?.includes('8400 9400')));
   assert(e.panel.all().some(item => item.tagName === 'IMG' && item.src === 'images/beard.webp'));
@@ -157,11 +168,11 @@ test('intentional next pupil keeps the prior sealed local original available for
   const e = boot(); await e.ui.open(e.assigned); await fill(e); const first = clone(e.record());
   await e.click('下一位同學'); assert.equal(e.ui.active(), false);
   const next = boot({ store: e.store }); await next.ui.open(next.assigned);
-  assert(next.button('第 1 題 · 詞語第 1 字 · 未提交'));
+  assert(next.button('鬍鬚'));
   assert.equal([...e.store.records.values()].filter(item => item.run).length, 2);
   assert.deepEqual(e.store.records.get(first.key), first);
   await fill(next); await next.click('本機原卷');
-  assert.equal(next.panel.all().filter(item => item.tagName === 'BUTTON' && /聽詞寫 · 2 字/.test(item.textContent)).length, 2);
+  assert.equal(next.panel.all().filter(item => item.tagName === 'BUTTON' && /看字寫 · 2 字/.test(item.textContent)).length, 2);
 });
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -178,7 +189,7 @@ test('late cold class response cannot initialize private ink under the next loca
   lookup.resolve(null); await local;
   assert(!JSON.stringify([...store.records.values()]).includes('1234'));
   assert([...store.records.keys()].every(key => key.startsWith('local:')));
-  assert(e.button('第 1 題 · 詞語第 1 字 · 未提交'));
+  assert(e.button('鬍鬚'));
 });
 test('receipt arriving after 24-hour expiry cannot resurrect or redisplay an original', async () => {
   const receipt = deferred(), uploading = deferred(), start = Date.now(), member = { code: 'CLASSAAA', memberId: 'one', expiresAt: start + 86400000 };
@@ -191,9 +202,9 @@ test('receipt arriving after 24-hour expiry cannot resurrect or redisplay an ori
   assert.equal(e.panel.all().filter(item => item.tagName === 'PATH').length, 0);
 });
 test('persistent storage failure allows audio, background and repeated undo while retaining reduced visible ink', async () => {
-  const e = boot(); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); e.store.blocked = true;
+  const e = boot(); await e.ui.open(e.assigned); await begin(e); await e.stroke(); e.store.blocked = true;
   const inkCount = () => e.panel.all().filter(item => item.tagName === 'PATH' && !item.attributes['aria-hidden']).length;
-  await e.stroke(); await e.stroke(); assert.equal(inkCount(), 2);
+  await e.stroke(); assert.equal(inkCount(), 2);
   await e.click('聽題目'); assert.equal(e.spoken.length, 1);
   await e.click('擦掉前一筆'); assert.equal(inkCount(), 1);
   e.context.document.hidden = true; await e.listeners.visibilitychange(); await tick(); e.context.document.hidden = false; await e.listeners.visibilitychange(); await tick();
@@ -207,26 +218,27 @@ test('reviewing an older local original does not change the active next-pupil po
   const e = boot(); await e.ui.open(e.assigned); await fill(e); const first = e.record().key;
   await e.click('下一位同學'); await e.ui.open(e.assigned); await fill(e);
   const second = [...e.store.records.values()].find(item => item.run && item.key !== first).key;
-  await e.click('本機原卷'); const older = e.panel.all().find(item => item.tagName === 'BUTTON' && /聽詞寫 · 2 字 · 1$/.test(item.textContent));
+  await e.click('本機原卷'); const older = e.panel.all().find(item => item.tagName === 'BUTTON' && /看字寫 · 2 字 · 1$/.test(item.textContent));
   assert(older); await older.click(); await tick(); await e.click('← 返回原卷'); await e.click('下一位同學');
   await e.ui.open(e.assigned);
   const runs = [...e.store.records.values()].filter(item => item.run); assert.equal(runs.length, 3);
   assert(runs.some(item => item.key === first)); assert(runs.some(item => item.key === second));
-  assert(e.button('第 1 題 · 詞語第 1 字 · 未提交'));
+  assert(e.button('鬍鬚'));
 });
 test('background excludes hidden time from teacher elapsed time and resumes the exact ink without speaking', async () => {
-  let time = 0; const e = boot({ elapsed: () => time }); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
+  let time = 0; const e = boot({ elapsed: () => time }); await e.ui.open(e.assigned); await begin(e);
   time = 100; await e.stroke(); time = 1000; e.context.document.hidden = true; await e.listeners.visibilitychange(); await tick();
   const ink = clone(e.record().run.answers[0].strokes); assert.equal(e.record().run.elapsedMs, 1000);
   time = 50000; e.context.document.hidden = false; await e.listeners.visibilitychange(); await tick(); assert.equal(e.spoken.length, 0);
-  time = 51000; await e.click('交答案'); assert.equal(e.record().run.elapsedMs, 2000); assert.deepEqual(e.record().run.answers[0].strokes, ink);
+  time = 51000; await e.click('下一個字'); assert.equal(e.record().run.elapsedMs, 2000); assert.deepEqual(e.record().run.answers[0].strokes, ink);
   assert(!e.panel.textContent.includes('秒'));
-  for (const label of ['聽題目', '交答案', '暫時跳過', '擦掉前一筆']) assert.equal(e.button(label).tagName, 'BUTTON', 'native keyboard activation remains available');
+  for (const label of ['聽題目', '交答案', '提示', '擦掉前一筆']) assert.equal(e.button(label).tagName, 'BUTTON', 'native keyboard activation remains available');
+  assert(!e.button('暫時跳過'));
 });
 test('partial formal selections expand to complete words in the separate context challenge', async () => {
   for (const word of ['鬍鬚', '剪草機', '推來推去']) {
     const e = boot(), assigned = e.context.BishunAssessment.assignment([{ text: word, selectedIndexes: [0] }], 'listen');
-    await e.ui.open(assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.stroke(); await e.click('交答案'); await e.click('交整份小挑戰');
+    await e.ui.open(assigned); await begin(e); await e.stroke(); await e.click('交答案'); await e.click('交整份小挑戰');
     const original = clone(e.record().run); await e.click('情境小挑戰');
     const challenge = [...e.store.records.values()].find(item => item.kind === 'challenge');
     assert.equal(challenge.run.answers.length, Array.from(word).length); assert.deepEqual(challenge.run.assignment.entries[0].selectedIndexes, Array.from(word, (_, i) => i));
@@ -236,8 +248,7 @@ test('partial formal selections expand to complete words in the separate context
 test('twelve-position summary keeps actions separate from paged original details and six work cards', async () => {
   const e = boot(), words = Array.from(e.context.BishunContent.words);
   const assignment = e.context.BishunAssessment.assignment(words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) })), 'listen');
-  await e.ui.open(assignment); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
-  for (let index = 0; index < 12; index++) { await e.stroke(); await e.click('交答案'); }
+  await e.ui.open(assignment); await completeWords(e);
   await e.click('交整份小挑戰');
   assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, 0, 'summary does not render twelve large sheets above its actions');
   for (const label of ['查看原筆跡', '老師批改', '本機原卷', '下一位同學', '情境小挑戰', '跟住練習', '← 返回課程']) assert(e.button(label));
@@ -245,8 +256,7 @@ test('twelve-position summary keeps actions separate from paged original details
   assert.equal(e.button('上一項').disabled, true);
   for (let index = 1; index < 12; index++) { await e.click('下一項'); assert.equal(e.panel.all().filter(item => item.tagName === 'SVG').length, 1); }
   assert.equal(e.button('下一項').disabled, true); assert.match(e.panel.textContent, /12 \/ 12/);
-  await e.click('← 返回原卷'); await e.click('情境小挑戰'); await e.click('第 1 題 · 詞語第 1 字 · 未提交');
-  for (let index = 0; index < 12; index++) { await e.stroke(); await e.click('交答案'); }
+  await e.click('← 返回原卷'); await e.click('情境小挑戰'); await completeWords(e);
   await e.click('完成作品卡');
   for (const [index, word] of words.entries()) {
     assert.equal(e.panel.all().filter(item => item.className === 'assessment-workcard').length, 1);
@@ -258,15 +268,14 @@ test('twelve-position summary keeps actions separate from paged original details
 });
 test('a conflicting second tab preserves its visible ink and never overwrites the saved first tab', async () => {
   const store = memory(), first = boot({ store }), second = boot({ store });
-  await first.ui.open(first.assigned); await second.ui.open(second.assigned);
-  await first.click('第 1 題 · 詞語第 1 字 · 未提交'); await second.click('第 1 題 · 詞語第 1 字 · 未提交');
-  await first.stroke(20); const saved = clone(first.record().run.answers);
-  await second.stroke(80); assert.match(second.panel.textContent, /另一分頁/);
-  assert(second.panel.all().some(item => item.attributes.d?.startsWith('M1600 600')));
-  assert.deepEqual(first.record().run.answers, saved);
-  await second.click('重試保存'); assert.match(second.panel.textContent, /另一分頁/);
-  assert(second.panel.all().some(item => item.attributes.d?.startsWith('M1600 600')));
-  assert.deepEqual(first.record().run.answers, saved);
+  await first.ui.open(first.assigned); await begin(first); await second.ui.open(second.assigned); await begin(second);
+  await second.stroke(20); const saved = clone(second.record().run.answers);
+  await first.stroke(80); assert.match(first.panel.textContent, /另一分頁/);
+  assert(first.panel.all().some(item => item.attributes.d?.startsWith('M1600 600')));
+  assert.deepEqual(second.record().run.answers, saved);
+  await first.click('重試保存'); assert.match(first.panel.textContent, /另一分頁/);
+  assert(first.panel.all().some(item => item.attributes.d?.startsWith('M1600 600')));
+  assert.deepEqual(second.record().run.answers, saved);
 });
 
 test('assessment status translates server activity wording while preserving the original error', async () => {
@@ -275,4 +284,90 @@ test('assessment status translates server activity wording while preserving the 
   await e.ui.open(e.assigned);
   assert.match(e.panel.textContent, /小挑戰紀錄或題目不一致/);
   assert.equal(failure.message, '測驗紀錄或題目不一致。');
+});
+
+function demoVendor(e) {
+  vm.runInContext(source('data/characters.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const plays = [];
+  plays.engines = 0;
+  e.context.HanziWriter = class {
+    constructor(layer, options) { this.layer = layer; this.options = options; plays.engines++; }
+    async setCharacter(character) { const play = { layer: this.layer, character, options: this.options, completion: deferred(), paused: false }; this.options.charDataLoader(character, data => { play.data = clone(data); }); plays.push(play); this.play = play; }
+    animateCharacter() { return this.play.completion.promise; }
+    pauseAnimation() { if (this.play) this.play.paused = true; }
+    updateDimensions() {}
+  };
+  return plays;
+}
+
+test('Start gates ink and time; word submission is atomic and returns to completed cards without starting another word', async () => {
+  let time = 0; const e = boot({ elapsed: () => time }), A = e.context.BishunAssessment;
+  const assigned = A.assignment([{ text: '鬍鬚', selectedIndexes: [0, 1] }, { text: '粗', selectedIndexes: [0] }], 'listen');
+  await e.ui.open(assigned); await chooseFirst(e); time = 5000; await e.stroke();
+  assert.equal(e.record().run.answers[0].strokes.length, 0); assert.equal(e.record().run.elapsedMs, 0); assert(e.panel.querySelector('[data-hint]'));
+  await e.click('開始'); time = 6000; await e.stroke(); await e.click('下一個字');
+  assert.equal(e.record().run.answers[0].status, 'ready'); assert.equal(e.record().run.wordProgress[0].elapsedMs, 1000);
+  time = 7000; await e.stroke(); e.store.blocked = true; await e.click('交答案');
+  assert.deepEqual(e.record().run.answers.map(answer => answer.status), ['ready', 'draft', 'draft']);
+  assert(e.panel.all().some(item => item.attributes.d?.includes('8400 9400')));
+  e.store.blocked = false; await e.click('重試保存'); await e.click('交答案');
+  assert(e.button('鬍鬚已完成').disabled); assert(!e.button('開始')); assert(!e.panel.querySelector('svg'));
+  const elapsed = e.record().run.elapsedMs; time = 20000; await e.click('粗'); await e.stroke();
+  assert(e.button('開始')); assert.equal(e.record().run.answers[2].strokes.length, 0); assert.equal(e.record().run.elapsedMs, elapsed);
+  await e.click('開始'); time = 21000; await e.stroke(); await e.click('交答案');
+  assert.equal(e.record().run.wordProgress[1].elapsedMs, 1000); assert(e.button('粗已完成').disabled);
+});
+
+test('menu visits and cold reload keep accumulated word time but require another Start without counting wall time', async () => {
+  let time = 0; const e = boot({ elapsed: () => time }); await e.ui.open(e.assigned); await begin(e);
+  time = 1000; await e.stroke(); time = 2000; await e.click('← 返回選題');
+  assert.equal(e.record().run.wordProgress[0].elapsedMs, 2000);
+  time = 50000; await chooseFirst(e); await e.stroke(); assert.equal(e.record().run.answers[0].strokes.length, 1);
+  const reload = boot({ store: e.store, elapsed: () => 900000 }); await reload.ui.open(reload.assigned); await chooseFirst(reload);
+  assert(reload.button('開始')); await reload.stroke(); assert.equal(reload.record().run.answers[0].strokes.length, 1);
+  assert.equal(reload.record().run.wordProgress[0].elapsedMs, 2000); assert.equal(reload.panel.querySelector('output').textContent, '00:02');
+});
+
+test('Hint uses corrected data, preserves ink and fixed glyph, counts foreground word time and never completes an answer', async () => {
+  let time = 0; const e = boot({ elapsed: () => time }), plays = demoVendor(e);
+  const assigned = e.context.BishunAssessment.assignment([{ text: '草密來', selectedIndexes: [0, 1, 2] }], 'listen');
+  await e.ui.open(assigned); await begin(e);
+  for (const [index, character] of Array.from('草密來').entries()) {
+    time += 1000; await e.stroke(); const before = clone(e.record().run.answers[index].strokes);
+    await e.click('提示'); const play = plays.at(-1);
+    assert.equal(play.character, character); assert.deepEqual(play.data.strokes, clone(e.context.BishunCharacters[character].strokes));
+    assert(e.panel.querySelector('[data-hint]')); await e.stroke(); assert.deepEqual(e.record().run.answers[index].strokes, before);
+    time += 2000; play.completion.resolve(); await tick(); assert(!e.panel.querySelector('.assessment-demo'));
+    assert(e.panel.querySelector('[data-hint]')); assert.equal(e.record().run.answers[index].hintUsed, true);
+    assert.equal(e.record().run.answers[index].status, 'draft');
+    await e.click(index === 2 ? '交答案' : '下一個字');
+  }
+  assert.equal(e.record().run.wordProgress[0].elapsedMs, 9000);
+  assert.equal(plays.engines, 1, 'repeated hints reuse one vendor listener target');
+  await e.click('交整份小挑戰'); await e.click('老師批改');
+  assert.match(e.panel.textContent, /看字寫/); assert.equal(e.panel.all().filter(item => item.tagName === 'P' && item.textContent === '有提示').length, 3);
+  assert.match(e.panel.textContent, /詞語用時 9.0 秒/);
+});
+
+test('Hint cancellation on repeat, next, background and close ignores late success and retains the original strokes', async () => {
+  const e = boot(), plays = demoVendor(e); await e.ui.open(e.assigned); await begin(e); await e.stroke();
+  const ink = clone(e.record().run.answers[0].strokes);
+  await e.click('提示'); await e.click('提示'); assert(plays[0].paused); plays[0].completion.resolve(); await tick(); assert(e.panel.querySelector('.assessment-demo'));
+  await e.click('下一個字'); assert(plays[1].paused); plays[1].completion.resolve(); await tick(); assert.equal(e.record().run.cursor, 1);
+  await e.stroke(); await e.click('提示'); e.context.document.hidden = true; await e.listeners.visibilitychange(); assert(plays[2].paused);
+  plays[2].completion.resolve(); await tick(); e.context.document.hidden = false; await e.listeners.visibilitychange();
+  assert(!e.panel.querySelector('.assessment-demo')); assert(e.panel.querySelector('[data-hint]'));
+  await e.click('提示'); await e.click('← 返回選題'); assert(plays[3].paused); plays[3].completion.resolve(); await tick();
+  assert(!e.panel.querySelector('svg')); assert.deepEqual(e.record().run.answers[0].strokes, ink); assert.equal(e.record().run.answers[0].status, 'ready');
+  await e.click('← 返回課程'); assert.equal(e.ui.active(), false);
+});
+
+test('late Hint load cannot attach to another page; failed custom data leaves writing and the fixed model available', async () => {
+  const e = boot(), plays = demoVendor(e), load = deferred(); e.context.BishunWriting.loadCharacter = () => load.promise;
+  await e.ui.open(e.assigned); await begin(e); await e.stroke(); await e.click('提示'); await e.click('下一個字');
+  load.resolve(clone(e.context.BishunCharacters.鬍)); await tick(); assert.equal(plays.length, 0); assert(!e.panel.querySelector('.assessment-demo'));
+  e.context.BishunWriting.loadCharacter = async () => { throw new Error('unavailable'); };
+  await e.click('提示'); await tick(); assert.match(e.panel.textContent, /筆順未能播放/); assert(e.panel.querySelector('[data-hint]'));
+  await e.stroke(); assert.equal(e.record().run.answers[1].strokes.length, 1); assert.equal(e.record().run.answers[1].hintUsed, true);
+  await e.click('擦掉前一筆'); assert(e.panel.querySelector('[data-hint]')); assert.equal(e.record().run.answers[1].hintUsed, true);
 });

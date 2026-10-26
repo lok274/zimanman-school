@@ -21,13 +21,17 @@
     if (!view.accepted || !view.board) return;
     if (!remaining) $('board-status').textContent += ' 自動更新已暫停，按「更新排行榜」繼續。';
     if (!view.board.rows.length) { container.append(node('p', '沒有可排名的完成紀錄。')); return; }
-    const podium = node('div', '', 'class-podium');
-    view.board.rows.filter(row => row.rank <= 3).forEach(row => { const card = node('div', '', 'podium-place'); card.append(node('strong', '第 ' + row.rank + ' 名'), node('span', row.alias), node('small', score(row))); podium.append(card); });
-    const table = document.createElement('table'), header = document.createElement('tr');
-    table.append(node('caption', reviewed ? '每位同學第一份原卷' : '每位同學全份小挑戰的最佳成績'));
-    for (const text of reviewed ? ['名次', '暱稱', '字形正確'] : ['名次', '暱稱', '錯誤', '時間（秒）']) { const cell = node('th', text); cell.setAttribute('scope', 'col'); header.append(cell); } table.append(header);
-    for (const row of view.board.rows) { const tr = document.createElement('tr'); if (row.isMe) tr.className = 'is-me'; for (const text of reviewed ? [row.rank, row.alias, row.score] : [row.rank, row.alias + (row.isMe ? '（你）' : ''), row.mistakes, (row.elapsedMs / 1000).toFixed(1)]) tr.append(node('td', String(text))); table.append(tr); }
-    container.append(podium, table);
+    for (const mode of new Set(view.board.rows.map(row => row.mode))) {
+      const rows = view.board.rows.filter(row => row.mode === mode);
+      if (mode) container.append(node('h2', mode === 'copy' ? '看字寫' : '聽詞寫'));
+      const podium = node('div', '', 'class-podium');
+      rows.filter(row => row.rank <= 3).forEach(row => { const card = node('div', '', 'podium-place'); card.append(node('strong', '第 ' + row.rank + ' 名'), node('span', row.alias), node('small', score(row))); podium.append(card); });
+      const table = document.createElement('table'), header = document.createElement('tr');
+      table.append(node('caption', reviewed ? '每位同學第一份原卷' : '每位同學全份小挑戰的最佳成績'));
+      for (const text of reviewed ? ['名次', '暱稱', '字形正確'] : ['名次', '暱稱', '錯誤', '時間（秒）']) { const cell = node('th', text); cell.setAttribute('scope', 'col'); header.append(cell); } table.append(header);
+      for (const row of rows) { const tr = document.createElement('tr'); if (row.isMe) tr.className = 'is-me'; for (const text of reviewed ? [row.rank, row.alias, row.score] : [row.rank, row.alias + (row.isMe ? '（你）' : ''), row.mistakes, (row.elapsedMs / 1000).toFixed(1)]) tr.append(node('td', String(text))); table.append(tr); }
+      container.append(podium, table);
+    }
   }
   $('board-continue').addEventListener('click', () => { client.continueMember(); client.refresh(); });
   $('board-refresh').addEventListener('click', () => { remaining = 120; client.refresh(); });

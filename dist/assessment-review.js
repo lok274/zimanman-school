@@ -9,6 +9,9 @@
     data.run.answers.forEach((answer, index) => {
       const position = positions[index], row = node('section', '', 'review-answer');
       row.append(node('h3', position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'));
+      const word = data.run.wordProgress?.[A.wordAt(data.run, index).wordIndex];
+      if (word && A.wordAt(data.run, index).start === index) row.append(node('p', (word.timeKnown ? '詞語用時 ' : '續寫用時 ') + (word.elapsedMs / 1000).toFixed(1) + ' 秒'));
+      if (answer.hintUsed) row.append(node('p', '有提示'));
       const paper = node('div', '', 'review-paper'); F.render(paper, answer.strokes); row.append(paper);
       row.append(node('p', answer.status === 'skipped' ? '跳過，保留原筆跡' : '已提交原筆跡'));
       const replay = node('button', '重播原筆跡', 'button secondary');
@@ -32,7 +35,7 @@
       } catch (error) { if (!disposed) status.textContent = error.message; }
       finally { if (!disposed) save.disabled = false; }
     });
-    container.replaceChildren(node('p', '書寫時間 ' + ((data.elapsedMs ?? data.run.elapsedMs) / 1000).toFixed(1) + ' 秒 · 批改版本 ' + revision), rows, save, status);
+    container.replaceChildren(node('p', (A.actualMode(data.run) === 'copy' ? '看字寫' : '聽詞寫') + ' · 書寫時間 ' + ((data.elapsedMs ?? data.run.elapsedMs) / 1000).toFixed(1) + ' 秒 · 批改版本 ' + revision), rows, save, status);
     return () => { disposed = true; stopReplay?.(); };
   }
   root.BishunAssessmentReview = { mount };
