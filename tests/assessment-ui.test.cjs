@@ -63,7 +63,7 @@ test('listen quiz has a free pad with private checkpoints and no visible or acce
   assert(cards.every(card => card.className.includes('assessment-choice-listen')));
   assert(cards.every(card => card.children.find(item => item.className === 'word-name').textContent.startsWith('第 ')));
   assert(cards.every(card => !card.children.some(item => item.tagName === 'IMG')));
-  assert.match(cards[0].children.find(item => item.className === 'stamp').textContent, /第 1 字 · 未提交　第 2 字 · 未提交/);
+  assert.equal(cards[0].textContent, '第 1 題');
   assert.equal(e.previous.inert, true); assert.equal(e.previous.attributes['aria-hidden'], 'true');
   assert(!/鬍|鬚/.test(e.panel.textContent));
   await e.click('第 1 題 · 詞語第 1 字 · 未提交'); await e.click('聽題目');
@@ -81,6 +81,8 @@ test('copy quiz uses the practice-style word and photo cards', async () => {
   const cards = e.panel.all().filter(item => item.tagName === 'BUTTON' && item.className?.includes('assessment-choice-card'));
   assert.equal(cards.length, 1); assert(cards.every(card => !card.className.includes('assessment-choice-listen')));
   assert.equal(cards[0].children.find(item => item.className === 'word-name').textContent, '鬍鬚');
+  assert.equal(cards[0].textContent, '鬍鬚');
+  assert.equal(cards[0].children.length, 2);
   assert(cards.every(card => card.children.some(item => item.tagName === 'IMG')));
   assert.equal(cards[0].style.values['--word-length'], '2');
 });
@@ -155,7 +157,7 @@ test('intentional next pupil keeps the prior sealed local original available for
   const e = boot(); await e.ui.open(e.assigned); await fill(e); const first = clone(e.record());
   await e.click('下一位同學'); assert.equal(e.ui.active(), false);
   const next = boot({ store: e.store }); await next.ui.open(next.assigned);
-  assert.match(next.panel.textContent, /未提交/);
+  assert(next.button('第 1 題 · 詞語第 1 字 · 未提交'));
   assert.equal([...e.store.records.values()].filter(item => item.run).length, 2);
   assert.deepEqual(e.store.records.get(first.key), first);
   await fill(next); await next.click('本機原卷');
@@ -176,7 +178,7 @@ test('late cold class response cannot initialize private ink under the next loca
   lookup.resolve(null); await local;
   assert(!JSON.stringify([...store.records.values()]).includes('1234'));
   assert([...store.records.keys()].every(key => key.startsWith('local:')));
-  assert.match(e.panel.textContent, /未提交/);
+  assert(e.button('第 1 題 · 詞語第 1 字 · 未提交'));
 });
 test('receipt arriving after 24-hour expiry cannot resurrect or redisplay an original', async () => {
   const receipt = deferred(), uploading = deferred(), start = Date.now(), member = { code: 'CLASSAAA', memberId: 'one', expiresAt: start + 86400000 };
@@ -210,7 +212,7 @@ test('reviewing an older local original does not change the active next-pupil po
   await e.ui.open(e.assigned);
   const runs = [...e.store.records.values()].filter(item => item.run); assert.equal(runs.length, 3);
   assert(runs.some(item => item.key === first)); assert(runs.some(item => item.key === second));
-  assert.match(e.panel.textContent, /未提交/);
+  assert(e.button('第 1 題 · 詞語第 1 字 · 未提交'));
 });
 test('background excludes hidden time from teacher elapsed time and resumes the exact ink without speaking', async () => {
   let time = 0; const e = boot({ elapsed: () => time }); await e.ui.open(e.assigned); await e.click('第 1 題 · 詞語第 1 字 · 未提交');

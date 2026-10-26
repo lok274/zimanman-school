@@ -94,7 +94,7 @@
         const word = node('span', listen ? '第 ' + (group.wordIndex + 1) + ' 題' : group.entry.text, 'word-name');
         card.append(word);
         if (!listen) { const photo = node('img'); photo.src = C.photos[group.entry.text]; photo.alt = group.entry.text + '圖片'; photo.className = 'word-photo'; card.append(photo); }
-        card.append(node('span', group.positions.map((item, groupIndex) => '第 ' + (item.index + 1) + ' 字 · ' + answerLabel(group.answers[groupIndex])).join('　'), 'stamp')); list.append(card);
+        list.append(card);
       });
       panel.append(list, message(error));
       if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
