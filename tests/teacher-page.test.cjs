@@ -15,7 +15,7 @@ const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
 function boot({ data = new Map(), owners = new Map(), hash = '', blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
   const nodes = new Map();
   const node = () => ({ textContent: '', children: [], listeners: {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; }, addEventListener(type, handler) { this.listeners[type] = handler; } });
-  for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board', 'mode', 'publish', 'delete-class', 'members', 'review']) nodes.set(id, { ...node(), hidden: ['room', 'new-class'].includes(id) });
+  for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board', 'mode', 'publish', 'delete-class', 'members', 'review']) nodes.set(id, { ...node(), hidden: ['room', 'new-class', 'publish'].includes(id) });
   const controls = { blocked, blockedOwners };
   const storage = (map, flag) => ({ getItem: key => map.get(key) || null, setItem(key, value) { if (controls[flag]) throw new Error('blocked'); map.set(key, value); } });
   const calls = [], navigation = [];
@@ -53,10 +53,10 @@ test('teacher chooses reviewed mode, privately collects originals, publishes and
 test('teacher publication stays disabled for no submissions or any incomplete submitted review', async () => {
   const reviewedRoom = { ...room, assignment: { ...room.assignment, version: 2, mode: 'listen' } }; let members = [];
   const e = boot({ fetch: async url => response(url.endsWith('/reviews') ? { members, published: false, rows: [] } : reviewedRoom) });
-  await e.click('create'); assert.equal(e.nodes.get('publish').disabled, true);
-  await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
+  await e.click('create'); assert.equal(e.nodes.get('publish').disabled, true); assert.equal(e.nodes.get('publish').hidden, true);
+  await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true); assert.equal(e.nodes.get('publish').hidden, true);
   members = [{ alias: 'a', runId: null, score: null }]; await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
-  members.push({ alias: 'b', runId: 'one', score: null }); await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
+  members.push({ alias: 'b', runId: 'one', score: null }); await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true); assert.equal(e.nodes.get('publish').hidden, false);
   members[1].score = 0; await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, false, 'zero is a complete teacher grade');
   members.push({ alias: 'c', runId: 'two', score: null }); await e.click('refresh'); assert.equal(e.nodes.get('publish').disabled, true);
 });

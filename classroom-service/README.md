@@ -46,8 +46,8 @@ All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Con
 
 | Method and relative path | Authority | Result |
 | --- | --- | --- |
-| `POST /` | Same-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns class code, assignment and expiry. |
-| `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken}`; returns membership and assignment. |
+| `POST /` | Same-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns a three-digit code, assignment, `joinExpiresAt` and `expiresAt`. |
+| `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken}` during the first 15 minutes of a new class; returns membership and assignment. An identical saved request remains retryable after admission closes. |
 | `PUT /:code/answers` | Current member | Accepts one complete sealed original; returns `{runId,official:true,version:3}` for version 3, or the legacy receipt without version. |
 | `GET /:code/answers` | Current member | Returns only that member's original, marks and revision, or `answer:null`. Aggregate elapsed time is omitted. |
 | `GET /:code/reviews` | Same-origin owner | Lists members, submission status, scores, revisions and elapsed time. |
@@ -86,7 +86,7 @@ The reviewed request body is capped at 4 MiB. Canonical original JSON is capped 
 
 The other limits are 200,000 points per original, 256 strokes per historical character or 64 per v4 character, 48 selected positions, 64 MiB of original JSON per class, and 256 MiB globally. Current draft aggregate limits are checked before each character is locked. A v4 stroke that exceeds capacity is rejected before accepted progress advances; prior accepted ink stays visible. There is no silent thinning or point truncation. A server quota rejection returns `507 INK_CAPACITY` and leaves the local sealed retry intact. Legacy bodies remain capped at 256 KiB.
 
-Class limits remain 100 members, 10 active classes per owner and 100 active classes globally. Classes expire 24 hours after creation. All reads and writes require an unexpired class. Owner deletion cascades immediately. Creation and the public maintenance endpoint each delete at most 10 expired classes. Caller-supplied cutoffs and class selectors do not affect cleanup. Periodic background cleanup has not been enabled. There is no MCP endpoint. Provider backups are outside this application deletion guarantee.
+Class limits remain 100 members, 10 active classes per owner and 100 active classes globally. New class codes use the decimal range 100–999 and remain reserved for 24 hours. Admission to a new code closes exactly 15 minutes after creation. `expiresAt` remains the 24-hour room access cutoff; `joinExpiresAt` is the separate admission cutoff. Existing eight-character codes retain their original admission window and data. All reads and writes require an unexpired class. Owner deletion cascades immediately. Creation and the public maintenance endpoint each delete at most 10 expired classes. Caller-supplied cutoffs and class selectors do not affect cleanup. Periodic background cleanup has not been enabled. There is no MCP endpoint. Provider backups are outside this application deletion guarantee.
 
 Local drafts, originals and challenge cards stop displaying at their expiry and are purged when the app next runs. Clearing browser data can lose a capability or local original. A browser capability is not a verified school identity.
 

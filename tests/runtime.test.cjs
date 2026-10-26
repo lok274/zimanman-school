@@ -135,12 +135,30 @@ function dictationApp({ prefixed = false, unsupported = false } = {}) {
   }
   if (!unsupported) e.context[prefixed ? 'webkitSpeechRecognition' : 'SpeechRecognition'] = Recognition;
   e.context.BishunSession = S; e.context.BishunWriting = { guide: () => null };
-  vm.runInContext(source('content.js'), e.context); vm.runInContext(source('app.js'), e.context);
+  for (const file of ['content.js', 'quiz-results.js', 'assessment.js', 'app.js']) vm.runInContext(source(file), e.context);
   e.speech = speech;
   e.begin = () => { e.$('dictation-start').click(); const recognition = speech.instances.at(-1); recognition.begin(); return recognition; };
   e.review = text => { const recognition = e.begin(); recognition.result(text); return recognition; };
   return e;
 }
+
+test('teacher class opens the public HTTPS page in the same tab with selected assignment', () => {
+  const e = dictationApp(), navigation = [];
+  e.context.location.assign = url => navigation.push(url);
+  e.$('teacher-open').click();
+  e.$('teacher-words').value = Array.from(e.context.BishunContent.words).join('\n');
+  const last = walk(e.$('teacher-word-options')).filter(node => node.nodeName === 'input').at(-1);
+  last.checked = false; last.emit('change');
+  e.$('teacher-class').click();
+  assert.equal(navigation.length, 1, e.$('teacher-error').textContent);
+  const url = new URL(navigation[0]);
+  assert.equal(url.origin, 'https://zimanman-classroom-1023.lokyau65.chatgpt.site');
+  assert.equal(url.pathname, '/teacher');
+  const assignment = JSON.parse(decodeURIComponent(url.hash.slice(1)));
+  assert.deepEqual(Array.from(assignment.entries, entry => entry.text), ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去']);
+  assert.equal(assignment.entries.reduce((total, entry) => total + entry.selectedIndexes.length, 0), 11);
+  assert.deepEqual(Array.from(assignment.entries.at(-1).selectedIndexes), [0, 1, 2]);
+});
 
 test('Cantonese dictation starts only on tap, reviews an editable final phrase and appends to the current draft once', () => {
   const e = dictationApp();
@@ -1802,7 +1820,7 @@ test('simplified practice removes obsolete controls and keeps an accessible icon
   e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.voices.changed();
   assert.notEqual(e.$('speak').getAttribute('aria-label'), unavailableName); e.$('speak').click(); assert.equal(e.voices.spoken.at(-1).text, '粗。寫第1個字。');
   e.document.querySelector('.brand').click(); assert.equal(e.$('start-quiz').textContent, '小挑戰'); assert(e.$('class-open').textContent.includes('小挑戰'));
-  assert(e.$('teacher-class').textContent.includes('測驗')); assert(e.$('teacher-dialog').textContent.includes('測驗題型'));
+  assert(e.$('teacher-class').textContent.includes('小挑戰')); assert(e.$('teacher-dialog').textContent.includes('測驗題型'));
 });
 
 test('assessment uses the real pinned vendor for next-stroke locking and exact normalized cold hydration', async () => {
