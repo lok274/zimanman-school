@@ -5,7 +5,7 @@
     const node = (tag, text = '', className = '') => { const el = document.createElement(tag); el.textContent = text; if (className) el.className = className; return el; };
     const panel = node('section', '', 'assessment-panel'); panel.id = 'assessment-view'; panel.hidden = true;
     panel.setAttribute('aria-label', '自由書寫小挑戰'); document.body.append(panel);
-    let context = null, activeLocal = null, record = null, official = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0, segmentStart = null, pad = null, stopReplay = null, stopReview = null, expiryTimer = null, visible = false;
+    let context = null, activeLocal = null, record = null, official = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0, segmentStart = null, runningWord = null, timerFrame = null, pad = null, stopReplay = null, stopReview = null, stopDemo = null, demoActive = false, expiryTimer = null, visible = false;
     const siblings = [...document.body.children].filter(el => el !== panel && el.tagName !== 'SCRIPT');
     function conceal(value) { for (const el of siblings) { el.inert = value; if (value) el.setAttribute('aria-hidden', 'true'); else el.removeAttribute('aria-hidden'); } }
     function status(text) { const el = panel.querySelector('[data-status]'); if (el) el.textContent = text.replaceAll('測驗', '小挑戰'); }
@@ -29,21 +29,33 @@
       return saved;
     }
     function clock(resume) {
-      if (segmentStart !== null && record?.run.phase === 'writing') record = { ...record, run: { ...record.run, elapsedMs: Math.min(A.limits.duration, record.run.elapsedMs + Math.max(0, Math.round(performance.now() - segmentStart))) } };
-      segmentStart = resume && !busy && page === 'writing' && !document.hidden && record?.run.answers[record.run.cursor]?.status === 'draft' ? performance.now() : null;
+      if (segmentStart !== null && record?.run.phase === 'writing') record = { ...record, run: A.transition(record.run, { type: 'TIME', elapsedMs: Math.max(0, Math.round(performance.now() - segmentStart)) }) };
+      segmentStart = resume && writingAllowed() ? performance.now() : null;
+    }
+    function writingAllowed() { return !busy && !error && page === 'writing' && !document.hidden && record?.run.phase === 'writing' && record.run.version === 3 && record.run.wordProgress[A.wordAt(record.run).wordIndex].wordId === runningWord && record.run.answers[record.run.cursor].status !== 'submitted'; }
+    function timerText() {
+      const word = record.run.wordProgress[A.wordAt(record.run).wordIndex];
+      const milliseconds = Math.min(A.limits.duration, word.elapsedMs + (segmentStart === null ? 0 : Math.max(0, performance.now() - segmentStart)));
+      const seconds = Math.floor(milliseconds / 1000); return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+    }
+    function startTimer(output) {
+      const owner = context;
+      function tick() { if (owner !== context || page !== 'writing' || !visible) return; output.textContent = timerText(); timerFrame = requestAnimationFrame(tick); }
+      tick();
     }
     function queueCheckpoint() {
       const snapshot = record, owner = context; checkpointing++;
-      pending = pending.catch(() => {}).then(() => persist(snapshot, owner)).catch(problem => { if (owner === context && !problem.stale) { error = problem.message || '原稿未能保存，請保持頁面開啟再試。'; status(error); showSaveRetry(); } }).finally(() => { checkpointing--; });
+      pending = pending.catch(() => {}).then(() => persist(snapshot, owner)).catch(problem => { if (owner === context && !problem.stale) { clock(false); error = problem.message || '原稿未能保存，請保持頁面開啟再試。'; pad?.lock(true); status(error); showSaveRetry(); } }).finally(() => { checkpointing--; });
     }
-    function dispose() { pad?.dispose(); pad = null; stopReplay?.(); stopReplay = null; stopReview?.(); stopReview = null; }
+    function cancelDemo() { stopDemo?.(); stopDemo = null; demoActive = false; }
+    function dispose() { cancelDemo(); cancelAnimationFrame(timerFrame); timerFrame = null; pad?.dispose(); pad = null; stopReplay?.(); stopReplay = null; stopReview?.(); stopReview = null; }
     async function action(fn, checkpoint = false) {
       if (busy) return;
       const owner = context;
       clock(false); busy = true; pad?.flush(); pad?.lock(true);
       try { if (owner) { await pending; current(owner, record); if (checkpoint && record?.run.phase === 'writing') await persist(record, owner); } await fn(owner); }
       catch (problem) { if (owner === context && !problem.stale) { error = problem.message || '未能保存原稿，請保持頁面開啟再試。'; status(error); showSaveRetry(); } }
-      finally { if (owner === context) { busy = false; pad?.lock(false); clock(true); } }
+      finally { if (owner === context) { busy = false; clock(true); pad?.lock(!writingAllowed() || demoActive); } }
     }
     function button(text, fn, kind = 'secondary', checkpoint = false) { const el = node('button', text, 'button ' + kind); el.addEventListener('click', () => action(fn, checkpoint)); return el; }
     function showSaveRetry() {
@@ -61,7 +73,7 @@
     }
     function footer(fn, label = '← 返回') { const el = node('footer', '', 'assessment-footer'); el.append(button(label, fn, 'secondary', true)); panel.append(el); }
     function isChallenge() { return record?.kind === 'challenge'; }
-    function titleFor(position, index) { return record.run.assignment.mode === 'listen' || isChallenge() ? '第 ' + (index + 1) + ' 題 · 詞語第 ' + (position.index + 1) + ' 字' : position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'; }
+    function titleFor(position, index) { return A.actualMode(record.run) === 'listen' ? '第 ' + (index + 1) + ' 題 · 詞語第 ' + (position.index + 1) + ' 字' : position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'; }
     function positionGroups() {
       const positions = A.positions(record.run.assignment); let offset = 0;
       return record.run.assignment.entries.map((entry, wordIndex) => {
@@ -69,7 +81,7 @@
         offset += count; return group;
       });
     }
-    function answerLabel(answer) { return answer.status === 'draft' ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交'; }
+    function answerLabel(answer) { return ['draft', 'ready'].includes(answer.status) ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交'; }
     function speak(position, contextual = false) {
       const owner = context;
       const synth = root.speechSynthesis, voice = synth?.getVoices().find(item => /yue|zh[-_]HK/i.test(item.lang));
@@ -80,9 +92,9 @@
     }
     async function close() { visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; official = null; activeLocal = null; onClose(); }
     function drawList() {
-      page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
+      clock(false); runningWord = null; page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
       const list = node('div', '', 'word-cards assessment-choices');
-      const listen = record.run.assignment.mode === 'listen' && !isChallenge();
+      const listen = A.actualMode(record.run) === 'listen' && !isChallenge();
       positionGroups().forEach(group => {
         const position = group.positions[0], index = group.start, title = group.positions.map((item, groupIndex) => titleFor(item, index + groupIndex) + ' · ' + answerLabel(group.answers[groupIndex])).join('；');
         const card = button('', () => {
@@ -94,36 +106,51 @@
         const word = node('span', listen ? '第 ' + (group.wordIndex + 1) + ' 題' : group.entry.text, 'word-name');
         card.append(word);
         if (!listen) { const photo = node('img'); photo.src = C.photos[group.entry.text]; photo.alt = group.entry.text + '圖片'; photo.className = 'word-photo'; card.append(photo); }
+        if (group.answers.every(answer => answer.status === 'submitted')) { card.disabled = true; card.append(node('span', '已完成', 'assessment-completed')); }
         list.append(card);
       });
       panel.append(list, message(error));
-      if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
+      if (record.run.answers.every(answer => answer.status === 'submitted')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
       footer(isChallenge() ? async () => { record = official; drawSummary(); } : close, isChallenge() ? '← 返回原卷' : '← 返回課程');
     }
     function drawWriting() {
       page = 'writing'; const index = record.run.cursor, position = A.positions(record.run.assignment)[index], answer = record.run.answers[index];
-      shell(titleFor(position, index));
+      shell(position.word);
       const area = node('div', '', 'assessment-writing'), paper = node('div', '', 'assessment-paper'), controls = node('div', '', 'assessment-controls');
       area.append(paper, controls); panel.append(area);
       if (isChallenge()) {
         const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = '情境圖片'; photo.className = 'assessment-context'; controls.append(photo);
       }
       controls.append(button('聽題目', () => speak(position, isChallenge())));
-      if (answer.status === 'draft') {
+      if (['draft', 'ready'].includes(answer.status)) {
+        const group = A.wordAt(record.run), word = record.run.wordProgress[group.wordIndex], started = runningWord === word.wordId;
+        const timer = node('output', timerText(), 'assessment-timer'); timer.setAttribute('aria-label', '詞語用時'); controls.append(timer); startTimer(timer);
         pad = F.capture(paper, answer.strokes, stroke => {
           clock(!busy);
           record = { ...record, run: A.transition(record.run, { type: 'STROKE', stroke }) };
+          const undo = controls.querySelector('[data-undo]'); if (undo) undo.disabled = false;
           queueCheckpoint();
           try { A.checkInk(record.run); } catch (problem) { error = problem.message; status(error); }
-        });
-        pad.lock(busy);
-        const answerWith = async outcome => {
-          const next = { ...record, run: A.transition(record.run, { type: 'ANSWER', status: outcome }) }; await persist(next); record = next;
-          if (record.run.answers.every(item => item.status !== 'draft')) drawList(); else drawWriting();
+        }, position.character);
+        pad.lock(!writingAllowed());
+        const advance = async () => {
+          const last = index + 1 === group.end;
+          const next = { ...record, run: A.transition(record.run, { type: last ? 'SUBMIT_WORD' : 'NEXT_CHARACTER' }) }; await persist(next); record = next;
+          if (last) drawList(); else drawWriting();
         };
-        const submit = button('交答案', () => answerWith('submitted'), 'primary large'); submit.setAttribute('data-submit', '');
-        controls.append(submit, button('暫時跳過', () => answerWith('skipped')),
-          button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }));
+        const primary = started ? button(index + 1 === group.end ? '交答案' : '下一個字', advance, 'primary large') : button('開始', async () => {
+          const next = { ...record, run: A.transition(record.run, { type: 'START_WORD' }) }; await persist(next); record = next; runningWord = word.wordId; drawWriting();
+        }, 'primary large');
+        primary.setAttribute('data-submit', '');
+        const hint = button('提示', async () => {
+          cancelDemo();
+          const next = { ...record, run: A.transition(record.run, { type: 'HINT' }) }; await persist(next); record = next;
+          demoActive = true; pad.lock(true);
+          stopDemo = F.demo(paper, position.character, () => { stopDemo = null; demoActive = false; pad?.lock(!writingAllowed()); }, text => { stopDemo = null; demoActive = false; status(text); pad?.lock(!writingAllowed()); });
+        });
+        hint.disabled = !started;
+        const undo = button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }); undo.disabled = !started || !answer.strokes.length; undo.setAttribute('data-undo', '');
+        controls.append(primary, hint, undo);
       } else {
         F.render(paper, answer.strokes); controls.append(node('p', answer.status === 'skipped' ? '已跳過，原筆跡保留。' : '已提交，等老師批改。'));
         controls.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }));
@@ -199,7 +226,11 @@
       const board = await classroom.reviewedBoard(); current(owner, record);
       drawSummary(); const section = node('section', '', 'assessment-board'); section.append(node('h2', '班級榜'));
       if (!board.published) section.append(node('p', '等老師公布。'));
-      for (const row of board.rows) section.append(node('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+      let mode;
+      for (const row of board.rows) {
+        if (row.mode && row.mode !== mode) { section.append(node('h3', row.mode === 'copy' ? '看字寫' : '聽詞寫')); mode = row.mode; }
+        section.append(node('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+      }
       if (board.published && !board.rows.length) section.append(node('p', '未有完成批改的原卷。'));
       panel.querySelector('.assessment-footer').before(section);
     }
@@ -216,7 +247,7 @@
       const owner = context, originals = await store.localOriginals(); current(owner, record); page = 'history'; shell('本機原卷');
       const list = node('div', '', 'assessment-choices');
       originals.forEach((saved, index) => {
-        const label = new Date(saved.run.startedAt).toLocaleString('zh-HK') + ' · ' + (saved.run.assignment.mode === 'copy' ? '看字寫' : '聽詞寫') + ' · ' + saved.run.answers.length + ' 字 · ' + (index + 1);
+        const label = new Date(saved.run.startedAt).toLocaleString('zh-HK') + ' · ' + (A.actualMode(saved.run) === 'copy' ? '看字寫' : '聽詞寫') + ' · ' + saved.run.answers.length + ' 字 · ' + (index + 1);
         list.append(button(label, async () => {
           const original = await store.get(saved.key); current(owner, original); if (!original) throw new Error('原卷已到期。');
           owner.revisions.set(original.key, original.revision || 0); record = original; official = original; armExpiry(); drawReview();
@@ -232,9 +263,10 @@
       else {
         const entries = official.run.assignment.entries.filter(entry => C.purposes[entry.text]).map(entry => ({ text: entry.text, selectedIndexes: Array.from(entry.text, (_, index) => index) }));
         const assignment = A.assignment(entries, 'listen');
-        record = { key, kind: 'challenge', expiresAt: official.expiresAt, run: A.start(assignment, crypto.randomUUID()) };
+        record = { key, kind: 'challenge', expiresAt: official.expiresAt, run: A.startWords(assignment, crypto.randomUUID()) };
         await persist();
       }
+      if (record.run.version === 2 && record.run.phase === 'writing') { const next = { ...record, run: A.upgradeWords(record.run) }; await persist(next); record = next; }
       if (record.run.phase === 'sealed') drawWorkCard(); else drawList();
     }
     function drawWorkCard(index = 0) {
@@ -251,7 +283,7 @@
       if (visible) return;
       const assignment = A.assignment(assigned.entries, assigned.mode), scope = joined ? 'class:' + joined.code + ':' + joined.memberId : 'local:' + JSON.stringify(assignment);
       const owner = Object.freeze({ scope, member: joined ? Object.freeze({ ...joined }) : null, expiresAt: joined?.expiresAt || Date.now() + 86400000, revisions: new Map() });
-      visible = true; context = owner; activeLocal = null; busy = false; error = ''; record = null; official = null; pending = Promise.resolve(); segmentStart = null;
+      visible = true; context = owner; activeLocal = null; busy = false; error = ''; record = null; official = null; pending = Promise.resolve(); segmentStart = null; runningWord = null;
       panel.hidden = false; conceal(true); shell('小挑戰'); panel.append(message('載入原稿…')); footer(close, '← 返回課程');
       armExpiry();
       try {
@@ -266,22 +298,23 @@
           }
         }
         if (!saved) {
-          const run = A.start(assignment, crypto.randomUUID());
+          const run = A.startWords(assignment, crypto.randomUUID());
           saved = { key: scope + ':' + run.runId, expiresAt: joined?.expiresAt || Date.now() + 86400000, kind: 'official', run };
         }
         saved = await store.initialize(scope, saved, () => current(owner, saved)); current(owner, saved);
         owner.revisions.set(saved.key, saved.revision || 0);
+        if (saved.run.version === 2 && saved.run.phase === 'writing') { saved = { ...saved, run: A.upgradeWords(saved.run) }; saved = await persist(saved, owner); }
         if (!joined) activeLocal = Object.freeze({ scope, runKey: saved.key });
         record = saved; official = saved;
         armExpiry();
         if (saved.run.phase === 'sealed') drawSummary(); else drawList();
       } catch (problem) { if (owner === context && !problem.stale) { error = problem.message; status(error); } }
     }
-    document.addEventListener('visibilitychange', () => {
-      if (!visible) return;
-      if (document.hidden) { clock(false); pad?.flush(); if (record?.run.phase === 'writing') queueCheckpoint(); }
-      else clock(true);
-    });
+    function pauseWriting() { if (visible) { clock(false); cancelDemo(); pad?.flush(); pad?.lock(true); if (record?.run.phase === 'writing') queueCheckpoint(); } }
+    function resumeWriting() { if (visible && !document.hidden) { clock(true); pad?.lock(!writingAllowed()); } }
+    document.addEventListener('visibilitychange', () => { if (document.hidden) pauseWriting(); else resumeWriting(); });
+    root.addEventListener('pagehide', pauseWriting);
+    root.addEventListener('pageshow', resumeWriting);
     root.addEventListener('beforeunload', event => { if (visible && (error || checkpointing || pad?.active())) { event.preventDefault(); event.returnValue = ''; } });
     return { open, active: () => visible, hasLocal: async () => !!await store.activeLocal(),
       async resumeLocal() { const saved = await store.activeLocal(); if (saved) await open(saved.run.assignment); return !!saved; } };

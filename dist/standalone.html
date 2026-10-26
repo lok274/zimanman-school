@@ -120,13 +120,17 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
 .assessment-footer { position:fixed; bottom:0; left:0; right:0; padding:14px 28px; background:#f5f6ed; border-top:1px solid #d4ddd6; z-index:2; }
 .assessment-footer button { min-height:72px; min-width:200px; font-size:24px; }
 .assessment-writing { display:grid; grid-template-columns:minmax(0,1fr) minmax(330px,.66fr); align-items:center; gap:20px; max-width:1180px; margin:auto; }
-.assessment-paper { width:min(100%,calc(100dvh - 180px)); aspect-ratio:1; border:2px solid #a4b5a6; border-radius:12px; background:#fffef8; justify-self:center; overflow:hidden; }
+.assessment-paper { position:relative; width:min(100%,calc(100dvh - 180px)); aspect-ratio:1; border:2px solid #a4b5a6; border-radius:12px; background:#fffef8; justify-self:center; overflow:hidden; }
+.assessment-demo { position:absolute; inset:0; pointer-events:none; opacity:.65; }
 .freehand-ink { display:block; width:100%; height:100%; aspect-ratio:1; touch-action:none; user-select:none; -webkit-user-select:none; }
 .assessment-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .assessment-controls .button { min-height:64px; font-size:24px; line-height:1.25; padding:8px; }
-.assessment-controls .primary { min-height:72px; grid-column:1/-1; grid-row:2; }
+.assessment-controls .primary { min-height:72px; grid-column:1/-1; }
 .assessment-controls>p,.assessment-controls>img,.assessment-controls>nav { grid-column:1/-1; }
-.assessment-controls:has(.assessment-context) .primary { grid-row:3; }
+.assessment-timer { grid-column:1/-1; text-align:center; font-size:26px; font-variant-numeric:tabular-nums; line-height:1.2; }
+.assessment-completed { position:absolute; right:10px; bottom:10px; border-radius:8px; padding:2px 10px; font-size:18px; color:#214b3b; background:#e9eddf; }
+.assessment-choice-card:disabled { opacity:1; }
+.assessment-controls .assessment-status:empty { display:none; }
 .assessment-controls:has(.assessment-context)>p:not(.assessment-status) { display:none; }
 .assessment-status { min-height:1.5em; margin:4px 0; font-size:16px; }
 .assessment-context { width:100%; height:100px; object-fit:contain; }
@@ -255,7 +259,7 @@ body.writing-view{min-height:100svh;display:flex;flex-direction:column}
     <button id="validate-words" class="button secondary">更新可選詞語</button>
     <fieldset class="teacher-selection"><legend>下一節練習範圍</legend><div id="teacher-word-options"></div><p id="teacher-selection-total" role="status" aria-live="polite"></p></fieldset>
     <button id="apply-words" class="button primary">套用並返回首頁</button>
-    <label class="field-label" for="assessment-mode">測驗題型</label><select id="assessment-mode"><option value="copy">看字寫</option><option value="listen">聽詞寫</option></select>
+    <label class="field-label" for="assessment-mode">測驗題型</label><select id="assessment-mode"><option value="copy">看字寫</option></select>
     <button id="teacher-class" class="button secondary">用以上範圍開班級測驗 ↗</button>
     <div id="teacher-active" class="teacher-active" hidden><h3>本節練習</h3><button id="teacher-skip" class="button secondary">老師協助，跳過此字</button><button id="teacher-end" class="button quiet">結束本節並查看紀錄</button></div>
     <details id="license-details"><summary>字庫授權及修改說明</summary><p>Copyright 1999 Arphic Technology Co., Ltd. Copyright 2016 Shaunak Kishore. 字庫按 Arphic Public License 提供，並無擔保。你可以按授權條款修改及再分發。</p><p>本版將「草」改為十畫，交換「密」第七、八畫，並調整「來」嘅筆順。初始十一字嘅筆順已對照教育局圖示；字形仍有字庫風格差異。</p><p><details><summary>Arphic Public License 全文</summary><pre class="license-text">ARPHIC PUBLIC LICENSE
@@ -715,6 +719,33 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const canonical = assignment(assigned.entries, assigned.mode);
     return { version: 2, runId, assignment: canonical, startedAt: now, elapsedMs: 0, phase: 'writing', cursor: 0, answers: positions(canonical).map(item => ({ occurrenceId: item.id, status: 'draft', strokes: [] })) };
   }
+  function startWords(assigned, runId, now = Date.now()) {
+    const run = start(assigned, runId, now);
+    return { ...run, version: 3, presentationMode: 'copy', legacyElapsedMs: 0, wordProgress: run.assignment.entries.map((entry, index) => ({ wordId: 'w' + index, phase: 'unstarted', elapsedMs: 0, timeKnown: true })), answers: run.answers.map(answer => ({ ...answer, hintUsed: false })) };
+  }
+  function actualMode(run) { return run.version === 3 ? run.presentationMode : run.assignment.mode; }
+  function wordAt(run, index = run.cursor) {
+    let start = 0;
+    for (let wordIndex = 0; wordIndex < run.assignment.entries.length; wordIndex++) {
+      const end = start + run.assignment.entries[wordIndex].selectedIndexes.length;
+      if (index >= start && index < end) return { wordIndex, start, end };
+      start = end;
+    }
+    throw new Error('題目無效。');
+  }
+  function upgradeWords(run) {
+    if (run.version !== 2 || run.phase !== 'writing') return run;
+    const next = startWords(run.assignment, run.runId, run.startedAt);
+    next.cursor = run.cursor; next.legacyElapsedMs = run.elapsedMs; next.elapsedMs = run.elapsedMs;
+    next.answers = structuredClone(run.answers).map(answer => ({ ...answer, hintUsed: false }));
+    for (const word of next.wordProgress) {
+      const answers = next.answers.filter(answer => answer.occurrenceId.startsWith(word.wordId + ':'));
+      const complete = answers.every(answer => answer.status === 'submitted');
+      word.phase = complete ? 'submitted' : 'unstarted'; word.timeKnown = !run.elapsedMs && !answers.some(answer => answer.strokes.length);
+      if (!complete) for (const answer of answers) answer.status = 'draft';
+    }
+    return next;
+  }
   function ink(strokes, count) {
     if (!Array.isArray(strokes) || strokes.length > limits.strokes) throw new Error('每字最多 256 筆，原筆跡仍然保留，請返回檢查。');
     return strokes.map(stroke => {
@@ -730,12 +761,21 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function validateSubmission(assigned, run) {
     const canonical = assignment(assigned.entries, assigned.mode), expected = positions(canonical), count = { n: 0 };
-    if (run?.version !== 2 || typeof run.runId !== 'string' || !/^[\w-]{1,100}$/.test(run.runId) || run.phase !== 'sealed' || JSON.stringify(run.assignment) !== JSON.stringify(canonical) || !Number.isSafeInteger(run.startedAt) || run.startedAt < 0 || !Number.isSafeInteger(run.elapsedMs) || run.elapsedMs < 0 || run.elapsedMs > limits.duration || !Array.isArray(run.answers) || run.answers.length !== expected.length) throw new Error('測驗紀錄或題目不一致。');
+    if (![2, 3].includes(run?.version) || typeof run.runId !== 'string' || !/^[\w-]{1,100}$/.test(run.runId) || run.phase !== 'sealed' || JSON.stringify(run.assignment) !== JSON.stringify(canonical) || !Number.isSafeInteger(run.startedAt) || run.startedAt < 0 || !Number.isSafeInteger(run.elapsedMs) || run.elapsedMs < 0 || run.elapsedMs > limits.duration || !Array.isArray(run.answers) || run.answers.length !== expected.length) throw new Error('測驗紀錄或題目不一致。');
+    if (run.version === 3) {
+      if (run.presentationMode !== 'copy' || !Number.isSafeInteger(run.legacyElapsedMs) || run.legacyElapsedMs < 0 || !Array.isArray(run.wordProgress) || run.wordProgress.length !== canonical.entries.length) throw new Error('詞語用時紀錄無效。');
+      const total = run.wordProgress.reduce((sum, word, index) => {
+        if (!word || word.wordId !== 'w' + index || word.phase !== 'submitted' || !Number.isSafeInteger(word.elapsedMs) || word.elapsedMs < 0 || word.elapsedMs > limits.duration || typeof word.timeKnown !== 'boolean') throw new Error('詞語用時紀錄無效。');
+        return sum + word.elapsedMs;
+      }, run.legacyElapsedMs);
+      if (total !== run.elapsedMs || total > limits.duration) throw new Error('詞語用時紀錄不一致。');
+    }
     const answers = run.answers.map((answer, index) => {
       if (!answer || answer.occurrenceId !== expected[index].id || !['submitted', 'skipped'].includes(answer.status)) throw new Error('請先提交或跳過每一字。');
+      if (run.version === 3 && (answer.status !== 'submitted' || typeof answer.hintUsed !== 'boolean')) throw new Error('請先提交每個詞語。');
       const strokes = ink(answer.strokes, count);
       if (answer.status === 'submitted' && !strokes.length) throw new Error('未寫字，請先書寫或選跳過。');
-      return { occurrenceId: answer.occurrenceId, status: answer.status, strokes };
+      return { occurrenceId: answer.occurrenceId, status: answer.status, strokes, ...(run.version === 3 ? { hintUsed: answer.hintUsed } : {}) };
     });
     const result = envelope({ ...run, assignment: canonical }, answers);
     if (new TextEncoder().encode(JSON.stringify(result)).length > limits.bytes) throw new Error('筆跡超出容量，原稿仍然保留，請聯絡老師。');
@@ -744,8 +784,29 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function transition(run, event) {
     if (run.phase !== 'writing') throw new Error('原卷已封存。');
     const next = structuredClone(run), answer = next.answers[next.cursor];
-    if (event.type === 'STROKE') { if (answer.status !== 'draft') throw new Error('此字已提交。'); answer.strokes.push(event.stroke); }
-    else if (event.type === 'UNDO') { if (answer.status !== 'draft') throw new Error('此字已提交。'); answer.strokes.pop(); }
+    if (run.version === 3) {
+      const group = wordAt(next), word = next.wordProgress[group.wordIndex];
+      if (event.type === 'START_WORD') { if (word.phase === 'submitted') throw new Error('此詞語已提交。'); word.phase = 'writing'; return next; }
+      if (event.type === 'TIME') {
+        if (word.phase !== 'writing' || !Number.isSafeInteger(event.elapsedMs) || event.elapsedMs < 0) throw new Error('計時紀錄無效。');
+        const elapsed = Math.min(event.elapsedMs, limits.duration - next.elapsedMs); word.elapsedMs += elapsed; next.elapsedMs += elapsed; return next;
+      }
+      if (['STROKE', 'UNDO', 'HINT', 'NEXT_CHARACTER', 'SUBMIT_WORD'].includes(event.type) && (word.phase !== 'writing' || answer.status === 'submitted')) throw new Error('請先按開始。');
+      if (event.type === 'HINT') { answer.hintUsed = true; return next; }
+      if (event.type === 'NEXT_CHARACTER') {
+        if (!answer.strokes.length) throw new Error('請先書寫。');
+        if (next.cursor + 1 >= group.end) throw new Error('請提交此詞語。');
+        answer.status = 'ready'; checkInk(next); next.cursor++; return next;
+      }
+      if (event.type === 'SUBMIT_WORD') {
+        const answers = next.answers.slice(group.start, group.end);
+        if (answers.some(item => !item.strokes.length)) throw new Error('請先完成此詞語。');
+        for (const item of answers) item.status = 'submitted'; word.phase = 'submitted'; checkInk(next); return next;
+      }
+      if (event.type === 'ANSWER') throw new Error('請提交整個詞語。');
+    }
+    if (event.type === 'STROKE') { if (!['draft', 'ready'].includes(answer.status)) throw new Error('此字已提交。'); answer.strokes.push(event.stroke); }
+    else if (event.type === 'UNDO') { if (!['draft', 'ready'].includes(answer.status)) throw new Error('此字已提交。'); answer.strokes.pop(); }
     else if (event.type === 'ANSWER') {
       if (answer.status !== 'draft' || !['submitted', 'skipped'].includes(event.status)) throw new Error('此字已提交。');
       if (event.status === 'submitted' && !answer.strokes.length) throw new Error('未寫字，請先書寫或選跳過。');
@@ -755,7 +816,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (!Number.isInteger(event.index) || event.index < 0 || event.index >= next.answers.length) throw new Error('題目無效。');
       next.cursor = event.index;
     } else if (event.type === 'SEAL') {
-      next.phase = 'sealed'; next.elapsedMs = Math.min(limits.duration, Math.max(0, Math.round(event.elapsedMs)));
+      next.phase = 'sealed'; if (next.version === 2) next.elapsedMs = Math.min(limits.duration, Math.max(0, Math.round(event.elapsedMs)));
       return validateSubmission(next.assignment, next);
     } else throw new Error('測驗操作無效。');
     return next;
@@ -763,10 +824,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   function checkInk(run) {
     const count = { n: 0 };
     for (const answer of run.answers) ink(answer.strokes, count);
-    const terminal = envelope({ ...run, elapsedMs: limits.duration }, run.answers.map(answer => ({ occurrenceId: answer.occurrenceId, status: answer.status === 'draft' ? 'submitted' : answer.status, strokes: answer.strokes })));
+    const terminal = envelope({ ...run, elapsedMs: limits.duration, ...(run.version === 3 ? { wordProgress: run.wordProgress.map(word => ({ ...word, phase: 'submitted', elapsedMs: limits.duration })) } : {}) }, run.answers.map(answer => ({ occurrenceId: answer.occurrenceId, status: ['draft', 'ready'].includes(answer.status) ? 'submitted' : answer.status, strokes: answer.strokes, ...(run.version === 3 ? { hintUsed: answer.hintUsed } : {}) })));
     if (new TextEncoder().encode(JSON.stringify(terminal)).length > limits.bytes) throw new Error('筆跡超出容量，請撤回本字上一筆再試。原稿仍然保留。');
   }
-  function envelope(run, answers) { return { version: 2, runId: run.runId, assignment: run.assignment, startedAt: run.startedAt, elapsedMs: run.elapsedMs, phase: 'sealed', answers }; }
+  function envelope(run, answers) { return { version: run.version, runId: run.runId, assignment: run.assignment, startedAt: run.startedAt, elapsedMs: run.elapsedMs, phase: 'sealed', answers, ...(run.version === 3 ? { presentationMode: run.presentationMode, legacyElapsedMs: run.legacyElapsedMs, wordProgress: run.wordProgress.map(word => ({ wordId: word.wordId, phase: word.phase, elapsedMs: word.elapsedMs, timeKnown: word.timeKnown })) } : {}) }; }
   function review(assigned, marks) {
     const expected = positions(assigned);
     if (!Array.isArray(marks) || marks.length !== expected.length) throw new Error('批改項目不完整。');
@@ -778,10 +839,14 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
   }
   function unmarked(assigned) { return positions(assigned).map(item => ({ occurrenceId: item.id, correct: null, strokePractice: false })); }
   function ranks(rows) {
-    let rank = 0;
-    return rows.filter(row => Number.isInteger(row.score)).sort((a, b) => b.score - a.score || a.alias.localeCompare(b.alias)).map((row, i, sorted) => { if (!i || row.score !== sorted[i - 1].score) rank = i + 1; return { ...row, rank }; });
+    let rank = 0, start = 0;
+    return rows.filter(row => Number.isInteger(row.score)).sort((a, b) => (a.mode || '').localeCompare(b.mode || '') || b.score - a.score || a.alias.localeCompare(b.alias)).map((row, i, sorted) => {
+      if (!i || row.mode !== sorted[i - 1].mode) { start = i; rank = 1; }
+      else if (row.score !== sorted[i - 1].score) rank = i - start + 1;
+      return { ...row, rank };
+    });
   }
-  const api = { limits, assignment, positions, start, transition, checkInk, validateSubmission, review, unmarked, ranks };
+  const api = { limits, assignment, positions, start, startWords, actualMode, wordAt, upgradeWords, transition, checkInk, validateSubmission, review, unmarked, ranks };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.BishunAssessment = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -905,11 +970,23 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     svg.append(grid); return svg;
   }
   function line(stroke) { return element('path', { d: path(stroke), fill: 'none', stroke: '#20392e', 'stroke-width': 110, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); }
-  function render(container, strokes, label = '原筆跡') {
-    const svg = frame(label); for (const stroke of strokes) svg.append(line(stroke)); container.replaceChildren(svg); return svg;
+  function render(container, strokes, label = '原筆跡', hint = null) {
+    const svg = frame(label);
+    if (hint) {
+      const model = element('g', { 'aria-hidden': 'true', 'data-hint': '', fill: '#bbc5b9', stroke: 'none' }), glyph = root.BishunCharacters?.[hint];
+      if (glyph) {
+        model.setAttribute('transform', 'translate(1000 8031.25) scale(7.8125 -7.8125)');
+        for (const d of glyph.strokes) model.append(element('path', { d, fill: '#bbc5b9', stroke: 'none', 'aria-hidden': 'true' }));
+      } else {
+        const text = element('text', { x: 5000, y: 5200, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 7600, 'font-family': '"Noto Serif TC","Songti TC","PMingLiU",serif', fill: '#bbc5b9', stroke: 'none' });
+        text.textContent = hint; model.append(text);
+      }
+      svg.append(model);
+    }
+    for (const stroke of strokes) svg.append(line(stroke)); container.replaceChildren(svg); return svg;
   }
-  function capture(container, strokes, onStroke) {
-    const svg = render(container, strokes, '自由書寫格'), active = { pointer: null, points: [], path: null, started: 0 };
+  function capture(container, strokes, onStroke, hint = null) {
+    const svg = render(container, strokes, '自由書寫格', hint), active = { pointer: null, points: [], path: null, started: 0 };
     let locked = false;
     function point(event) {
       const rect = svg.getBoundingClientRect(), bound = n => Math.max(0, Math.min(10000, Math.round(n)));
@@ -951,7 +1028,31 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     frameId = requestAnimationFrame(tick);
     return () => { stopped = true; cancelAnimationFrame(frameId); };
   }
-  const api = { render, capture, replay };
+  let demoEngine = null;
+  function demo(container, character, onDone, onError) {
+    // Hanzi Writer retains document listeners, so all hints share one stable target.
+    if (!demoEngine) { const layer = document.createElement('div'); layer.className = 'assessment-demo'; layer.setAttribute('aria-hidden', 'true'); demoEngine = { layer, writer: null, data: null, ready: Promise.resolve(), cancel: null }; }
+    const engine = demoEngine, layer = engine.layer, controller = new AbortController();
+    engine.cancel?.(); container.append(layer);
+    let alive = true, observer = null;
+    function cancel() { if (!alive) return; alive = false; controller.abort(); observer?.disconnect(); engine.writer?.pauseAnimation(); layer.remove(); engine.cancel = null; }
+    engine.cancel = cancel;
+    Promise.resolve().then(async () => {
+      if (!root.BishunWriting || !root.HanziWriter) throw new Error('筆順未能播放。');
+      const data = await root.BishunWriting.loadCharacter(character, controller.signal);
+      if (!alive) return;
+      const size = container.getBoundingClientRect().width;
+      if (!engine.writer) engine.writer = new root.HanziWriter(layer, { width: size, height: size, padding: size * .1, showCharacter: false, showOutline: false, strokeColor: '#48735b', strokeAnimationSpeed: .45, delayBetweenStrokes: 520, charDataLoader: (value, loaded) => loaded(engine.data) });
+      engine.ready = engine.ready.catch(() => {}).then(() => { if (!alive) return; engine.data = data; engine.writer.updateDimensions({ width: size, height: size, padding: size * .1 }); return engine.writer.setCharacter(character); });
+      await engine.ready;
+      if (!alive) return;
+      if (root.ResizeObserver) { observer = new root.ResizeObserver(() => { const width = container.getBoundingClientRect().width; engine.writer.updateDimensions({ width, height: width, padding: width * .1 }); }); observer.observe(container); }
+      await engine.writer.animateCharacter();
+      if (alive) { cancel(); onDone(); }
+    }).catch(() => { if (alive) { cancel(); onError('筆順未能播放，請繼續書寫。'); } });
+    return cancel;
+  }
+  const api = { render, capture, replay, demo };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.BishunFreehand = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -969,6 +1070,9 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     data.run.answers.forEach((answer, index) => {
       const position = positions[index], row = node('section', '', 'review-answer');
       row.append(node('h3', position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'));
+      const word = data.run.wordProgress?.[A.wordAt(data.run, index).wordIndex];
+      if (word && A.wordAt(data.run, index).start === index) row.append(node('p', (word.timeKnown ? '詞語用時 ' : '續寫用時 ') + (word.elapsedMs / 1000).toFixed(1) + ' 秒'));
+      if (answer.hintUsed) row.append(node('p', '有提示'));
       const paper = node('div', '', 'review-paper'); F.render(paper, answer.strokes); row.append(paper);
       row.append(node('p', answer.status === 'skipped' ? '跳過，保留原筆跡' : '已提交原筆跡'));
       const replay = node('button', '重播原筆跡', 'button secondary');
@@ -992,7 +1096,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       } catch (error) { if (!disposed) status.textContent = error.message; }
       finally { if (!disposed) save.disabled = false; }
     });
-    container.replaceChildren(node('p', '書寫時間 ' + ((data.elapsedMs ?? data.run.elapsedMs) / 1000).toFixed(1) + ' 秒 · 批改版本 ' + revision), rows, save, status);
+    container.replaceChildren(node('p', (A.actualMode(data.run) === 'copy' ? '看字寫' : '聽詞寫') + ' · 書寫時間 ' + ((data.elapsedMs ?? data.run.elapsedMs) / 1000).toFixed(1) + ' 秒 · 批改版本 ' + revision), rows, save, status);
     return () => { disposed = true; stopReplay?.(); };
   }
   root.BishunAssessmentReview = { mount };
@@ -1090,7 +1194,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       try {
         const data = await request('/' + saved.member.code + '/board', 'GET', undefined, saved.member.token);
         if (saved.member.assignment.version === 2) {
-          if (typeof data.published !== 'boolean' || !Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => typeof row.alias !== 'string' || !Number.isInteger(row.score) || row.score < 0 || !Number.isInteger(row.rank) || row.rank < 1)) throw new Error('排行榜回應無效。');
+          validateReviewedBoard(data);
           board = { ...data, reviewed: true, personalBest: data.rows.find(row => row.alias === saved.member.alias) || null };
           message = data.published ? '老師已公布班級榜。' : '等老師公布班級榜。'; notify(); return;
         }
@@ -1101,6 +1205,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       catch (error) { if (error.stale) return; message = '已交卷，班級榜暫未能更新。' + (error.message || '請重試。'); }
       notify();
     }
+    function validateReviewedBoard(data) {
+      if (typeof data.published !== 'boolean' || !Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => !row || typeof row.alias !== 'string' || !Number.isInteger(row.score) || row.score < 0 || !Number.isInteger(row.rank) || row.rank < 1 || row.mode !== undefined && !['copy', 'listen'].includes(row.mode))) throw new Error('排行榜回應無效。');
+      return data;
+    }
     async function reviewedRequest(action, method, value) {
       if (!accepted || saved.member?.assignment.version !== 2) throw new Error('請先確認參加身份。');
       const member = saved.member;
@@ -1109,11 +1217,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
     async function submitReviewed(run) {
       const receipt = await reviewedRequest('answers', 'PUT', run);
-      if (receipt.runId !== run.runId || receipt.official !== true) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
+      if (receipt.runId !== run.runId || receipt.official !== true || run.version === 3 && receipt.version !== 3) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
       saved.receipt = receipt; persist(); notify(); return receipt;
     }
     return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed,
-      ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: () => reviewedRequest('board', 'GET') };
+      ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: async () => validateReviewedBoard(await reviewedRequest('board', 'GET')) };
   }
   const api = { create, storageKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -1129,7 +1237,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     const node = (tag, text = '', className = '') => { const el = document.createElement(tag); el.textContent = text; if (className) el.className = className; return el; };
     const panel = node('section', '', 'assessment-panel'); panel.id = 'assessment-view'; panel.hidden = true;
     panel.setAttribute('aria-label', '自由書寫小挑戰'); document.body.append(panel);
-    let context = null, activeLocal = null, record = null, official = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0, segmentStart = null, pad = null, stopReplay = null, stopReview = null, expiryTimer = null, visible = false;
+    let context = null, activeLocal = null, record = null, official = null, page = 'list', busy = false, error = '', pending = Promise.resolve(), checkpointing = 0, segmentStart = null, runningWord = null, timerFrame = null, pad = null, stopReplay = null, stopReview = null, stopDemo = null, demoActive = false, expiryTimer = null, visible = false;
     const siblings = [...document.body.children].filter(el => el !== panel && el.tagName !== 'SCRIPT');
     function conceal(value) { for (const el of siblings) { el.inert = value; if (value) el.setAttribute('aria-hidden', 'true'); else el.removeAttribute('aria-hidden'); } }
     function status(text) { const el = panel.querySelector('[data-status]'); if (el) el.textContent = text.replaceAll('測驗', '小挑戰'); }
@@ -1153,21 +1261,33 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       return saved;
     }
     function clock(resume) {
-      if (segmentStart !== null && record?.run.phase === 'writing') record = { ...record, run: { ...record.run, elapsedMs: Math.min(A.limits.duration, record.run.elapsedMs + Math.max(0, Math.round(performance.now() - segmentStart))) } };
-      segmentStart = resume && !busy && page === 'writing' && !document.hidden && record?.run.answers[record.run.cursor]?.status === 'draft' ? performance.now() : null;
+      if (segmentStart !== null && record?.run.phase === 'writing') record = { ...record, run: A.transition(record.run, { type: 'TIME', elapsedMs: Math.max(0, Math.round(performance.now() - segmentStart)) }) };
+      segmentStart = resume && writingAllowed() ? performance.now() : null;
+    }
+    function writingAllowed() { return !busy && !error && page === 'writing' && !document.hidden && record?.run.phase === 'writing' && record.run.version === 3 && record.run.wordProgress[A.wordAt(record.run).wordIndex].wordId === runningWord && record.run.answers[record.run.cursor].status !== 'submitted'; }
+    function timerText() {
+      const word = record.run.wordProgress[A.wordAt(record.run).wordIndex];
+      const milliseconds = Math.min(A.limits.duration, word.elapsedMs + (segmentStart === null ? 0 : Math.max(0, performance.now() - segmentStart)));
+      const seconds = Math.floor(milliseconds / 1000); return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
+    }
+    function startTimer(output) {
+      const owner = context;
+      function tick() { if (owner !== context || page !== 'writing' || !visible) return; output.textContent = timerText(); timerFrame = requestAnimationFrame(tick); }
+      tick();
     }
     function queueCheckpoint() {
       const snapshot = record, owner = context; checkpointing++;
-      pending = pending.catch(() => {}).then(() => persist(snapshot, owner)).catch(problem => { if (owner === context && !problem.stale) { error = problem.message || '原稿未能保存，請保持頁面開啟再試。'; status(error); showSaveRetry(); } }).finally(() => { checkpointing--; });
+      pending = pending.catch(() => {}).then(() => persist(snapshot, owner)).catch(problem => { if (owner === context && !problem.stale) { clock(false); error = problem.message || '原稿未能保存，請保持頁面開啟再試。'; pad?.lock(true); status(error); showSaveRetry(); } }).finally(() => { checkpointing--; });
     }
-    function dispose() { pad?.dispose(); pad = null; stopReplay?.(); stopReplay = null; stopReview?.(); stopReview = null; }
+    function cancelDemo() { stopDemo?.(); stopDemo = null; demoActive = false; }
+    function dispose() { cancelDemo(); cancelAnimationFrame(timerFrame); timerFrame = null; pad?.dispose(); pad = null; stopReplay?.(); stopReplay = null; stopReview?.(); stopReview = null; }
     async function action(fn, checkpoint = false) {
       if (busy) return;
       const owner = context;
       clock(false); busy = true; pad?.flush(); pad?.lock(true);
       try { if (owner) { await pending; current(owner, record); if (checkpoint && record?.run.phase === 'writing') await persist(record, owner); } await fn(owner); }
       catch (problem) { if (owner === context && !problem.stale) { error = problem.message || '未能保存原稿，請保持頁面開啟再試。'; status(error); showSaveRetry(); } }
-      finally { if (owner === context) { busy = false; pad?.lock(false); clock(true); } }
+      finally { if (owner === context) { busy = false; clock(true); pad?.lock(!writingAllowed() || demoActive); } }
     }
     function button(text, fn, kind = 'secondary', checkpoint = false) { const el = node('button', text, 'button ' + kind); el.addEventListener('click', () => action(fn, checkpoint)); return el; }
     function showSaveRetry() {
@@ -1185,7 +1305,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
     function footer(fn, label = '← 返回') { const el = node('footer', '', 'assessment-footer'); el.append(button(label, fn, 'secondary', true)); panel.append(el); }
     function isChallenge() { return record?.kind === 'challenge'; }
-    function titleFor(position, index) { return record.run.assignment.mode === 'listen' || isChallenge() ? '第 ' + (index + 1) + ' 題 · 詞語第 ' + (position.index + 1) + ' 字' : position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'; }
+    function titleFor(position, index) { return A.actualMode(record.run) === 'listen' ? '第 ' + (index + 1) + ' 題 · 詞語第 ' + (position.index + 1) + ' 字' : position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'; }
     function positionGroups() {
       const positions = A.positions(record.run.assignment); let offset = 0;
       return record.run.assignment.entries.map((entry, wordIndex) => {
@@ -1193,7 +1313,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         offset += count; return group;
       });
     }
-    function answerLabel(answer) { return answer.status === 'draft' ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交'; }
+    function answerLabel(answer) { return ['draft', 'ready'].includes(answer.status) ? '未提交' : answer.status === 'skipped' ? '已跳過' : '已提交'; }
     function speak(position, contextual = false) {
       const owner = context;
       const synth = root.speechSynthesis, voice = synth?.getVoices().find(item => /yue|zh[-_]HK/i.test(item.lang));
@@ -1204,9 +1324,9 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
     }
     async function close() { visible = false; context = null; busy = false; clearTimeout(expiryTimer); dispose(); root.speechSynthesis?.cancel(); panel.hidden = true; conceal(false); record = null; official = null; activeLocal = null; onClose(); }
     function drawList() {
-      page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
+      clock(false); runningWord = null; page = 'list'; shell(isChallenge() ? '情境小挑戰' : '小挑戰');
       const list = node('div', '', 'word-cards assessment-choices');
-      const listen = record.run.assignment.mode === 'listen' && !isChallenge();
+      const listen = A.actualMode(record.run) === 'listen' && !isChallenge();
       positionGroups().forEach(group => {
         const position = group.positions[0], index = group.start, title = group.positions.map((item, groupIndex) => titleFor(item, index + groupIndex) + ' · ' + answerLabel(group.answers[groupIndex])).join('；');
         const card = button('', () => {
@@ -1218,36 +1338,51 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
         const word = node('span', listen ? '第 ' + (group.wordIndex + 1) + ' 題' : group.entry.text, 'word-name');
         card.append(word);
         if (!listen) { const photo = node('img'); photo.src = C.photos[group.entry.text]; photo.alt = group.entry.text + '圖片'; photo.className = 'word-photo'; card.append(photo); }
+        if (group.answers.every(answer => answer.status === 'submitted')) { card.disabled = true; card.append(node('span', '已完成', 'assessment-completed')); }
         list.append(card);
       });
       panel.append(list, message(error));
-      if (record.run.answers.every(answer => answer.status !== 'draft')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
+      if (record.run.answers.every(answer => answer.status === 'submitted')) panel.append(button(isChallenge() ? '完成作品卡' : '交整份小挑戰', seal, 'primary large'));
       footer(isChallenge() ? async () => { record = official; drawSummary(); } : close, isChallenge() ? '← 返回原卷' : '← 返回課程');
     }
     function drawWriting() {
       page = 'writing'; const index = record.run.cursor, position = A.positions(record.run.assignment)[index], answer = record.run.answers[index];
-      shell(titleFor(position, index));
+      shell(position.word);
       const area = node('div', '', 'assessment-writing'), paper = node('div', '', 'assessment-paper'), controls = node('div', '', 'assessment-controls');
       area.append(paper, controls); panel.append(area);
       if (isChallenge()) {
         const photo = node('img'); photo.src = C.photos[position.word]; photo.alt = '情境圖片'; photo.className = 'assessment-context'; controls.append(photo);
       }
       controls.append(button('聽題目', () => speak(position, isChallenge())));
-      if (answer.status === 'draft') {
+      if (['draft', 'ready'].includes(answer.status)) {
+        const group = A.wordAt(record.run), word = record.run.wordProgress[group.wordIndex], started = runningWord === word.wordId;
+        const timer = node('output', timerText(), 'assessment-timer'); timer.setAttribute('aria-label', '詞語用時'); controls.append(timer); startTimer(timer);
         pad = F.capture(paper, answer.strokes, stroke => {
           clock(!busy);
           record = { ...record, run: A.transition(record.run, { type: 'STROKE', stroke }) };
+          const undo = controls.querySelector('[data-undo]'); if (undo) undo.disabled = false;
           queueCheckpoint();
           try { A.checkInk(record.run); } catch (problem) { error = problem.message; status(error); }
-        });
-        pad.lock(busy);
-        const answerWith = async outcome => {
-          const next = { ...record, run: A.transition(record.run, { type: 'ANSWER', status: outcome }) }; await persist(next); record = next;
-          if (record.run.answers.every(item => item.status !== 'draft')) drawList(); else drawWriting();
+        }, position.character);
+        pad.lock(!writingAllowed());
+        const advance = async () => {
+          const last = index + 1 === group.end;
+          const next = { ...record, run: A.transition(record.run, { type: last ? 'SUBMIT_WORD' : 'NEXT_CHARACTER' }) }; await persist(next); record = next;
+          if (last) drawList(); else drawWriting();
         };
-        const submit = button('交答案', () => answerWith('submitted'), 'primary large'); submit.setAttribute('data-submit', '');
-        controls.append(submit, button('暫時跳過', () => answerWith('skipped')),
-          button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }));
+        const primary = started ? button(index + 1 === group.end ? '交答案' : '下一個字', advance, 'primary large') : button('開始', async () => {
+          const next = { ...record, run: A.transition(record.run, { type: 'START_WORD' }) }; await persist(next); record = next; runningWord = word.wordId; drawWriting();
+        }, 'primary large');
+        primary.setAttribute('data-submit', '');
+        const hint = button('提示', async () => {
+          cancelDemo();
+          const next = { ...record, run: A.transition(record.run, { type: 'HINT' }) }; await persist(next); record = next;
+          demoActive = true; pad.lock(true);
+          stopDemo = F.demo(paper, position.character, () => { stopDemo = null; demoActive = false; pad?.lock(!writingAllowed()); }, text => { stopDemo = null; demoActive = false; status(text); pad?.lock(!writingAllowed()); });
+        });
+        hint.disabled = !started;
+        const undo = button('擦掉前一筆', async () => { record = { ...record, run: A.transition(record.run, { type: 'UNDO' }) }; drawWriting(); await persist(); }); undo.disabled = !started || !answer.strokes.length; undo.setAttribute('data-undo', '');
+        controls.append(primary, hint, undo);
       } else {
         F.render(paper, answer.strokes); controls.append(node('p', answer.status === 'skipped' ? '已跳過，原筆跡保留。' : '已提交，等老師批改。'));
         controls.append(button('重播原筆跡', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }));
@@ -1323,7 +1458,11 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const board = await classroom.reviewedBoard(); current(owner, record);
       drawSummary(); const section = node('section', '', 'assessment-board'); section.append(node('h2', '班級榜'));
       if (!board.published) section.append(node('p', '等老師公布。'));
-      for (const row of board.rows) section.append(node('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+      let mode;
+      for (const row of board.rows) {
+        if (row.mode && row.mode !== mode) { section.append(node('h3', row.mode === 'copy' ? '看字寫' : '聽詞寫')); mode = row.mode; }
+        section.append(node('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+      }
       if (board.published && !board.rows.length) section.append(node('p', '未有完成批改的原卷。'));
       panel.querySelector('.assessment-footer').before(section);
     }
@@ -1340,7 +1479,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       const owner = context, originals = await store.localOriginals(); current(owner, record); page = 'history'; shell('本機原卷');
       const list = node('div', '', 'assessment-choices');
       originals.forEach((saved, index) => {
-        const label = new Date(saved.run.startedAt).toLocaleString('zh-HK') + ' · ' + (saved.run.assignment.mode === 'copy' ? '看字寫' : '聽詞寫') + ' · ' + saved.run.answers.length + ' 字 · ' + (index + 1);
+        const label = new Date(saved.run.startedAt).toLocaleString('zh-HK') + ' · ' + (A.actualMode(saved.run) === 'copy' ? '看字寫' : '聽詞寫') + ' · ' + saved.run.answers.length + ' 字 · ' + (index + 1);
         list.append(button(label, async () => {
           const original = await store.get(saved.key); current(owner, original); if (!original) throw new Error('原卷已到期。');
           owner.revisions.set(original.key, original.revision || 0); record = original; official = original; armExpiry(); drawReview();
@@ -1356,9 +1495,10 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       else {
         const entries = official.run.assignment.entries.filter(entry => C.purposes[entry.text]).map(entry => ({ text: entry.text, selectedIndexes: Array.from(entry.text, (_, index) => index) }));
         const assignment = A.assignment(entries, 'listen');
-        record = { key, kind: 'challenge', expiresAt: official.expiresAt, run: A.start(assignment, crypto.randomUUID()) };
+        record = { key, kind: 'challenge', expiresAt: official.expiresAt, run: A.startWords(assignment, crypto.randomUUID()) };
         await persist();
       }
+      if (record.run.version === 2 && record.run.phase === 'writing') { const next = { ...record, run: A.upgradeWords(record.run) }; await persist(next); record = next; }
       if (record.run.phase === 'sealed') drawWorkCard(); else drawList();
     }
     function drawWorkCard(index = 0) {
@@ -1375,7 +1515,7 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
       if (visible) return;
       const assignment = A.assignment(assigned.entries, assigned.mode), scope = joined ? 'class:' + joined.code + ':' + joined.memberId : 'local:' + JSON.stringify(assignment);
       const owner = Object.freeze({ scope, member: joined ? Object.freeze({ ...joined }) : null, expiresAt: joined?.expiresAt || Date.now() + 86400000, revisions: new Map() });
-      visible = true; context = owner; activeLocal = null; busy = false; error = ''; record = null; official = null; pending = Promise.resolve(); segmentStart = null;
+      visible = true; context = owner; activeLocal = null; busy = false; error = ''; record = null; official = null; pending = Promise.resolve(); segmentStart = null; runningWord = null;
       panel.hidden = false; conceal(true); shell('小挑戰'); panel.append(message('載入原稿…')); footer(close, '← 返回課程');
       armExpiry();
       try {
@@ -1390,22 +1530,23 @@ globalThis.BishunCharacters = {"粗":{"strokes":["M 184 574 Q 197 547 212 515 Q 
           }
         }
         if (!saved) {
-          const run = A.start(assignment, crypto.randomUUID());
+          const run = A.startWords(assignment, crypto.randomUUID());
           saved = { key: scope + ':' + run.runId, expiresAt: joined?.expiresAt || Date.now() + 86400000, kind: 'official', run };
         }
         saved = await store.initialize(scope, saved, () => current(owner, saved)); current(owner, saved);
         owner.revisions.set(saved.key, saved.revision || 0);
+        if (saved.run.version === 2 && saved.run.phase === 'writing') { saved = { ...saved, run: A.upgradeWords(saved.run) }; saved = await persist(saved, owner); }
         if (!joined) activeLocal = Object.freeze({ scope, runKey: saved.key });
         record = saved; official = saved;
         armExpiry();
         if (saved.run.phase === 'sealed') drawSummary(); else drawList();
       } catch (problem) { if (owner === context && !problem.stale) { error = problem.message; status(error); } }
     }
-    document.addEventListener('visibilitychange', () => {
-      if (!visible) return;
-      if (document.hidden) { clock(false); pad?.flush(); if (record?.run.phase === 'writing') queueCheckpoint(); }
-      else clock(true);
-    });
+    function pauseWriting() { if (visible) { clock(false); cancelDemo(); pad?.flush(); pad?.lock(true); if (record?.run.phase === 'writing') queueCheckpoint(); } }
+    function resumeWriting() { if (visible && !document.hidden) { clock(true); pad?.lock(!writingAllowed()); } }
+    document.addEventListener('visibilitychange', () => { if (document.hidden) pauseWriting(); else resumeWriting(); });
+    root.addEventListener('pagehide', pauseWriting);
+    root.addEventListener('pageshow', resumeWriting);
     root.addEventListener('beforeunload', event => { if (visible && (error || checkpointing || pad?.active())) { event.preventDefault(); event.returnValue = ''; } });
     return { open, active: () => visible, hasLocal: async () => !!await store.activeLocal(),
       async resumeLocal() { const saved = await store.activeLocal(); if (saved) await open(saved.run.assignment); return !!saved; } };

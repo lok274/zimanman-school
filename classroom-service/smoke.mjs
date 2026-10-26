@@ -51,7 +51,15 @@ const concurrent = await Promise.all([put(reviewers[0], submitted), put(reviewer
 assert.equal(concurrent[0].status, 200); assert.deepEqual(concurrent[0].data, concurrent[1].data);
 assert.equal((await put(reviewers[0], { ...submitted, runId: randomUUID() })).status, 409);
 assert.equal((await call('/' + reviewedCode + '/answers', 'GET', undefined, auth(reviewers[1]))).data.answer, null);
-await put(reviewers[1], { ...submitted, runId: randomUUID(), elapsedMs: 1 });
+let wordRun = A.startWords(reviewed.data.assignment, randomUUID());
+wordRun = A.transition(wordRun, { type: 'START_WORD' }); wordRun = A.transition(wordRun, { type: 'HINT' }); wordRun = A.transition(wordRun, { type: 'TIME', elapsedMs: 1500 });
+for (let index = 0; index < wordRun.answers.length; index++) {
+  wordRun = A.transition(wordRun, { type: 'STROKE', stroke: [[10, 100, 0], [9900, 9800, 100]] });
+  wordRun = A.transition(wordRun, { type: index + 1 === wordRun.answers.length ? 'SUBMIT_WORD' : 'NEXT_CHARACTER' });
+}
+wordRun = A.transition(wordRun, { type: 'SEAL' });
+assert.equal((await put(reviewers[1], wordRun)).data.version, 3);
+assert.deepEqual((await call('/' + reviewedCode + '/reviews/' + reviewers[1].memberId, 'GET', undefined, teacher)).data.run, wordRun);
 assert.equal((await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher)).data.error.code, 'MARKING_PENDING');
 const own = await call('/' + reviewedCode + '/answers', 'GET', undefined, auth(reviewers[0]));
 assert.deepEqual(own.data.answer.run.answers, submitted.answers); assert(!Object.hasOwn(own.data.answer.run, 'elapsedMs'));
@@ -65,7 +73,8 @@ assert.equal((await call('/' + reviewedCode + '/board', 'GET', undefined, auth(r
 assert.equal((await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher)).status, 200);
 let reviewedBoard = (await call('/' + reviewedCode + '/board', 'GET', undefined, auth(reviewers[0]))).data;
 assert.deepEqual(reviewedBoard.rows.map(row => row.rank), [1, 1]);
-assert(reviewedBoard.rows.every(row => Object.keys(row).sort().join() === 'alias,rank,score'));
+assert(reviewedBoard.rows.every(row => Object.keys(row).sort().join() === 'alias,mode,rank,score'));
+assert.deepEqual(reviewedBoard.rows.map(row => row.mode).sort(), ['copy', 'listen']);
 marks[1].correct = false;
 assert.equal((await call('/' + reviewedCode + '/reviews/' + reviewers[0].memberId, 'PUT', { revision: 1, marks }, teacher)).status, 200);
 assert.equal((await call('/' + reviewedCode + '/reviews/' + reviewers[0].memberId, 'PUT', { revision: 1, marks }, teacher)).status, 409);

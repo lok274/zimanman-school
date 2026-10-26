@@ -38,6 +38,19 @@ test('reviewed late uploads and private reads cannot restore a switched member',
     await assert.rejects(pending, /身份/); assert.equal(e.client.view().member, null); assert.equal(e.client.view().receipt, null);
   }
 });
+
+test('v3 originals require a version-preserving receipt and reviewed boards validate actual mode', async () => {
+  const reviewedMember = { ...member, assignment: BishunAssessment.assignment(assignment.entries, 'listen') };
+  let receipt = { runId: 'new-word', official: true }, rows = [{ alias: member.alias, rank: 1, score: 1, mode: 'copy' }];
+  const e = setup(url => response(url.endsWith('/members') ? reviewedMember : url.endsWith('/board') ? { published: true, rows } : receipt));
+  await e.client.join(member.code, member.alias);
+  const run = { version: 3, runId: 'new-word' };
+  await assert.rejects(e.client.submitReviewed(run), /回應無效/); assert.equal(e.client.view().receipt, null);
+  receipt = { ...receipt, version: 3 }; await e.client.submitReviewed(run);
+  assert.equal((await e.client.reviewedBoard()).rows[0].mode, 'copy');
+  rows = [{ ...rows[0], mode: 'unknown' }]; await assert.rejects(e.client.reviewedBoard(), /排行榜回應無效/);
+  rows = [{ alias: member.alias, rank: 1, score: 1 }]; assert.equal((await e.client.reviewedBoard()).rows.length, 1, 'legacy board readers remain compatible');
+});
 async function settled(client) { for (let i = 0; i < 30 && client.view().busy; i++) await new Promise(resolve => setImmediate(resolve)); assert.equal(client.view().busy, false); }
 test('lost join responses retry the exact request ID and pre-generated capability', async () => {
   let fail = true;

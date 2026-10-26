@@ -88,7 +88,7 @@
       try {
         const data = await request('/' + saved.member.code + '/board', 'GET', undefined, saved.member.token);
         if (saved.member.assignment.version === 2) {
-          if (typeof data.published !== 'boolean' || !Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => typeof row.alias !== 'string' || !Number.isInteger(row.score) || row.score < 0 || !Number.isInteger(row.rank) || row.rank < 1)) throw new Error('排行榜回應無效。');
+          validateReviewedBoard(data);
           board = { ...data, reviewed: true, personalBest: data.rows.find(row => row.alias === saved.member.alias) || null };
           message = data.published ? '老師已公布班級榜。' : '等老師公布班級榜。'; notify(); return;
         }
@@ -99,6 +99,10 @@
       catch (error) { if (error.stale) return; message = '已交卷，班級榜暫未能更新。' + (error.message || '請重試。'); }
       notify();
     }
+    function validateReviewedBoard(data) {
+      if (typeof data.published !== 'boolean' || !Array.isArray(data.rows) || data.rows.length > 100 || data.rows.some(row => !row || typeof row.alias !== 'string' || !Number.isInteger(row.score) || row.score < 0 || !Number.isInteger(row.rank) || row.rank < 1 || row.mode !== undefined && !['copy', 'listen'].includes(row.mode))) throw new Error('排行榜回應無效。');
+      return data;
+    }
     async function reviewedRequest(action, method, value) {
       if (!accepted || saved.member?.assignment.version !== 2) throw new Error('請先確認參加身份。');
       const member = saved.member;
@@ -107,11 +111,11 @@
     }
     async function submitReviewed(run) {
       const receipt = await reviewedRequest('answers', 'PUT', run);
-      if (receipt.runId !== run.runId || receipt.official !== true) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
+      if (receipt.runId !== run.runId || receipt.official !== true || run.version === 3 && receipt.version !== 3) throw new Error('交卷回應無效，原稿仍然保留，請重試。');
       saved.receipt = receipt; persist(); notify(); return receipt;
     }
     return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed,
-      ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: () => reviewedRequest('board', 'GET') };
+      ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: async () => validateReviewedBoard(await reviewedRequest('board', 'GET')) };
   }
   const api = { create, storageKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -3,7 +3,7 @@
 <style>__ASSESSMENT_CSS__</style>
 <style>body{font:18px/1.7 system-ui,sans-serif;background:#f6f3e9;color:#243d32;margin:0}main{max-width:800px;padding:24px;margin:auto}button,a{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px}button{background:#214b3b;color:white;border:0;cursor:pointer}button:disabled{opacity:.5}a{color:#214b3b}section{background:#fffdf6;padding:20px;border:1px solid #d9dece;border-radius:12px;margin:20px 0}#code{font-size:42px;letter-spacing:5px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #d9dece}p{overflow-wrap:anywhere}[hidden]{display:none!important}:focus-visible{outline:3px solid #ba642d;outline-offset:4px}</style></head>
 <body><main><h1>寫字樂 · 班級測驗</h1>
-<section><h2>今次題目</h2><p id="assignment"></p><label for="mode">題型 </label><select id="mode"><option value="copy">看字寫</option><option value="listen">聽詞寫</option></select> <button id="create">建立班級</button> <button id="new-class" hidden>開新一班</button></section>
+<section><h2>今次題目</h2><p id="assignment"></p><label for="mode">題型 </label><select id="mode"><option value="copy">看字寫</option><option value="listen" hidden>看字寫</option></select> <button id="create">建立班級</button> <button id="new-class" hidden>開新一班</button></section>
 <p id="status" role="status"></p>
 <section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p><a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">學生頁面</a></p><button id="refresh">更新收卷及批改</button> <button id="publish">公布班級榜</button> <button id="delete-class">提早刪除此班</button><div id="members"></div><div id="board"></div><section id="review" hidden></section></section></main>
 <script>
@@ -103,7 +103,11 @@ function text(tag, value) { const el = document.createElement(tag); el.textConte
 function showBoard(data) {
   const section = document.createElement('div');
   section.append(text('h2', data.published ? '已公布班級榜' : '班級榜尚未公布'));
-  for (const row of data.rows) section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+  let mode;
+  for (const row of data.rows) {
+    if (row.mode && row.mode !== mode) { section.append(text('h3', row.mode === 'copy' ? '看字寫' : '聽詞寫')); mode = row.mode; }
+    section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+  }
   const submitted = data.members?.filter(member => member.runId) || [];
   const ready = submitted.length > 0 && submitted.every(member => Number.isInteger(member.score));
   if (!data.published && !ready) section.append(text('p', '請先完成已交原卷的批改。'));
