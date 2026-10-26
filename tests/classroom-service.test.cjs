@@ -176,12 +176,49 @@ test('review revisions, explicit publication and tied shape ranks never use timi
   await e.call(path + '/publication', 'POST', {}, teacherHeaders);
   let board = (await get()).data;
   assert.deepEqual(board.rows.map(row => row.rank), [1, 1]);
-  assert(board.rows.every(row => Object.keys(row).sort().join() === 'alias,rank,score'));
+  assert(board.rows.every(row => Object.keys(row).sort().join() === 'alias,mode,rank,score' && row.mode === 'listen'));
   marks[1].correct = true; await mark(e.member, 2, marks);
   board = (await get()).data;
   assert.equal(board.rows[0].alias, '小星'); assert.equal(board.rows[0].score, 2);
   assert.equal(board.rows[1].rank, 2);
   assert.deepEqual(JSON.parse(e.sqlite.prepare('SELECT ink_json FROM reviewed_submissions WHERE member_id = ?').get(e.member.data.memberId).ink_json), e.run);
+});
+
+function wordOriginal(assignment, id, elapsedMs) {
+  let run = A.startWords(assignment, id, 1);
+  run = A.transition(run, { type: 'START_WORD' }); run = A.transition(run, { type: 'HINT' }); run = A.transition(run, { type: 'TIME', elapsedMs });
+  for (let index = 0; index < run.answers.length; index++) {
+    run = A.transition(run, { type: 'STROKE', stroke: [[100, 200, 0], [9000, 8000, 30]] });
+    run = A.transition(run, { type: index + 1 === run.answers.length ? 'SUBMIT_WORD' : 'NEXT_CHARACTER' });
+  }
+  return A.transition(run, { type: 'SEAL' });
+}
+
+test('v3 word time, actual presentation mode and hint survive round trip while legacy listen and new copy scores rank separately', async t => {
+  const e = await reviewed(t), path = '/' + e.room.code; await e.put();
+  const second = await e.join(e.room.code, '小月'), third = await e.join(e.room.code, '小雨');
+  const run = wordOriginal(e.room.assignment, 'word-original', 7500), own = { authorization: 'Bearer ' + second.token };
+  assert.equal(run.assignment.mode, 'listen'); assert.equal(A.actualMode(run), 'copy');
+  const receipt = await e.put(run, own); assert.equal(receipt.status, 200); assert.deepEqual(receipt.data, { runId: run.runId, official: true, version: 3 });
+  assert.deepEqual((await e.put(run, own)).data, receipt.data);
+  const teacher = (await e.call(path + '/reviews/' + second.data.memberId, 'GET', undefined, teacherHeaders)).data;
+  assert.deepEqual(teacher.run, run); assert.equal(teacher.elapsedMs, 7500);
+  const pupil = (await e.call(path + '/answers', 'GET', undefined, own)).data.answer;
+  assert.deepEqual(pupil.run.wordProgress, run.wordProgress); assert.equal(pupil.run.answers[0].hintUsed, true); assert.equal(pupil.run.presentationMode, 'copy');
+  assert(!Object.hasOwn(pupil.run, 'elapsedMs')); assert(!Object.hasOwn(pupil.run, 'startedAt'));
+  const changed = structuredClone(run); changed.answers[0].hintUsed = false; assert.equal((await e.put(changed, own)).status, 409);
+  const invalid = structuredClone(run); invalid.presentationMode = 'listen'; assert.equal((await e.put(invalid, { authorization: 'Bearer ' + third.token })).status, 400);
+  await e.put(wordOriginal(e.room.assignment, 'third', 1), { authorization: 'Bearer ' + third.token });
+  for (const [member, score] of [[e.member, 2], [second, 1], [third, 1]]) {
+    const marks = A.unmarked(e.room.assignment); marks.forEach((mark, index) => { mark.correct = index < score; });
+    await e.call(path + '/reviews/' + member.data.memberId, 'PUT', { revision: 0, marks }, teacherHeaders);
+  }
+  await e.call(path + '/publication', 'POST', {}, teacherHeaders);
+  const board = (await e.call(path + '/board', 'GET', undefined, own)).data;
+  assert.deepEqual(board.rows.filter(row => row.mode === 'copy').map(row => row.rank), [1, 1]);
+  assert.deepEqual(board.rows.filter(row => row.mode === 'listen').map(row => row.rank), [1]);
+  assert(board.rows.every(row => Object.keys(row).sort().join() === 'alias,mode,rank,score'));
+  assert.deepEqual((await e.call(path + '/reviews', 'GET', undefined, teacherHeaders)).data.rows, board.rows);
 });
 test('reviewed payload validation and checked quotas leave no partial original', async t => {
   const e = await reviewed(t);

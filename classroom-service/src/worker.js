@@ -57,7 +57,9 @@ async function ownerFor(request, room) {
 async function reviewedBoard(db, room) {
   const published = !!await db.prepare('SELECT code FROM publications WHERE code = ?').bind(room.code).first();
   if (!published) return { published: false, rows: [], expiresAt: room.expires_at };
-  const { results } = await db.prepare('SELECT m.alias, s.score FROM members m JOIN reviewed_submissions s ON s.member_id = m.id WHERE m.code = ? AND s.score IS NOT NULL').bind(room.code).all();
+  const { results } = await db.prepare(`SELECT m.alias, s.score,
+    CASE WHEN json_extract(s.ink_json, '$.version') = 3 THEN json_extract(s.ink_json, '$.presentationMode') ELSE json_extract(s.ink_json, '$.assignment.mode') END AS mode
+    FROM members m JOIN reviewed_submissions s ON s.member_id = m.id WHERE m.code = ? AND s.score IS NOT NULL`).bind(room.code).all();
   return { published, rows: A.ranks(results), expiresAt: room.expires_at };
 }
 function original(row, includeTime = false) {
@@ -129,7 +131,7 @@ async function api(request, env, url) {
       if (!saved) { await roomFor(db, code); fail(507, 'INK_CAPACITY', '班級儲存已滿，原稿仍保留在裝置，請老師處理後重試。'); }
       if (saved.run_id !== run.runId) fail(409, 'FIRST_SUBMISSION', '第一份原卷已收妥，之後練習不會取代。');
       if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '原卷編號已有另一份筆跡。');
-      return { runId: saved.run_id, official: true };
+      return { runId: saved.run_id, official: true, ...(run.version === 3 ? { version: 3 } : {}) };
     }
   }
   if (assigned.version === 2 && action === 'reviews') {
