@@ -173,7 +173,11 @@ test('standalone service export builds with exact shared content and scorer copi
   try {
     fs.cpSync(root, fixture, { recursive: true, filter: file => !['node_modules', '.wrangler', 'dist', 'shared'].includes(path.basename(file)) });
     fs.mkdirSync(path.join(fixture, 'shared'));
-    for (const file of ['quiz-results.js', 'content.js', 'assessment.js', 'freehand.js', 'assessment-review.js', 'assessment.css']) fs.copyFileSync(path.join(__dirname, '../dist', file), path.join(fixture, 'shared', file));
+    for (const file of ['quiz-results.js', 'content.js', 'assessment.js', 'freehand.js', 'assessment-review.js', 'assessment.css', 'character-data.js']) fs.copyFileSync(path.join(__dirname, '../dist', file), path.join(fixture, 'shared', file));
+    fs.mkdirSync(path.join(fixture, 'shared/data'), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, '../dist/data/characters.js'), path.join(fixture, 'shared/data/characters.js'));
+    fs.mkdirSync(path.join(fixture, 'drizzle'), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, '../classroom-service/drizzle/0002_automatic_submissions.sql'), path.join(fixture, 'drizzle/0002_automatic_submissions.sql'));
     execFileSync(process.execPath, [path.join(fixture, 'build.mjs')]);
     assert.equal(fs.readFileSync(path.join(fixture, 'dist/server/index.js'), 'utf8'), fs.readFileSync(path.join(root, 'dist/server/index.js'), 'utf8'));
   } finally {
@@ -181,4 +185,13 @@ test('standalone service export builds with exact shared content and scorer copi
     assert(path.basename(fixture).startsWith('bishun-service-export-'));
     fs.rmSync(fixture, { recursive: true, force: true });
   }
+});
+
+test('owner sees automatic completion time and a readonly original action without a grading requirement',async()=>{
+  const reviewedRoom={...room,assignment:{...room.assignment,version:2,mode:'copy'}};
+  const e=boot({fetch:async url=>response(url.endsWith('/reviews')?{members:[{alias:'小星',memberId:'one',runId:null,automaticRunId:'locked',automaticElapsedMs:1200}],published:false,rows:[]}:reviewedRoom)});
+  await e.click('create');await e.click('refresh');
+  const texts=node=>[node.textContent,...node.children.flatMap(texts)].join(' '),members=texts(e.nodes.get('members'));
+  assert.match(members,/已完成 · 1.2 秒/);assert.match(members,/查看筆順小挑戰原卷/);assert(!members.includes('查看／批改原卷'));assert(!members.includes('待批改'));
+  assert.equal(e.nodes.get('publish').hidden,true);assert(!texts(e.nodes.get('board')).includes('請先完成'));assert.match(texts(e.nodes.get('board')),/1.2 秒/);
 });

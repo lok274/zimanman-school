@@ -22,3 +22,9 @@ export const reviewedSubmissions = sqliteTable('reviewed_submissions', {
 export const publications = sqliteTable('publications', {
   code: text('code').primaryKey().references(() => classes.code, { onDelete: 'cascade' }), publishedAt: integer('published_at').notNull(),
 });
+
+export const automaticSubmissions = sqliteTable('automatic_submissions', {
+  memberId: text('member_id').primaryKey().references(() => members.id, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull(), payloadHash: text('payload_hash').notNull(), inkJson: text('ink_json').notNull(),
+  inkBytes: integer('ink_bytes').notNull(), elapsedMs: integer('elapsed_ms').notNull(), submittedAt: integer('submitted_at').notNull(),
+});

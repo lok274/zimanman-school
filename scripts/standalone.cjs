@@ -4,7 +4,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const dist = path.join(__dirname, '..', 'dist');
-const scripts = ['vendor/hanzi-writer.min.js', 'data/characters.js', 'content.js', 'session.js', 'quiz-results.js', 'assessment.js', 'assessment-store.js', 'freehand.js', 'assessment-review.js', 'classroom.js', 'assessment-ui.js', 'writing.js', 'app.js'];
+const scripts = ['vendor/hanzi-writer.min.js', 'data/characters.js', 'content.js', 'session.js', 'quiz-results.js', 'assessment.js', 'assessment-store.js', 'freehand.js', 'classroom.js', 'assessment-ui.js', 'character-data.js', 'writing.js', 'app.js'];
 let html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
 html = html.replace('<body>', '<body data-standalone>');
 for (const file of ['styles.css', 'assessment.css']) {

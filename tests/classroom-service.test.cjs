@@ -312,3 +312,127 @@ test('maintenance is bounded, ignores caller cutoffs and never exposes an MCP se
   await e.call('/cleanup', 'POST', { cutoff: Number.MAX_SAFE_INTEGER });
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM classes').get().n, 1);
 });
+
+function automaticRun(assigned, runId = 'automatic', milliseconds = 1049) {
+  const A = globalThis.BishunAssessment, run = A.startLocked(assigned, runId, 1);
+  run.elapsedMs = milliseconds; run.wordProgress.forEach((word,index)=>{word.phase='submitted';word.elapsedMs=index?0:milliseconds;});
+  const counts = JSON.parse(fs.readFileSync(path.join(root,'src/target-counts.js'),'utf8').match(/export const counts = (.*);/)[1]);
+  run.answers.forEach((answer,index)=>{answer.status='submitted';answer.expectedStrokes=counts[A.positions(assigned)[index].character];answer.strokes=Array.from({length:answer.expectedStrokes},()=>[[1000,2000],[3000,4000]]);});
+  return A.transition(run,{type:'SEAL'});
+}
+async function automaticClass(e) {
+  await worker;
+  const A = globalThis.BishunAssessment;
+  const assigned = A.assignment([{text:'來去',selectedIndexes:[0,1]}],'listen');
+  const room = (await e.call('', 'POST', {requestId:randomUUID(),...assigned}, teacherHeaders)).data;
+  return {room,assigned};
+}
+
+test('automatic v4 submissions preserve first originals, validate trusted counts and expose only time metadata', async t => {
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'小星'),b=await e.join(room.code,'小月');
+  const call=(suffix,method='GET',body,token=a.token)=>e.call('/'+room.code+'/'+suffix,method,body,{authorization:'Bearer '+token});
+  assert.equal((await call('automatic-board')).status,403);assert.equal((await call('automatic-answers')).data.answer,null);
+  const run=automaticRun(assigned);const missing=structuredClone(run);missing.answers[0].strokes.pop();assert.equal((await call('automatic-answers','PUT',missing)).status,400);
+  const fake=structuredClone(run);fake.answers[0].expectedStrokes--;fake.answers[0].strokes.pop();assert.equal((await call('automatic-answers','PUT',fake)).status,400);
+  const accepted=await call('automatic-answers','PUT',{...run,score:999,rank:1});assert.equal(accepted.status,200);assert.equal(accepted.data.version,4);assert.equal(accepted.data.elapsedMs,1000);
+  assert.deepEqual((await call('automatic-answers','PUT',run)).data,accepted.data);
+  assert.equal((await call('automatic-answers','PUT',{...run,runId:'another'})).data.error.code,'FIRST_SUBMISSION');
+  const changed=structuredClone(run);changed.answers[0].strokes[0][0][0]++;assert.equal((await call('automatic-answers','PUT',changed)).data.error.code,'CONFLICT');
+  assert.deepEqual((await call('automatic-answers')).data.answer.run,run);
+  await call('automatic-answers','PUT',automaticRun(assigned,'b',1001),b.token);
+  const board=(await call('automatic-board')).data;assert.deepEqual(board.rows.map(row=>row.rank),[1,1]);assert(board.rows.every(row=>row.elapsedMs===1000));assert(!JSON.stringify(board).includes('"strokes":'));assert(!JSON.stringify(board).includes('score'));assert(!JSON.stringify(board).includes('runId'));
+  const raw=e.sqlite.prepare('SELECT elapsed_ms,ink_json FROM automatic_submissions WHERE member_id=?').get(a.data.memberId);assert.equal(raw.elapsed_ms,1000);assert.equal(JSON.parse(raw.ink_json).elapsedMs,1049);
+  assert.equal((await call('automatic-original/'+b.data.memberId)).status,401);
+  const owner=await e.call('/'+room.code+'/automatic-original/'+a.data.memberId,'GET',undefined,teacherHeaders);assert.equal(owner.status,200);assert.deepEqual(owner.data.run,run);
+  assert.equal((await e.call('/'+room.code+'/automatic-original/'+a.data.memberId,'PUT',{},teacherHeaders)).status,404);
+  const metadata=(await e.call('/'+room.code+'/reviews','GET',undefined,teacherHeaders)).data;assert.equal(metadata.members.find(row=>row.memberId===a.data.memberId).automaticRunId,run.runId);assert.equal(metadata.published,false);
+});
+
+test('new automatic cohort never publishes old scores and each member can retain both old and new originals', async t=>{
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'小星');const headers={authorization:'Bearer '+a.token},path='/'+room.code;
+  const A=globalThis.BishunAssessment,old=A.start(assigned,'old');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
+  assert.equal((await e.call(path+'/answers','PUT',old,headers)).status,200);
+  e.sqlite.prepare('UPDATE reviewed_submissions SET score=2 WHERE member_id=?').run(a.data.memberId);
+  const run=automaticRun(assigned);assert.equal((await e.call(path+'/automatic-answers','PUT',run,headers)).status,200);
+  assert.equal((await e.call(path+'/board','GET',undefined,headers)).data.published,false);
+  assert.equal((await e.call(path+'/automatic-board','GET',undefined,headers)).data.rows.length,1);
+  assert.equal((await e.call(path+'/answers','GET',undefined,headers)).data.answer.run.runId,'old');
+  assert.equal((await e.call(path+'/answers','PUT',run,headers)).status,400);assert.equal((await e.call(path+'/automatic-answers','PUT',old,headers)).status,400);
+  await e.call(path,'DELETE',undefined,teacherHeaders);assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,0);assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM reviewed_submissions').get().n,0);
+});
+
+test('old and automatic uploads share atomic class and global ink quotas, and immutable retries work at capacity', async t=>{
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'small'),b=await e.join(room.code,'large');const path='/'+room.code,headers={authorization:'Bearer '+a.token};
+  const run=automaticRun(assigned);await e.call(path+'/automatic-answers','PUT',run,headers);
+  e.sqlite.prepare('UPDATE automatic_submissions SET ink_bytes=67108864 WHERE member_id=?').run(a.data.memberId);
+  const A=globalThis.BishunAssessment,old=A.start(assigned,'old');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
+  assert.equal((await e.call(path+'/answers','PUT',old,{authorization:'Bearer '+b.token})).status,507);
+  assert.equal((await e.call(path+'/automatic-answers','PUT',run,headers)).status,200);
+  assert.equal((await e.call(path+'/automatic-answers','PUT',{...run,runId:'b'},{authorization:'Bearer '+b.token})).status,507);
+  e.sqlite.prepare('UPDATE automatic_submissions SET ink_bytes=1').run();await e.call(path+'/answers','PUT',old,{authorization:'Bearer '+b.token});
+  e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes=67108864').run();const c=await e.join(room.code,'new');assert.equal((await e.call(path+'/automatic-answers','PUT',{...run,runId:'c'},{authorization:'Bearer '+c.token})).status,507);
+  e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes=268435456').run();const other=await automaticClass(e),otherMember=await e.join(other.room.code,'global');assert.equal((await e.call('/'+other.room.code+'/automatic-answers','PUT',run,{authorization:'Bearer '+otherMember.token})).status,507);
+});
+
+test('API initializes missing additive table once per binding and retries a failed initialization', async t=>{
+  const e=setup(t);e.sqlite.exec('DROP TABLE automatic_submissions');let attempts=0,failOnce=true;const prepare=e.db.prepare;
+  e.db.prepare=sql=>{if(sql.includes('CREATE TABLE IF NOT EXISTS `automatic_submissions`')){attempts++;if(failOnce){failOnce=false;return{async run(){throw new Error('DDL interrupted');}};}}return prepare(sql);};
+  assert.equal((await e.create('fails')).status,503);assert.equal((await e.create('works')).status,200);assert.equal((await e.create('again')).status,200);assert.equal(attempts,2);
+  assert.equal(e.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name='automatic_submissions'").get().n,1);
+});
+
+test('first old answers PUT initializes additive schema before shared quota SQL', async t=>{
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'old-first');
+  e.sqlite.exec('DROP TABLE automatic_submissions');let creates=0;
+  const db={prepare(sql){if(sql.startsWith('CREATE TABLE'))creates++;return e.db.prepare(sql);}};
+  const run=globalThis.BishunAssessment.start(assigned,'legacy-first');run.phase='sealed';run.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
+  const response=await(await worker).fetch(new Request('https://class.test/api/v1/classes/'+room.code+'/answers',{method:'PUT',headers:{'content-type':'application/json',authorization:'Bearer '+a.token},body:JSON.stringify(run)}),{DB:db});
+  assert.equal(response.status,200);assert.equal(creates,1);assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM reviewed_submissions').get().n,1);
+});
+
+test('simultaneous old and automatic writes cannot cross their combined class byte limit', async t=>{
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'seed'),b=await e.join(room.code,'old'),c=await e.join(room.code,'automatic');const path='/'+room.code,run=automaticRun(assigned);
+  await e.call(path+'/automatic-answers','PUT',run,{authorization:'Bearer '+a.token});
+  const old=globalThis.BishunAssessment.start(assigned,'legacy-race');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
+  const oldCanonical=globalThis.BishunAssessment.validateSubmission(assigned,old),newRun={...run,runId:'race'};
+  const remaining=Math.max(Buffer.byteLength(JSON.stringify(oldCanonical)),Buffer.byteLength(JSON.stringify(newRun)));
+  e.sqlite.prepare('UPDATE automatic_submissions SET ink_bytes=? WHERE member_id=?').run(67108864-remaining,a.data.memberId);
+  const results=await Promise.all([e.call(path+'/answers','PUT',old,{authorization:'Bearer '+b.token}),e.call(path+'/automatic-answers','PUT',newRun,{authorization:'Bearer '+c.token})]);assert.deepEqual(results.map(result=>result.status).sort(),[200,507]);
+});
+
+test('automatic custom character fetch is bounded and unavailable data never becomes wrong ink', async t=>{
+  const e=setup(t);await worker;const A=globalThis.BishunAssessment,assigned=A.assignment([{text:'火',selectedIndexes:[0]}],'copy');const room=(await e.call('','POST',{requestId:'custom',...assigned},teacherHeaders)).data,a=await e.join(room.code,'custom');
+  let run=A.startLocked(assigned,'custom');run.answers[0]={...run.answers[0],expectedStrokes:2,status:'submitted',strokes:[[[1,2],[3,4]],[[5,6],[7,8]]]};run.wordProgress[0].phase='submitted';run=A.transition(run,{type:'SEAL'});
+  const fetch=globalThis.fetch;t.after(()=>{globalThis.fetch=fetch;});let options;
+  globalThis.fetch=async(_url,value)=>{options=value;return new Response('{}',{headers:{'content-length':'2000001'}});};
+  const failed=await e.call('/'+room.code+'/automatic-answers','PUT',run,{authorization:'Bearer '+a.token});assert.equal(failed.status,503);assert.equal(failed.data.error.code,'DATA_UNAVAILABLE');assert(options.signal instanceof AbortSignal);assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,0);
+  const glyph={strokes:['M1 1L2 2','M2 2L3 3'],medians:[[[1,1],[2,2]],[[2,2],[3,3]]]};globalThis.fetch=async()=>Response.json(glyph);
+  assert.equal((await e.call('/'+room.code+'/automatic-answers','PUT',run,{authorization:'Bearer '+a.token})).status,200);
+});
+
+test('cold automatic retries reconcile stored originals without character data', async t=>{
+  const e=setup(t);await worker;const A=globalThis.BishunAssessment,assigned=A.assignment([{text:'火',selectedIndexes:[0]}],'copy');
+  const room=(await e.call('','POST',{requestId:'cold-retry',...assigned},teacherHeaders)).data,a=await e.join(room.code,'first'),b=await e.join(room.code,'new');
+  let run=A.startLocked(assigned,'cold-retry');run.answers[0]={...run.answers[0],expectedStrokes:2,status:'submitted',strokes:[[[1,2],[3,4]],[[5,6],[7,8]]]};run.wordProgress[0].phase='submitted';run=A.transition(run,{type:'SEAL'});
+  const loadWorker=async()=> (await import(pathToFileURL(path.join(root,'dist/server/index.js')).href+'?'+randomUUID())).default;
+  const call=async(instance,data,token=a.token)=>{const response=await instance.fetch(new Request('https://class.test/api/v1/classes/'+room.code+'/automatic-answers',{method:'PUT',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(data)}),{DB:e.db});return {status:response.status,data:await response.json()};};
+  const originalFetch=globalThis.fetch;t.after(()=>{globalThis.fetch=originalFetch;});
+  let loads=0;globalThis.fetch=async()=>{loads++;return Response.json({strokes:['M1 1L2 2','M2 2L3 3'],medians:[[[1,1],[2,2]],[[2,2],[3,3]]]});};
+  const first=await call(await loadWorker(),run);assert.equal(first.status,200);assert.equal(loads,1);
+  let fetches=0;globalThis.fetch=async()=>{fetches++;throw new Error('CDN unavailable');};const cold=await loadWorker();
+  assert.deepEqual(await call(cold,run),first);
+  assert.equal((await call(cold,{...run,runId:'different'})).data.error.code,'FIRST_SUBMISSION');
+  const changed=structuredClone(run);changed.answers[0].strokes[0][0][0]++;assert.equal((await call(cold,changed)).data.error.code,'CONFLICT');
+  const malformed=structuredClone(run);malformed.answers[0].strokes[0][0][0]=-1;assert.equal((await call(cold,malformed)).status,400);
+  assert.equal(fetches,0);
+  const unavailable=await call(cold,{...run,runId:'unstored'},b.token);assert.equal(unavailable.status,503);assert.equal(unavailable.data.error.code,'DATA_UNAVAILABLE');
+  assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,1);
+});
+
+test('automatic expiry denies private reads and cleanup cascades after twenty-four hours', async t=>{
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'expiry'),headers={authorization:'Bearer '+a.token},path='/'+room.code;
+  await e.call(path+'/automatic-answers','PUT',automaticRun(assigned),headers);e.sqlite.prepare('UPDATE classes SET expires_at=? WHERE code=?').run(Date.now()-1,room.code);
+  for(const route of ['automatic-answers','automatic-board'])assert.equal((await e.call(path+'/'+route,'GET',undefined,headers)).status,410);
+  assert.equal((await e.call(path+'/automatic-original/'+a.data.memberId,'GET',undefined,teacherHeaders)).status,410);
+  await e.call('/cleanup','POST',{});assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,0);
+});

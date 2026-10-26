@@ -113,3 +113,11 @@ test('invalidation inside an asynchronous IndexedDB transaction prevents insert 
   await assert.rejects(checkpoint, /closed context/); assert.deepEqual(await store.get(saved.key), saved);
   await assert.rejects(store.put(draft('expired', 1)), /到期/); assert.equal(db.records.has('expired'), false);
 });
+
+test('official pointer adoption is conditional, guarded and leaves both sealed originals unchanged',async()=>{
+  const db=indexedDatabase(),store=create(db),scope='class:v4:one';const local=await store.initialize(scope,draft('local-alternative'));
+  const official=await store.put({...draft('official'),run:{phase:'sealed'}});await store.replacePointer(scope,local.key,official.key,official.expiresAt);
+  assert.equal((await store.get(scope)).runKey,official.key);assert.deepEqual(await store.get(local.key),local);
+  await store.replacePointer(scope,local.key,'other',official.expiresAt);assert.equal((await store.get(scope)).runKey,official.key);
+  await assert.rejects(store.replacePointer(scope,official.key,'other',official.expiresAt,()=>{throw new Error('stale');}),/stale/);assert.equal((await store.get(scope)).runKey,official.key);
+});

@@ -56,15 +56,27 @@
       const records = await transaction('readonly', store => store.getAll());
       return records.filter(record => record.key.startsWith('local:') && record.kind === 'official' && record.run?.phase === 'sealed' && record.expiresAt > Date.now()).sort((a, b) => b.run.startedAt - a.run.startedAt);
     }
-    async function activeLocal() {
+    async function activeLocal(version) {
       const records = await transaction('readonly', store => store.getAll()), now = Date.now();
       const pointers = new Set(records.filter(record => record.key.startsWith('local:') && record.runKey && record.expiresAt > now).map(record => record.runKey));
-      return records.filter(record => pointers.has(record.key) && record.expiresAt > now).sort((a, b) => b.run.startedAt - a.run.startedAt)[0] || null;
+      return records.filter(record => pointers.has(record.key) && record.expiresAt > now && (version === undefined || record.run?.version === version)).sort((a, b) => b.run.startedAt - a.run.startedAt)[0] || null;
     }
     async function release(scope, runKey) {
       await transaction('readwrite', store => {
         const request = store.get(scope);
         request.onsuccess = () => { if (request.result?.runKey === runKey) store.delete(scope); };
+      });
+    }
+    async function replacePointer(scope, expectedKey, runKey, expiresAt, guard = () => {}) {
+      const db = await database(); guard();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('records', 'readwrite'), store = tx.objectStore('records'), request = store.get(scope); let failure;
+        request.onsuccess = () => {
+          try { guard(); if (request.result?.runKey === expectedKey) store.put({ key: scope, runKey, expiresAt }); }
+          catch (problem) { failure = problem; tx.abort(); }
+        };
+        tx.oncomplete = resolve;
+        tx.onabort = tx.onerror = () => reject(failure || tx.error || new Error('原卷指標未能保存。'));
       });
     }
     async function initialize(scope, candidate, guard = () => {}) {
@@ -91,7 +103,7 @@
         cursor.onsuccess = () => { const item = cursor.result; if (!item) return; if (item.value.expiresAt <= now) item.delete(); item.continue(); };
       });
     }
-    return { get, put, putMany, initialize, remove, localOriginals, activeLocal, release, purge };
+    return { get, put, putMany, initialize, remove, localOriginals, activeLocal, release, replacePointer, purge };
   }
   const api = { create };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

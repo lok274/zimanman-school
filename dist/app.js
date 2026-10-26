@@ -30,8 +30,7 @@
   const Q = globalThis.BishunQuizResults;
   const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
   const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
-  const assessment = globalThis.BishunAssessmentUI?.create({ classroom, onClose: goHome,
-    onPractice: assigned => startSession(S.createSession({ id: id(), entries: assigned.entries, startedAt: Date.now(), mode: 'practice' })) });
+  const assessment = globalThis.BishunAssessmentUI?.create({ classroom, onClose: goHome });
   function assessmentMode() { return $('assessment-mode')?.value || 'copy'; }
   function refreshLocalResume() { if (assessment) assessment.hasLocal().then(found => { $('resume-assessment').hidden = !found; }).catch(() => {}); }
   if (assessment) {

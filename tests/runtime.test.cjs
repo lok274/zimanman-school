@@ -654,7 +654,7 @@ test('pinned vendor keeps one pointer-end listener pair across repeated mounts a
   vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context);
   const settings = [], Vendor = e.context.HanziWriter;
   e.context.HanziWriter = new Proxy(Vendor, { construct(Target, args) { settings.push(args[1]); return Reflect.construct(Target, args); } });
-  vm.runInContext(source('writing.js'), e.context);
+  vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   const element = e.$('writer'), events = [], W = e.context.BishunWriting;
   const data = { strokes: ['M 100 500 L 900 500 Z'], medians: [[[100, 500], [900, 500]]] };
   let handle;
@@ -680,7 +680,7 @@ test('pinned vendor keeps one pointer-end listener pair across repeated mounts a
 test('independent writing rejects a centred half-stroke instead of completing the character', async () => {
   const e = environment();
   vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context);
-  vm.runInContext(source('writing.js'), e.context);
+  vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   const events = [], data = { strokes: ['M 100 500 L 900 500 Z'], medians: [[[100, 500], [900, 500]]] };
   const identity = { sessionId: 'short', occurrenceId: 'w0:0', attemptId: 'one' };
   e.context.BishunWriting.resetPractice(identity.sessionId);
@@ -890,7 +890,7 @@ test('mount failures are recoverable and stale same-token callbacks cannot ready
   e.context.localStorage.setItem = () => { throw new Error('quota'); }; e.send('STROKE_MISSED', { strokeIndex: 0 }); assert.equal(e.$('storage-notice').hidden, false); assert.equal('hidden' in e.$('quiz-mark').attributes, true);
 });
 test('pinned vendor retains original accepted ink through remount and resize while keeping canonical quiz strokes transparent', async () => {
-  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   const W = e.context.BishunWriting, element = e.$('writer'), events = [];
   const data = { strokes: ['M100 500L900 500Z', 'M100 300L900 300Z'], medians: [[[100, 500], [900, 500]], [[100, 300], [900, 300]]], radStrokes: [1] };
   let ready = 0, size = 360; element.getBoundingClientRect = () => ({ width: size, height: size, left: 0, top: 0 });
@@ -953,7 +953,7 @@ test('same-token loading restart ignores old failure and only accepts the new re
   requests[1].resolve({ strokes: ['M1 1L2 2'] }); await waitFor(() => e.snapshot().active.phase === 'quiz'); assert.equal(e.snapshot().attempts.length, 1);
 });
 test('pinned vendor mount queue recovers after setup rejection and only latest mount announces readiness', async () => {
-  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   const prototype = e.context.HanziWriter.prototype, original = prototype.setCharacter;
   let first = true;
   prototype.setCharacter = function(character) { if (first) { first = false; return Promise.reject(new Error('setup failed')); } return original.call(this, character); };
@@ -971,7 +971,7 @@ test('practice recall keeps its recorded outline assistance after teacher and ba
   e.document.hidden = true; e.document.emit('visibilitychange'); e.document.hidden = false; e.document.emit('visibilitychange'); assert(e.mounts.at(-1).help.some(item => item.kind === 'outline')); assert.equal(e.snapshot().attempts.at(-1).help.length, count);
 });
 test('writer rejects malformed accepted ink and missing remount ink as recoverable tool failures', async () => {
-  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   const prototype = e.context.HanziWriter.prototype, originalQuiz = prototype.quiz; let callbacks;
   prototype.quiz = function(options) { callbacks = options; return originalQuiz.call(this, options); };
   const W = e.context.BishunWriting, data = { strokes: ['M100 500L900 500Z'], medians: [[[100, 500], [900, 500]]] }, errors = [], events = [];
@@ -1115,7 +1115,7 @@ test('data and mount failures cancel autoplay and retry needs a manual play', as
 });
 
 test('writer full completion distinguishes cancel, restart, pause, suspension and disposal', async () => {
-  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   const runs = [], states = [], complete = [], prototype = e.context.HanziWriter.prototype;
   let resumes = 0, pauses = 0;
   prototype.animateCharacter = function() { return new Promise(resolve => runs.push(resolve)); };
@@ -1405,7 +1405,7 @@ test('guided direction follows the ordered short median prefix and treats dots a
   for (const median of [[[100, 500], [100, 500]], [[100, 500], [110, 490]], [[100, 500], [110, 500], [110, 200]]]) {
     assert(W.guide('來', sample(median), 0).instruction.includes('跟住提示慢慢寫'));
   }
-  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   let ready = false;
   const handle = e.context.BishunWriting.mount(e.$('writer'), '來', sample([[100, 500], [100, 500], [140, 500], [300, 500], [300, 0], [0, 0]]), { phase: 'guided', token: 'prefix', missesOnCurrentStroke: 1, onReady: () => { ready = true; }, onEvent() {} });
   await waitFor(() => ready);
@@ -1414,7 +1414,7 @@ test('guided direction follows the ordered short median prefix and treats dots a
   assert(!arrow.attributes.d.includes('300')); assert.equal(arrow.style.display, ''); handle.dispose();
 });
 test('real guided components change in one live vendor mount while retaining accepted strokes and restoring current help', async () => {
-  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('writing.js'), e.context);
+  const e = environment(); vm.runInContext(source('vendor/hanzi-writer.min.js'), e.context); vm.runInContext(source('character-data.js'), e.context); vm.runInContext(source('writing.js'), e.context);
   const data = lessonGlyph('粗'), events = [], calls = [], prototype = e.context.HanziWriter.prototype, originalQuiz = prototype.quiz, originalHighlight = prototype.highlightStroke;
   let callbacks, ready = 0;
   prototype.quiz = function(options) { calls.push(options.quizStartStrokeNum); callbacks = options; return originalQuiz.call(this, options); };
@@ -1450,7 +1450,7 @@ test('real guided components change in one live vendor mount while retaining acc
 async function componentApp(character) {
   const e = environment(source('index.html')); e.context.BishunSession = S;
   e.context.BishunContent = { words: [character], cue: () => ['例子', 'M1 1L2 2'] };
-  for (const file of ['data/characters.js', 'vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  for (const file of ['data/characters.js', 'vendor/hanzi-writer.min.js', 'character-data.js', 'writing.js']) vm.runInContext(source(file), e.context);
   e.mounts = []; const original = e.context.BishunWriting.mount;
   e.context.BishunWriting.mount = (...args) => { e.mounts.push(args[3]); return original(...args); };
   vm.runInContext(source('app.js'), e.context); startLocal(e); e.$('word-cards').childNodes[0].click();
@@ -1498,7 +1498,7 @@ test('guided completion waits for the current ready mount and hides the circle w
 });
 
 test('v4 original ink uses accepted vendor geometry and survives guidance token changes and retries', async () => {
-  const e = environment(); for (const file of ['vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  const e = environment(); for (const file of ['vendor/hanzi-writer.min.js', 'character-data.js', 'writing.js']) vm.runInContext(source(file), e.context);
   const W = e.context.BishunWriting, data = lessonGlyph('來'), identity = { sessionId: 'original', occurrenceId: 'w0:0', attemptId: 'one' }, events = [];
   W.resetPractice(identity.sessionId);
   let ready = 0, callbacks; const original = e.context.HanziWriter.prototype.quiz;
@@ -1520,7 +1520,7 @@ test('v4 original ink uses accepted vendor geometry and survives guidance token 
 });
 
 test('v4 ink bounds, prefix mismatch and session disposal fail without invented originals', async () => {
-  const e = environment(); for (const file of ['vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  const e = environment(); for (const file of ['vendor/hanzi-writer.min.js', 'character-data.js', 'writing.js']) vm.runInContext(source(file), e.context);
   const W = e.context.BishunWriting, data = { strokes: ['M100 500L900 500Z'], medians: [[[100,500],[900,500]]] };
   let callbacks, ready = 0; const errors = [], events = [];
   e.context.HanziWriter.prototype.quiz = function(options) { callbacks = options; };
@@ -1547,7 +1547,7 @@ async function purposeApp(text = '來', indexes = Array.from(text, (_, index) =>
     if (historical) { state.active = historical.active || { phase: 'choose-purpose', wordId: 'w0', token: 'historical-choice' }; if (historical.choice) state.wordChoices.w0 = historical.choice; }
     assert(currentSession.validateSnapshot(state)); return state;
   } };
-  for (const file of ['content.js', 'data/characters.js', 'vendor/hanzi-writer.min.js', 'writing.js']) vm.runInContext(source(file), e.context);
+  for (const file of ['content.js', 'data/characters.js', 'vendor/hanzi-writer.min.js', 'character-data.js', 'writing.js']) vm.runInContext(source(file), e.context);
   const originalMount = e.context.BishunWriting.mount, originalQuiz = e.context.HanziWriter.prototype.quiz;
   e.context.BishunWriting.mount = (...args) => { e.mounts.push(args[3]); const handle = originalMount(...args); e.handles.push(handle); return handle; };
   e.context.HanziWriter.prototype.quiz = function(options) { e.vendorCallbacks.push(options); return originalQuiz.call(this, options); };
@@ -1803,4 +1803,50 @@ test('simplified practice removes obsolete controls and keeps an accessible icon
   assert.notEqual(e.$('speak').getAttribute('aria-label'), unavailableName); e.$('speak').click(); assert.equal(e.voices.spoken.at(-1).text, '粗。寫第1個字。');
   e.document.querySelector('.brand').click(); assert.equal(e.$('start-quiz').textContent, '小挑戰'); assert(e.$('class-open').textContent.includes('小挑戰'));
   assert(e.$('teacher-class').textContent.includes('測驗')); assert(e.$('teacher-dialog').textContent.includes('測驗題型'));
+});
+
+test('assessment uses the real pinned vendor for next-stroke locking and exact normalized cold hydration', async () => {
+  const e = environment(); e.context.structuredClone = structuredClone; e.context.TextEncoder = TextEncoder;
+  for (const file of ['quiz-results.js','assessment.js','character-data.js','vendor/hanzi-writer.min.js','writing.js']) vm.runInContext(source(file),e.context);
+  const A=e.context.BishunAssessment,W=e.context.BishunWriting,element=e.$('writer'),data=lessonGlyph('來');
+  let run=A.startLocked(A.assignment([{text:'來',selectedIndexes:[0]}],'copy'),'real-vendor'),ready=0,misses=0,complete=0,fail=null,handle;
+  run=A.transition(run,{type:'DATA_READY',count:data.strokes.length});run=A.transition(run,{type:'START_WORD'});
+  function mount() { handle=W.mount(element,'來',data,{phase:'assessment',currentStroke:run.answers[0].strokes.length,acceptedInk:run.answers[0].strokes,locked:A.completeAnswer(run.answers[0]),onReady(){ready++;},onError(error){fail=error;},onEvent(event){if(event.type==='STROKE_MISSED'){misses++;return true;}try{run=A.transition(run,event);if(event.type==='WRITING_COMPLETE')complete++;return true;}catch(error){fail=error;return false;}}}); }
+  function draw(points) {
+    const svg=element.childNodes.find(node=>node.nodeName==='svg'),t=e.context.HanziWriter.getScalingTransform(360,360,36),point=p=>({clientX:t.x+p[0]*t.scale,clientY:360-t.y-p[1]*t.scale});
+    svg.emit('mousedown',point(points[0]));points.slice(1).forEach(p=>svg.emit('mousemove',point(p)));e.document.emit('mouseup');
+  }
+  const paths=()=>walk(element).filter(node=>node.attributes['vector-effect']==='non-scaling-stroke').map(node=>node.attributes.d);
+  mount();await waitFor(()=>ready===1||fail);assert.equal(fail,null);
+  draw([[100,100],[800,100]]);assert.equal(run.answers[0].strokes.length,0);assert.equal(misses,1);
+  draw(data.medians[0]);await waitFor(()=>run.answers[0].strokes.length===1||fail);assert.equal(fail,null);const prefix=paths()[0],original=structuredClone(run.answers[0].strokes);
+  assert(original[0].every(point=>point.length===2));assert.equal(paths().length,1);
+  handle.dispose();mount();await waitFor(()=>ready===2||fail);assert.equal(paths()[0],prefix);assert.deepEqual(JSON.parse(JSON.stringify(run.answers[0].strokes)),original);
+  assert.equal(e.document.listeners.mouseup.length,1);assert.equal(e.document.listeners.touchend.length,1);
+  for(let index=1;index<data.strokes.length;index++){draw(data.medians[index]);await waitFor(()=>run.answers[0].strokes.length===index+1||fail);assert.equal(fail,null);}
+  assert.equal(complete,1);assert.equal(paths().length,data.strokes.length);
+  const full=structuredClone(run.answers[0].strokes);run=A.transition(run,{type:'UNDO'});handle.dispose();mount();await waitFor(()=>ready===3||fail);
+  assert.deepEqual(JSON.parse(JSON.stringify(run.answers[0].strokes)),full.slice(0,-1));assert.equal(paths().length,data.strokes.length-1);assert.equal(paths()[0],prefix);
+  draw(data.medians.at(-1));await waitFor(()=>complete===2||fail);assert.equal(fail,null);
+  run=A.transition(run,{type:'SUBMIT_CHARACTER'});assert.equal(run.answers[0].status,'submitted');handle.dispose();
+});
+
+test('assessment rejected acceptance suspends the real engine before semantic progress and retains prior ink', async () => {
+  const e=environment();for(const file of ['character-data.js','vendor/hanzi-writer.min.js','writing.js'])vm.runInContext(source(file),e.context);
+  const data=lessonGlyph('來'),element=e.$('writer'),accepted=[data.medians[0].map(p=>[Math.round(1000+p[0]*7.8125),Math.round(8031.25-p[1]*7.8125)])];let ready=false,events=0;
+  const handle=e.context.BishunWriting.mount(element,'來',data,{phase:'assessment',currentStroke:1,acceptedInk:accepted,onReady(){ready=true;},onEvent(event){events++;assert.equal(event.type,'STROKE_ACCEPTED');return false;}});await waitFor(()=>ready);
+  const svg=element.childNodes.find(node=>node.nodeName==='svg'),t=e.context.HanziWriter.getScalingTransform(360,360,36),point=p=>({clientX:t.x+p[0]*t.scale,clientY:360-t.y-p[1]*t.scale});
+  svg.emit('mousedown',point(data.medians[1][0]));data.medians[1].slice(1).forEach(p=>svg.emit('mousemove',point(p)));e.document.emit('mouseup');
+  assert.equal(events,1);assert.equal(walk(element).filter(node=>node.attributes['vector-effect']==='non-scaling-stroke').length,1);assert.equal(element.style.visibility,'');handle.dispose();
+});
+
+test('assessment Hint animates only the next stroke over a permanent pale target and keeps original ink', async () => {
+  const e=environment();for(const file of ['character-data.js','vendor/hanzi-writer.min.js','writing.js'])vm.runInContext(source(file),e.context);
+  const data=lessonGlyph('來'),element=e.$('writer'),accepted=[data.medians[0].map(p=>[Math.round(1000+p[0]*7.8125),Math.round(8031.25-p[1]*7.8125)])],highlight=e.context.HanziWriter.prototype.highlightStroke,indices=[];let ready=false;
+  e.context.HanziWriter.prototype.highlightStroke=function(index){indices.push(index);return highlight.call(this,index);};
+  const handle=e.context.BishunWriting.mount(element,'來',data,{phase:'assessment',currentStroke:1,acceptedInk:accepted,onReady(){ready=true;},onEvent(){assert.fail('Hint cannot accept or complete ink');}});await waitFor(()=>ready);
+  const ink=()=>walk(element).filter(node=>node.attributes['vector-effect']==='non-scaling-stroke').map(node=>node.attributes.d),before=ink();
+  const pale=walk(element).filter(node=>node.nodeName==='path'&&node.attributes.stroke==='rgba(174,185,176,1)');assert.equal(pale.length,data.strokes.length);
+  const animation=handle.hint();await new Promise(resolve=>setTimeout(resolve,30));assert(pale.every(node=>Number(node.style.opacity)>0));assert.deepEqual(ink(),before);assert.deepEqual(indices,[1]);
+  await animation;assert(pale.every(node=>Number(node.style.opacity)>0));assert.deepEqual(ink(),before);handle.dispose();
 });
