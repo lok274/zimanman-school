@@ -143,7 +143,8 @@
       const index = record.run.cursor, position = A.positions(record.run.assignment)[index], answer = record.run.answers[index];
       shell(position.word + ' · 第 ' + (position.index + 1) + ' 字');
       const area = node('div', '', 'assessment-writing'), paper = node('div', '', 'assessment-paper'), controls = node('div', '', 'assessment-controls');
-      paper.append(target); area.append(paper, controls); panel.append(area);
+      const grid = node('div', '', 'grid-lines'); grid.setAttribute('aria-hidden', 'true');
+      paper.append(grid, target); area.append(paper, controls); panel.append(area);
       const timer = node('output', timerText(), 'assessment-timer'); timer.setAttribute('aria-label', '詞語用時'); controls.append(timer); startTimer(timer);
       controls.append(button('聽題目', () => speak(position)));
       if (answer.status === 'submitted') {

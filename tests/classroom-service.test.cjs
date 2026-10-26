@@ -410,6 +410,25 @@ test('automatic custom character fetch is bounded and unavailable data never bec
   assert.equal((await e.call('/'+room.code+'/automatic-answers','PUT',run,{authorization:'Bearer '+a.token})).status,200);
 });
 
+test('cold automatic retries reconcile stored originals without character data', async t=>{
+  const e=setup(t);await worker;const A=globalThis.BishunAssessment,assigned=A.assignment([{text:'火',selectedIndexes:[0]}],'copy');
+  const room=(await e.call('','POST',{requestId:'cold-retry',...assigned},teacherHeaders)).data,a=await e.join(room.code,'first'),b=await e.join(room.code,'new');
+  let run=A.startLocked(assigned,'cold-retry');run.answers[0]={...run.answers[0],expectedStrokes:2,status:'submitted',strokes:[[[1,2],[3,4]],[[5,6],[7,8]]]};run.wordProgress[0].phase='submitted';run=A.transition(run,{type:'SEAL'});
+  const loadWorker=async()=> (await import(pathToFileURL(path.join(root,'dist/server/index.js')).href+'?'+randomUUID())).default;
+  const call=async(instance,data,token=a.token)=>{const response=await instance.fetch(new Request('https://class.test/api/v1/classes/'+room.code+'/automatic-answers',{method:'PUT',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(data)}),{DB:e.db});return {status:response.status,data:await response.json()};};
+  const originalFetch=globalThis.fetch;t.after(()=>{globalThis.fetch=originalFetch;});
+  let loads=0;globalThis.fetch=async()=>{loads++;return Response.json({strokes:['M1 1L2 2','M2 2L3 3'],medians:[[[1,1],[2,2]],[[2,2],[3,3]]]});};
+  const first=await call(await loadWorker(),run);assert.equal(first.status,200);assert.equal(loads,1);
+  let fetches=0;globalThis.fetch=async()=>{fetches++;throw new Error('CDN unavailable');};const cold=await loadWorker();
+  assert.deepEqual(await call(cold,run),first);
+  assert.equal((await call(cold,{...run,runId:'different'})).data.error.code,'FIRST_SUBMISSION');
+  const changed=structuredClone(run);changed.answers[0].strokes[0][0][0]++;assert.equal((await call(cold,changed)).data.error.code,'CONFLICT');
+  const malformed=structuredClone(run);malformed.answers[0].strokes[0][0][0]=-1;assert.equal((await call(cold,malformed)).status,400);
+  assert.equal(fetches,0);
+  const unavailable=await call(cold,{...run,runId:'unstored'},b.token);assert.equal(unavailable.status,503);assert.equal(unavailable.data.error.code,'DATA_UNAVAILABLE');
+  assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,1);
+});
+
 test('automatic expiry denies private reads and cleanup cascades after twenty-four hours', async t=>{
   const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'expiry'),headers={authorization:'Bearer '+a.token},path='/'+room.code;
   await e.call(path+'/automatic-answers','PUT',automaticRun(assigned),headers);e.sqlite.prepare('UPDATE classes SET expires_at=? WHERE code=?').run(Date.now()-1,room.code);

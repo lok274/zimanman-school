@@ -82,6 +82,7 @@ const member = () => ({ code: 'CLASSAAA', memberId: 'one', expiresAt: Date.now()
 
 test('locked challenge preserves copy presentation and original ordinal speech for a legacy listen assignment', async () => {
   const e = boot(); await e.ui.open(e.assigned); assert.equal(e.previous.inert, true); await begin(e); await e.click('聽題目');
+  const paper=e.panel.querySelector('.assessment-paper');assert.equal(paper.children[0].className,'grid-lines');assert.equal(paper.children[0].attributes['aria-hidden'],'true');assert.equal(paper.children[1],e.mounts.at(-1).target);
   assert.equal(e.spoken[0], '鬍。寫第 1 個字。'); assert.equal(e.record().run.version, 4); assert.equal(e.record().run.presentationMode, 'copy'); assert.equal(e.record().run.assignment.mode, 'listen');
   assert(e.panel.querySelector('[data-hint]')); assert(e.button('交答案').disabled);
   await e.stroke(); assert(e.button('交答案').disabled); const before = clone(e.record().run.answers[0].strokes);

@@ -155,9 +155,15 @@ async function api(request, env, url) {
     if (request.method === 'PUT') {
       const data = await body(request, A.limits.bodyBytes); let run;
       try { run = A.validateAutomatic(assigned, data); } catch (error) { fail(400, 'INVALID_INK', error.message); }
+      const json = JSON.stringify(run), bytes = new TextEncoder().encode(json).length, payloadHash = await hash(json);
+      const original = await db.prepare('SELECT * FROM automatic_submissions WHERE member_id = ?').bind(member.id).first();
+      if (original) {
+        if (original.run_id !== run.runId) fail(409, 'FIRST_SUBMISSION', '第一份筆順小挑戰已收妥。');
+        if (original.payload_hash !== payloadHash) fail(409, 'CONFLICT', '原卷編號已有另一份筆跡。');
+        return automaticReceipt(original);
+      }
       const targets = await trustedCounts(assigned);
       try { run = A.validateAutomatic(assigned, run, targets); } catch (error) { fail(400, 'INVALID_INK', error.message); }
-      const json = JSON.stringify(run), bytes = new TextEncoder().encode(json).length, payloadHash = await hash(json);
       await db.prepare(`INSERT OR IGNORE INTO automatic_submissions(member_id, run_id, payload_hash, ink_json, ink_bytes, elapsed_ms, submitted_at)
         SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ?)
         AND COALESCE((SELECT SUM(s.ink_bytes) FROM (SELECT member_id, ink_bytes FROM reviewed_submissions UNION ALL SELECT member_id, ink_bytes FROM automatic_submissions) s JOIN members m ON s.member_id = m.id WHERE m.code = ?), 0) + ? <= 67108864
