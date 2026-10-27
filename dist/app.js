@@ -614,7 +614,7 @@
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
       const candidate = sessionCandidate('quiz', draftEntries, draftSelected);
       const assigned = globalThis.BishunAssessment ? globalThis.BishunAssessment.assignment(Q.entriesFromSession(candidate), assessmentMode()) : Q.assignment(Q.entriesFromSession(candidate));
-      window.location.assign(classOrigin + '/teacher#' + encodeURIComponent(JSON.stringify(assigned)));
+      window.location.assign('teacher.html#' + encodeURIComponent(JSON.stringify(assigned)));
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
   function selectedOptions() {

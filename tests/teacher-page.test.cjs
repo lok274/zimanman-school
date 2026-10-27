@@ -12,18 +12,49 @@ execFileSync(process.execPath, [path.join(root, 'build.mjs')]);
 const page = fs.readFileSync(path.join(root, 'src/teacher-page.js'), 'utf8');
 const html = JSON.parse(page.slice('export default '.length, -2));
 const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
-function boot({ data = new Map(), owners = new Map(), hash = '', blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
+const pagesHTML = fs.readFileSync(path.join(__dirname, '../dist/teacher.html'), 'utf8');
+function boot({ data = new Map(), owners = new Map(), hash = '', pathname = '/teacher', search = '', pageScript = script, blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
   const nodes = new Map();
   const node = () => ({ textContent: '', children: [], listeners: {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; }, addEventListener(type, handler) { this.listeners[type] = handler; } });
   for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board', 'mode', 'publish', 'delete-class', 'members', 'review']) nodes.set(id, { ...node(), hidden: ['room', 'new-class', 'publish'].includes(id) });
   const controls = { blocked, blockedOwners };
   const storage = (map, flag) => ({ getItem: key => map.get(key) || null, setItem(key, value) { if (controls[flag]) throw new Error('blocked'); map.set(key, value); } });
   const calls = [], navigation = [];
-  vm.runInNewContext(script, { document: { getElementById: id => nodes.get(id), createElement: node }, crypto: webcrypto, Uint8Array, localStorage: storage(owners, 'blockedOwners'), sessionStorage: storage(data, 'blocked'), location: { hash }, history: { replaceState(...args) { navigation.push(args); } }, fetch(url, options) { calls.push({ url, options }); return send(url, options); } });
+  vm.runInNewContext(pageScript, { document: { getElementById: id => nodes.get(id), createElement: node }, crypto: webcrypto, Uint8Array, localStorage: storage(owners, 'blockedOwners'), sessionStorage: storage(data, 'blocked'), location: { hash, pathname, search }, history: { replaceState(...args) { navigation.push(args); } }, fetch(url, options) { calls.push({ url, options }); return send(url, options); } });
   return { nodes, get draft() { return JSON.parse(data.get('zimanman:teacher') || 'null'); }, data, owners, controls, calls, navigation, click: id => nodes.get(id).listeners.click() };
 }
 const room = { code: 'ABCDEFGH', expiresAt: Date.now() + 86400000, assignment: { version: 1, entries: [{ text: '一', selectedIndexes: [0] }] } };
 const response = (data, ok = true) => ({ ok, json: async () => data });
+
+test('Pages and legacy teacher use the canonical page, omit cookies and retain assignment, path, query and retry identity', async () => {
+  const serviceOrigin = 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
+  assert.equal(pagesHTML, html.replace('const apiOrigin = "";', 'const apiOrigin = "' + serviceOrigin + '";'));
+  assert(!/__API_ORIGIN__|__DEFAULT_ENTRIES__|__ASSESSMENT_/.test(pagesHTML));
+  for (const [document, prefix, pathname] of [[html, '', '/teacher'], [pagesHTML, serviceOrigin, '/zimanman-school/teacher.html']]) {
+    const pageScript = document.match(/<script>([\s\S]*)<\/script>/)[1];
+    const entries = [{ text: '推來推去', selectedIndexes: [3] }]; let attempts = 0;
+    const options = { pageScript, pathname, search: '?lesson=one', hash: '#' + encodeURIComponent(JSON.stringify({ entries, ownerCapability: 'b'.repeat(64) })), fetch: async (_url, init) => {
+      if (!attempts++) throw new Error('offline');
+      return response(init.method === 'DELETE' ? { deleted: true } : { ...room, assignment: { ...room.assignment, version: 2 } });
+    } };
+    const e = boot(options), owner = e.draft.ownerCapability;
+    assert.equal(e.navigation[0][2], pathname + '?lesson=one');
+    assert.deepEqual(e.draft.entries, entries); assert.notEqual(owner, 'b'.repeat(64));
+    await e.click('create'); await e.click('create');
+    assert.equal(e.calls[0].options.body, e.calls[1].options.body);
+    assert.equal(e.calls[0].url, prefix + '/api/v1/classes');
+    const reload = boot({ ...options, hash: '', data: e.data, owners: e.owners });
+    assert.equal(reload.draft.requestId, e.draft.requestId); assert.equal(reload.draft.ownerCapability, owner);
+    await reload.click('refresh'); await reload.click('delete-class'); await reload.click('delete-class');
+    assert.equal(reload.calls[0].url, prefix + '/api/v1/classes/' + room.code + '/reviews');
+    assert.equal(reload.calls.at(-1).options.method, 'DELETE');
+    for (const call of [...e.calls, ...reload.calls]) {
+      assert.equal(call.options.credentials, 'omit');
+      assert.equal(call.options.headers['X-Teacher-Capability'], owner);
+      assert(!Object.keys(call.options.headers).some(name => /cookie|authorization/i.test(name)));
+    }
+  }
+});
 
 test('ordinary teacher page gets canonical six-word scope and retains its request after reload', () => {
   const e = boot();
@@ -170,16 +201,23 @@ test('a late teacher board response does not populate a newly selected class', a
 
 test('standalone service export builds with exact shared content and scorer copies', () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'bishun-service-export-'));
+  const service = path.join(fixture, 'service');
   try {
-    fs.cpSync(root, fixture, { recursive: true, filter: file => !['node_modules', '.wrangler', 'dist', 'shared'].includes(path.basename(file)) });
-    fs.mkdirSync(path.join(fixture, 'shared'));
-    for (const file of ['quiz-results.js', 'content.js', 'assessment.js', 'freehand.js', 'assessment-review.js', 'assessment.css', 'character-data.js']) fs.copyFileSync(path.join(__dirname, '../dist', file), path.join(fixture, 'shared', file));
-    fs.mkdirSync(path.join(fixture, 'shared/data'), { recursive: true });
-    fs.copyFileSync(path.join(__dirname, '../dist/data/characters.js'), path.join(fixture, 'shared/data/characters.js'));
-    fs.mkdirSync(path.join(fixture, 'drizzle'), { recursive: true });
-    fs.copyFileSync(path.join(__dirname, '../classroom-service/drizzle/0002_automatic_submissions.sql'), path.join(fixture, 'drizzle/0002_automatic_submissions.sql'));
-    execFileSync(process.execPath, [path.join(fixture, 'build.mjs')]);
-    assert.equal(fs.readFileSync(path.join(fixture, 'dist/server/index.js'), 'utf8'), fs.readFileSync(path.join(root, 'dist/server/index.js'), 'utf8'));
+    fs.cpSync(root, service, { recursive: true, filter: file => !['node_modules', '.wrangler', 'dist', 'shared'].includes(path.basename(file)) });
+    fs.mkdirSync(path.join(service, 'shared'));
+    for (const file of ['quiz-results.js', 'content.js', 'assessment.js', 'freehand.js', 'assessment-review.js', 'assessment.css', 'character-data.js']) fs.copyFileSync(path.join(__dirname, '../dist', file), path.join(service, 'shared', file));
+    fs.mkdirSync(path.join(service, 'shared/data'), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, '../dist/data/characters.js'), path.join(service, 'shared/data/characters.js'));
+    fs.mkdirSync(path.join(service, 'drizzle'), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, '../classroom-service/drizzle/0002_automatic_submissions.sql'), path.join(service, 'drizzle/0002_automatic_submissions.sql'));
+    const parentDist = path.join(fixture, 'dist');
+    fs.mkdirSync(parentDist);
+    fs.writeFileSync(path.join(parentDist, 'quiz-results.js'), 'invalid sibling scorer');
+    fs.writeFileSync(path.join(parentDist, 'teacher.html'), 'parent teacher stays unchanged');
+    execFileSync(process.execPath, [path.join(service, 'build.mjs')]);
+    assert.equal(fs.readFileSync(path.join(parentDist, 'teacher.html'), 'utf8'), 'parent teacher stays unchanged');
+    assert.deepEqual(fs.readdirSync(parentDist).sort(), ['quiz-results.js', 'teacher.html']);
+    assert.equal(fs.readFileSync(path.join(service, 'dist/server/index.js'), 'utf8'), fs.readFileSync(path.join(root, 'dist/server/index.js'), 'utf8'));
   } finally {
     assert.equal(path.dirname(path.resolve(fixture)), path.resolve(os.tmpdir()));
     assert(path.basename(fixture).startsWith('bishun-service-export-'));

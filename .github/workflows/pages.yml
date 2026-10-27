@@ -32,6 +32,10 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Build teacher page for Pages and service
+        run: node classroom-service/build.mjs
+      - name: Verify tracked teacher page
+        run: git diff --exit-code -- dist/teacher.html
       - name: Test learning behavior
         run: node --test tests/*.test.cjs
       - name: Check bundled character data

@@ -35,6 +35,9 @@ leaderboard.html
 
 standalone.html               由 scripts/standalone.cjs 產生
   └─ 將 index.html 和上述模組嵌入單一檔案
+
+teacher.html                  由 classroom-service/build.mjs 產生
+  └─ 與 Worker /teacher 共用模板，只有 API 網址前綴不同
 ```
 
 `app.js` 是組合根，不是資料庫或規則中心。它把模組接到頁面和事件上；真正的練習規則仍在 `session.js`、`writing.js` 和 `assessment.js`。
@@ -270,8 +273,8 @@ assessment.js 按全份前景時間排名，顯示時間相同則並列
 ```powershell
 node scripts/version-assets.cjs
 node scripts/standalone.cjs
-node --test tests/*.test.cjs
 node classroom-service/build.mjs
+node --test tests/*.test.cjs
 node dist/data/self-check.mjs
 git diff --check
 ```

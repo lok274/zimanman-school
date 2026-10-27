@@ -37,16 +37,18 @@ async function automaticBoard(db, room, memberId) {
 }
 
 const allowedOrigins = new Set(['https://lok274.github.io', 'http://127.0.0.1:4173', 'http://localhost:4173']);
+function teacherOrigin(request) {
+  const origin = request.headers.get('origin');
+  return origin === 'https://lok274.github.io' || origin === new URL(request.url).origin || (origin === null && request.headers.get('sec-fetch-site') === 'same-origin');
+}
 const keyPattern = /^[\w-]{1,100}$/;
 function fail(status, code, message) { throw Object.assign(new Error(message), { status, code }); }
 async function hash(value) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(n => n.toString(16).padStart(2, '0')).join(''); }
 async function teacher(request) {
   const capability = request.headers.get('x-teacher-capability');
   if (!/^[a-f0-9]{64}$/.test(capability || '')) fail(401, 'TEACHER_REQUIRED', '開班身份無效，請重新開啟老師頁面。');
+  if (!teacherOrigin(request)) fail(403, 'ORIGIN', '請在老師頁面管理班級。');
   return hash(capability);
-}
-function sameOrigin(request) {
-  if (request.headers.get('origin') !== new URL(request.url).origin && !(request.headers.get('origin') === null && request.headers.get('sec-fetch-site') === 'same-origin')) fail(403, 'ORIGIN', '請在老師頁面管理班級。');
 }
 async function body(request, maximum = 262144) {
   if (!request.headers.get('content-type')?.startsWith('application/json')) fail(415, 'JSON_REQUIRED', '請傳送 JSON。');
@@ -87,7 +89,6 @@ async function board(db, code, memberId) {
 }
 async function ownerFor(request, room) {
   if (await teacher(request) !== room.owner_id) fail(403, 'OWNER_REQUIRED', '只限開班瀏覽器查看。');
-  sameOrigin(request);
 }
 async function reviewedBoard(db, room) {
   const published = !!await db.prepare('SELECT code FROM publications WHERE code = ?').bind(room.code).first();
@@ -116,7 +117,7 @@ async function api(request, env, url) {
     return cleanup(db);
   }
   if (!route.length && request.method === 'POST') {
-    sameOrigin(request); const owner = await teacher(request), data = await body(request);
+    const owner = await teacher(request), data = await body(request);
     const requestId = key(data.requestId), assignment = canonicalAssignment(data), payloadHash = await hash(JSON.stringify(assignment));
     const existing = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
     if (existing) { if (existing.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (existing.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(existing); }
@@ -298,12 +299,19 @@ export default {
     const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Vary': 'Origin' };
     if (origin && (allowedOrigins.has(origin) || origin === url.origin)) {
       headers['Access-Control-Allow-Origin'] = origin;
-      headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS';
-      headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+      headers['Access-Control-Allow-Methods'] = teacherOrigin(request) ? 'GET, POST, PUT, DELETE, OPTIONS' : 'GET, POST, PUT, OPTIONS';
+      headers['Access-Control-Allow-Headers'] = teacherOrigin(request) ? 'Content-Type, Authorization, X-Teacher-Capability' : 'Content-Type, Authorization';
     }
     try {
       if (origin && !headers['Access-Control-Allow-Origin']) fail(403, 'ORIGIN', '來源未獲允許。');
-      if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+      if (request.method === 'OPTIONS') {
+        const method = request.headers.get('access-control-request-method');
+        const requestedHeaders = request.headers.get('access-control-request-headers');
+        if (method && !headers['Access-Control-Allow-Methods']?.split(', ').includes(method)) fail(403, 'ORIGIN', '來源未獲允許。');
+        const allowedHeaders = (headers['Access-Control-Allow-Headers'] || '').toLowerCase().split(', ');
+        if (requestedHeaders && requestedHeaders.split(',').some(name => !allowedHeaders.includes(name.trim().toLowerCase()))) fail(403, 'ORIGIN', '來源未獲允許。');
+        return new Response(null, { status: 204, headers });
+      }
       if (['/', '/teacher'].includes(url.pathname) && request.method === 'GET') return new Response(teacherHTML, { headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8' } });
       if (url.pathname !== '/api/v1/classes' && !url.pathname.startsWith('/api/v1/classes/')) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
       return Response.json(await api(request, env, url), { headers });

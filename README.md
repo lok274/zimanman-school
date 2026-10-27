@@ -55,13 +55,15 @@ Android 平板請用更新版 Chrome，iPad 請用 Safari，直接開啟上述 H
 
 暱稱和瀏覽器憑證不是已驗證帳戶。同名不會接管他人紀錄，遺失憑證不能靠暱稱取回。老師權限由開班瀏覽器自動保存，清除瀏覽器資料後不能恢復。班級最多 100 人，每個開班瀏覽器最多同時 10 班，全服務最多同時 100 班。原卷每份最多 1,800,000 bytes、200,000 點、每字 256 筆；超出時保留當前原稿，必須在該字提交前處理，沒有自動刪點或縮減筆跡。班級及全服務的原筆跡容量分別為 64 MiB 和 256 MiB。
 
-服務地址仍為 `https://zimanman-classroom-1023.lokyau65.chatgpt.site`。單檔版保留本機測驗及批改，跨平板班級功能使用網上頁面。服務 API、建置及本機 D1 驗證見 [classroom-service/README.md](classroom-service/README.md)。程式提交與實際部署分開記錄。
+老師工具的開班按鈕會在同一分頁開啟 Pages 的 `teacher.html`，保留所選題目。老師頁與 Worker 的 `/teacher` 由同一模板產生。服務地址仍為 `https://zimanman-classroom-1023.lokyau65.chatgpt.site`，老師請求明確不帶 Cookie。單檔版保留本機測驗及批改，跨平板班級功能使用網上頁面。服務 API、建置及本機 D1 驗證見 [classroom-service/README.md](classroom-service/README.md)。程式提交與實際部署分開記錄。
+
+Pages 和原有服務網址的老師權限分開保存。原有班級仍須用原來瀏覽器的 `/teacher` 管理，不會自動轉移老師憑證。服務只額外信任 `https://lok274.github.io`，這個範圍包含該帳戶所有 Pages 專案，並非只限本專案路徑。發佈時須先更新服務的來源權限，再發佈 Pages 老師頁。未登入裝置原本遇到的登入畫面尚未在真實瀏覽器重測，程式及無 Cookie API 測試不能代替這項驗證。
 
 既有練習仍使用版本 4 和 Hanzi Writer。練習原筆跡只留在當節記憶體，不寫入舊歷史；版本 1 至 3 紀錄仍可讀取。新小挑戰使用版本 3 assessment 原卷及版本 2 assignment，版本 2 已封存原卷仍可讀取。舊錯誤次數和時間成績不會轉成老師字形分數。
 
 學生頁使用「小挑戰」，「情境小挑戰」仍是另外的作品活動。老師設定與批改用語、儲存版本及 API 名稱不變。
 
-推送至 `main` 會自動執行 `.github/workflows/pages.yml`。流程先用 Node.js 24 執行現有行為測試及字庫檢查，全部通過後才將 `dist/` 部署到 GitHub Pages。GitHub 儲存庫嘅 Pages 發佈來源須設為 GitHub Actions。亦可在 Actions 頁面手動執行流程。網站不需要伺服器程式或額外建置。
+推送至 `main` 會自動執行 `.github/workflows/pages.yml`。流程先用 Node.js 24 產生老師頁並核對已追蹤的 `dist/teacher.html`，再執行行為測試及字庫檢查，全部通過後才將 `dist/` 部署到 GitHub Pages。GitHub 儲存庫嘅 Pages 發佈來源須設為 GitHub Actions。亦可在 Actions 頁面手動執行流程。Pages 網站本身不需要伺服器程式。
 
 `index.html` 與 `leaderboard.html` 的本機程式及樣式網址包含內容版本，避免新版頁面讀到舊快取。更改後執行 `node scripts/version-assets.cjs`；版本為統一 LF 換行後 SHA-256 的首 12 字。單檔產生器可處理這些版本網址。
 
@@ -70,8 +72,8 @@ Android 平板請用更新版 Chrome，iPad 請用 Safari，直接開啟上述 H
 ```powershell
 node scripts/version-assets.cjs
 node scripts/standalone.cjs
-node --test tests/*.test.cjs
 node classroom-service/build.mjs
+node --test tests/*.test.cjs
 node dist/data/self-check.mjs
 ```
 

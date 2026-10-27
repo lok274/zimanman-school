@@ -1,10 +1,12 @@
 # Classroom service
 
-The Worker serves the teacher page and stores assignments, anonymous memberships, original handwriting and teacher reviews in D1 binding `DB`. The student app is static. Assignments retain version 2 and their immutable `copy` or `listen` mode. New version 4 originals record the actual displayed mode as `presentationMode: 'copy'`; historical version 2 originals keep their original mode. New teacher choices offer 看字寫 only.
+The Worker serves the legacy teacher page and stores assignments, anonymous memberships, original handwriting and teacher reviews in D1 binding `DB`. Pages serves the student app and the new teacher entry at `teacher.html`. Assignments retain version 2 and their immutable `copy` or `listen` mode. New version 4 originals record the actual displayed mode as `presentationMode: 'copy'`; historical version 2 originals keep their original mode. New teacher choices offer 看字寫 only.
 
 ## Build and export
 
-Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissions.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. The API also initializes the additive automatic table once per DB binding because Sites packaging does not apply migrations. Failed initialization retries on the next request. The inline DDL is generated from migration 0002.
+Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. In the canonical repository it also produces tracked `../dist/teacher.html` from `src/teacher.html`. The Worker page uses relative API URLs. The Pages page uses the fixed existing HTTPS service origin. Both explicitly omit cookies. The Pages pipeline builds and checks this tracked page before publishing. Deploy the updated service before publishing the Pages entry.
+
+Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissions.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. The API also initializes the additive automatic table once per DB binding because Sites packaging does not apply migrations. Failed initialization retries on the next request. The inline DDL is generated from migration 0002.
 
 The canonical shared files are in the repository's `dist/`.
 
@@ -16,7 +18,7 @@ The canonical shared files are in the repository's `dist/`.
 - `freehand.js` and `assessment-review.js` render and replay originals and collect teacher marks.
 - `assessment.css` supplies the shared review layout.
 
-An exported Sites source needs exact copies of all eight files under `shared/`. The builder uses them when sibling canonical files are absent. Tests build this isolated export and compare the resulting Worker byte for byte. Do not edit generated `src/quiz-results.js`, `src/assessment.js`, `src/teacher-page.js`, `src/character-data.js`, `src/target-counts.js`, `src/automatic-schema.js` or the output bundle. The export owner preserves the managed hosting manifest. Building does not deploy or change Site access.
+An exported Sites source needs exact copies of all eight files under `shared/`. The presence of `shared/quiz-results.js` selects the export build. It uses only those shared copies and never writes a parent `dist/teacher.html`, even when sibling files exist. Tests build this isolated export and compare the resulting Worker byte for byte. Do not edit generated `src/quiz-results.js`, `src/assessment.js`, `src/teacher-page.js`, `src/character-data.js`, `src/target-counts.js`, `src/automatic-schema.js` or the output bundle. The export owner preserves the managed hosting manifest. Building does not deploy or change Site access.
 
 ## Automatic HTTP contract
 
@@ -27,7 +29,7 @@ New v4 originals use the same immutable version 2 assignment. Every new run has 
 | `PUT /:code/automatic-answers` | Current member | Validates v4 and stores the first automatic original. |
 | `GET /:code/automatic-answers` | Current member | Returns `{answer:{run,receipt},expiresAt}` or `answer:null`. |
 | `GET /:code/automatic-board` | Member with an automatic submission | Returns `{version:4,policy,expiresAt,rows}`. Rows contain member ID, alias, rounded elapsed time, rank and `isMe`. |
-| `GET /:code/automatic-original/:memberId` | Same-origin owner | Returns the original and receipt without grading controls. |
+| `GET /:code/automatic-original/:memberId` | Trusted-origin owner | Returns the original and receipt without grading controls. |
 
 All paths begin with `/api/v1/classes`. The receipt is `{version:4,policy,runId,official:true,elapsedMs}`. The client requires this receipt and never falls back to old answers. `GET /:code/reviews` additionally returns `automaticRunId` and `automaticElapsedMs` per member. Old scores stay behind the existing publication rule.
 
@@ -46,16 +48,16 @@ All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Con
 
 | Method and relative path | Authority | Result |
 | --- | --- | --- |
-| `POST /` | Same-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns a three-digit code, assignment, `joinExpiresAt` and `expiresAt`. |
+| `POST /` | Trusted-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns a three-digit code, assignment, `joinExpiresAt` and `expiresAt`. |
 | `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken}` during the first 15 minutes of a new class; returns membership and assignment. An identical saved request remains retryable after admission closes. |
 | `PUT /:code/answers` | Current member | Accepts one complete sealed original; returns `{runId,official:true,version:3}` for version 3, or the legacy receipt without version. |
 | `GET /:code/answers` | Current member | Returns only that member's original, marks and revision, or `answer:null`. Aggregate elapsed time is omitted. |
-| `GET /:code/reviews` | Same-origin owner | Lists members, submission status, scores, revisions and elapsed time. |
-| `GET /:code/reviews/:memberId` | Same-origin owner | Returns the original ink and review for that member. |
-| `PUT /:code/reviews/:memberId` | Same-origin owner | Accepts `{revision,marks}`; updates marks, score and revision atomically. |
-| `POST /:code/publication` | Same-origin owner | Makes completed teacher grades visible on the class board. |
+| `GET /:code/reviews` | Trusted-origin owner | Lists members, submission status, scores, revisions and elapsed time. |
+| `GET /:code/reviews/:memberId` | Trusted-origin owner | Returns the original ink and review for that member. |
+| `PUT /:code/reviews/:memberId` | Trusted-origin owner | Accepts `{revision,marks}`; updates marks, score and revision atomically. |
+| `POST /:code/publication` | Trusted-origin owner | Makes completed teacher grades visible on the class board. |
 | `GET /:code/board` | Member who submitted | Returns publication state and rows containing only alias, score, actual mode and rank. |
-| `DELETE /:code` | Same-origin owner | Deletes the class and cascades memberships, originals and publication. |
+| `DELETE /:code` | Trusted-origin owner | Deletes the class and cascades memberships, originals and publication. |
 | `POST /cleanup` | Public maintenance | Deletes at most 10 server-time expired classes; returns `{cleaned:true}`. |
 
 The original has version, run ID, canonical assignment, start time, elapsed milliseconds, sealed phase, and one answer per selected position. Each answer has `occurrenceId`, `submitted` or `skipped` status, and ordered strokes. Each stroke is an ordered array of `[x,y,relativeMs]` points. Coordinates are integers from 0 to 10000. Point times must be finite, nonnegative, monotonic within the stroke and at most 24 hours. A submitted answer needs ink; a skipped answer preserves any partial ink.
@@ -72,7 +74,9 @@ Legacy version 1 classes keep their existing aggregate `runs/:runId` and `teache
 
 ## Authority and browser recovery
 
-The teacher browser creates a 256-bit hexadecimal capability and saves it before opening a class. The server stores only its SHA-256 hash. Teacher requests send `X-Teacher-Capability` and must be same-origin. A same-origin browser GET may omit Origin but must then send `Sec-Fetch-Site: same-origin`. CORS never allows the teacher capability header. Neither a class code nor an assignment fragment grants teacher access.
+The teacher browser creates a 256-bit hexadecimal capability and saves it before opening a class. The server stores only its SHA-256 hash. Every teacher route requires `X-Teacher-Capability` and a trusted teacher origin. Trusted teacher origins are the service's own origin and exactly `https://lok274.github.io`. A same-origin browser GET may omit Origin but must then send `Sec-Fetch-Site: same-origin`. CORS allows `X-Teacher-Capability` and `DELETE` only for those origins. Localhost remains a student origin and cannot manage classes. Preflights reject unknown requested headers and methods. No platform access token is embedded in either page.
+
+GitHub Pages origin trust covers every project under the `lok274.github.io` account, not just this repository path. The two teacher origins retain separate browser capabilities. Existing rooms remain manageable through the old `/teacher` page with its saved capability. New Pages rooms use the Pages capability. Capabilities are never migrated through a URL, and neither a class code nor an assignment fragment grants teacher access.
 
 Students create a capability before joining, retain it in sessionStorage, and send it as a Bearer token. The server also stores only its hash. Alias collisions cannot take over another membership. Cold reload requires explicit identity continuation before private reads. Request generation checks reject late responses after an identity switch.
 
@@ -114,4 +118,4 @@ npx wrangler dev --local --ip 127.0.0.1 --port 8788 --inspector-port 9231
 
 Run `node classroom-service/smoke.mjs http://127.0.0.1:8788` from another terminal at the repository root. It refuses non-loopback hosts. It checks legacy behavior, reviewed original and grading routes, and a full 12-position, 151-stroke, 77,312-point JSON round trip. That fixture is constructed capacity evidence, not a pupil trial.
 
-A frontend preview can serve `dist/` at port 4173 and inject only `data-classroom-origin="http://127.0.0.1:8788"` on the two page bodies. Production keeps the existing service URL. Source verification does not prove deployed parity, physical iPad or Android input, or scheduled cleanup.
+A student frontend preview can serve `dist/` at port 4173 and inject only `data-classroom-origin="http://127.0.0.1:8788"` on the two page bodies. Preview teacher management through the local Worker `/teacher`, since localhost is not a trusted cross-origin teacher. Production keeps the existing service URL. Source verification does not prove deployed parity, physical iPad or Android input, or scheduled cleanup.
