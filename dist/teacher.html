@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="zh-Hant-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>寫字樂 · 班級小挑戰</title>
+<style>.assessment-panel { position:fixed; inset:0; z-index:50; overflow:auto; background:#f5f6ed; color:#20392e; padding:12px 24px 104px; font-family:system-ui,sans-serif; }
+.assessment-panel[hidden] { display:none; }
+.assessment-heading { padding:0; margin:0 0 10px; }
+.assessment-heading h1 { font-size:clamp(22px,3vw,32px); margin:4px 0; }
+.assessment-footer { position:fixed; bottom:0; left:0; right:0; padding:14px 28px; background:#f5f6ed; border-top:1px solid #d4ddd6; z-index:2; }
+.assessment-footer button { min-height:72px; min-width:200px; font-size:24px; }
+.assessment-writing { display:grid; grid-template-columns:minmax(0,1fr) minmax(330px,.66fr); align-items:center; gap:20px; max-width:1180px; margin:auto; }
+.assessment-paper { position:relative; width:min(100%,calc(100dvh - 180px)); aspect-ratio:1; border:2px solid #a4b5a6; border-radius:12px; background:#fffef8; justify-self:center; overflow:hidden; }
+.freehand-ink { display:block; width:100%; height:100%; aspect-ratio:1; touch-action:none; user-select:none; -webkit-user-select:none; }
+.assessment-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.assessment-controls .button { min-height:64px; font-size:24px; line-height:1.25; padding:8px; }
+.assessment-controls .primary { min-height:72px; grid-column:1/-1; }
+.assessment-controls>p,.assessment-controls>img,.assessment-controls>nav { grid-column:1/-1; }
+.assessment-timer { grid-column:1/-1; text-align:center; font-size:26px; font-variant-numeric:tabular-nums; line-height:1.2; }
+.assessment-completed { position:absolute; right:10px; bottom:10px; border-radius:8px; padding:2px 10px; font-size:18px; color:#214b3b; background:#e9eddf; }
+.assessment-choice-card:disabled { opacity:1; }
+.assessment-controls .assessment-status:empty { display:none; }
+.assessment-status { min-height:1.5em; margin:4px 0; font-size:16px; }
+.assessment-controls .assessment-status { font-size:clamp(28px,3vw,34px); font-weight:700; line-height:1.3; }
+.assessment-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:22px 0; }
+.assessment-panel:has(> .word-cards) { display:flex; flex-direction:column; gap:8px; padding:10px 16px max(10px,env(safe-area-inset-bottom)); }
+.assessment-panel:has(> .word-cards) .assessment-heading { flex:none; margin:0; }
+.assessment-panel:has(> .word-cards) .assessment-heading h1 { margin:0; line-height:1.2; }
+.assessment-panel:has(> .word-cards) .assessment-status:empty { display:none; }
+.assessment-panel:has(> .word-cards) .assessment-footer { position:static; flex:none; padding:8px 0 0; }
+.assessment-choices.word-cards { flex:1; min-height:0; grid-auto-rows:minmax(0,1fr); gap:10px; margin:0; }
+.assessment-choices .word-card { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:6px; min-height:0; min-width:0; padding:8px; }
+.assessment-choices .word-card .word-name { grid-column:1; grid-row:1; flex-wrap:wrap; white-space:normal; overflow-wrap:anywhere; font-size:clamp(32px,calc(180px / var(--word-length)),100px); line-height:1.35; align-self:center; }
+.assessment-choices .word-card .word-photo { grid-column:1; grid-row:2; width:min(100%,max(140px,calc(100svh - 440px)),240px); height:auto; aspect-ratio:1; object-fit:contain; align-self:center; }
+.assessment-choices .assessment-choice-listen { container-type:size; grid-template-rows:minmax(0,1fr); }
+.assessment-choices .assessment-choice-listen .word-name { grid-column:1/-1; font-size:min(96px,calc(100cqi / 5),50cqb); }
+.review-answers { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px; }
+.review-paper { width:100%; max-width:280px; aspect-ratio:1; border:1px solid #d4ddd6; background:white; }
+.review-answer label { display:block; margin:12px 0; }
+.review-answer select { font:inherit; min-height:44px; }
+.teacher-correct { color:#16752f; font-size:22px; font-weight:700; }
+.assessment-board { margin:24px 0; }
+@media (min-width:600px) and (orientation:portrait) {
+  .assessment-choices.word-cards { grid-template-columns:minmax(0,1fr); }
+  .assessment-choices .word-card { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto; }
+  .assessment-choices .word-card .word-name { font-size:clamp(32px,calc(280px / var(--word-length)),min(160px,calc((100svh - 420px) / 5))); }
+  .assessment-choices .word-card .word-photo { grid-column:2; grid-row:1; width:min(100%,calc((100svh - 360px) / 3),280px); }
+  .assessment-choices .assessment-choice-listen .word-name { font-size:min(96px,calc(100cqi / 5),50cqb); }
+}
+.assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-name { font-size:clamp(24px,calc(120px / var(--word-length)),60px); }
+.assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-photo { width:min(100%,max(80px,calc((100svh - 240px) / 4)),110px); }
+@media (min-width:600px) and (orientation:portrait) {
+  .assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-name { font-size:clamp(24px,calc(180px / var(--word-length)),80px); }
+  .assessment-choices:has(> .word-card:nth-child(4)) .word-card .word-photo { width:min(100%,calc((100svh - 260px) / 6),120px); }
+}
+@media (max-width:650px) {
+  .assessment-panel { padding:12px 14px 94px; }
+  .assessment-writing { grid-template-columns:minmax(0,1fr) minmax(260px,1fr); gap:12px; }
+  .assessment-controls { gap:8px; }
+  .assessment-footer { padding:10px 14px; }
+  .assessment-choices { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:480px) {
+  .assessment-writing { grid-template-columns:1fr; }
+  .assessment-paper { width:min(100%,calc(100dvh - 390px)); }
+  .assessment-status { grid-column:1 / -1; }
+  .assessment-choices { grid-template-columns:1fr; }
+}
+
+.review-answer { border:1px solid #bac9b9; border-radius:12px; padding:16px; background:#fffef8; }
+.assessment-writer { position:absolute; inset:0; touch-action:none; user-select:none; -webkit-user-select:none; }
+.assessment-writer>svg { position:absolute; inset:0; width:100%; height:100%; }
+.assessment-writer .start-overlay { pointer-events:none; z-index:1; }
+.assessment-correct { color:#16752f; font-size:64px; font-weight:700; margin:0; text-align:center; }
+.assessment-board table { width:100%; max-width:900px; margin:auto; border-collapse:collapse; font-size:24px; }
+.assessment-board th,.assessment-board td { padding:12px; text-align:left; border-bottom:1px solid #d4ddd6; }
+.assessment-board .is-me { background:#e4eddd; }
+@media (min-width:600px) and (orientation:portrait) {
+  .assessment-writing { grid-template-columns:1fr; gap:10px; }
+  .assessment-paper { width:min(100%,calc(100dvh - 400px)); }
+  .assessment-controls { width:100%; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .assessment-controls .primary { grid-column:auto; }
+  .assessment-controls .assessment-status { grid-column:2/-1; align-self:center; }
+}
+</style>
+<style>body{font:18px/1.7 system-ui,sans-serif;background:#f6f3e9;color:#243d32;margin:0}main{max-width:800px;padding:24px;margin:auto}button,a{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px}button{background:#214b3b;color:white;border:0;cursor:pointer}button:disabled{opacity:.5}a{color:#214b3b}section{background:#fffdf6;padding:20px;border:1px solid #d9dece;border-radius:12px;margin:20px 0}#code{font-size:42px;letter-spacing:5px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #d9dece}p{overflow-wrap:anywhere}[hidden]{display:none!important}:focus-visible{outline:3px solid #ba642d;outline-offset:4px}</style></head>
+<body><main><h1>寫字樂 · 班級小挑戰</h1>
+<section><h2>今次題目</h2><p id="assignment"></p><label for="mode">題型 </label><select id="mode"><option value="copy">看字寫</option><option value="listen" hidden>看字寫</option></select> <button id="create">建立班級</button> <button id="new-class" hidden>開新一班</button></section>
+<p id="status" role="status"></p>
+<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p><a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">學生頁面</a></p><button id="refresh">更新收卷及排行榜</button> <button id="publish" hidden>公布舊版班級榜</button> <button id="delete-class">提早刪除此班</button><div id="members"></div><div id="board"></div><section id="review" hidden></section></section></main>
+<script>
+(function (root) {
+  'use strict';
+  function assignment(entries) {
+    if (!Array.isArray(entries) || !entries.length || entries.length > 6) throw new Error('請選 1 至 6 項詞語。');
+    const seen = new Set();
+    return { version: 1, entries: entries.map(entry => {
+      if (!entry || typeof entry.text !== 'string' || !/^\p{Script=Han}{1,8}$/u.test(entry.text) || seen.has(entry.text)) throw new Error('詞語設定無效。');
+      seen.add(entry.text);
+      const indexes = entry.selectedIndexes;
+      if (!Array.isArray(indexes) || !indexes.length || new Set(indexes).size !== indexes.length || indexes.some(index => !Number.isInteger(index) || index < 0 || index >= Array.from(entry.text).length)) throw new Error('選字設定無效。');
+      return { text: entry.text, selectedIndexes: [...indexes].sort((a, b) => a - b) };
+    }) };
+  }
+  function evaluate(entries, evidence) {
+    const assigned = assignment(entries);
+    if (!evidence || typeof evidence.runId !== 'string' || !/^[\w-]{1,100}$/.test(evidence.runId) || !Array.isArray(evidence.attempts) || evidence.attempts.length > 2000) throw new Error('測驗紀錄無效。');
+    const occurrences = assigned.entries.flatMap((word, i) => word.selectedIndexes.map(index => 'w' + i + ':' + index));
+    const ids = new Set(), covered = new Set();
+    let mistakes = 0, elapsedMs = 0, reason = '';
+    const attempts = evidence.attempts.map(item => {
+      if (!item || typeof item.id !== 'string' || !/^[\w-]{1,100}$/.test(item.id) || ids.has(item.id) || !occurrences.includes(item.occurrenceId) || !['quiz', 'teacher'].includes(item.phase) || !['complete', 'abandoned', 'skipped'].includes(item.outcome) || !Number.isInteger(item.mistakes) || item.mistakes < 0 || item.mistakes >= 100000 || !Array.isArray(item.help) || item.help.length || (item.elapsedMs !== null && (!Number.isFinite(item.elapsedMs) || item.elapsedMs < 0 || item.elapsedMs > Number.MAX_SAFE_INTEGER)) || (item.phase === 'teacher' && (item.outcome !== 'skipped' || item.elapsedMs !== null))) throw new Error('測驗嘗試無效。');
+      ids.add(item.id);
+      if (item.outcome === 'complete' || item.outcome === 'skipped') covered.add(item.occurrenceId);
+      if (item.outcome === 'skipped') reason = 'skipped';
+      if (item.elapsedMs === null && !reason) reason = 'unknown-time';
+      mistakes += item.mistakes; elapsedMs += item.elapsedMs || 0;
+      return { id: item.id, occurrenceId: item.occurrenceId, phase: item.phase, outcome: item.outcome, mistakes: item.mistakes, elapsedMs: item.elapsedMs, help: [] };
+    });
+    elapsedMs = Math.round(elapsedMs / 100) * 100;
+    if (!Number.isSafeInteger(mistakes) || !Number.isSafeInteger(elapsedMs)) throw new Error('測驗合計超出範圍。');
+    const terminal = occurrences.every(id => covered.has(id));
+    if (!terminal) reason = 'incomplete';
+    return { terminal, ranked: terminal && !reason, reason: reason || null, score: terminal && !reason ? { mistakes, elapsedMs } : null, evidence: { runId: evidence.runId, attempts } };
+  }
+  function entriesFromSession(session) {
+    return session.entries.map(word => ({ text: word.text, selectedIndexes: session.occurrences.filter(item => item.wordId === word.id).map(item => item.index) }));
+  }
+  function fromSession(session, entries = entriesFromSession(session)) {
+    if (session.mode !== 'quiz' || session.active.phase !== 'summary' || JSON.stringify(assignment(entriesFromSession(session))) !== JSON.stringify(assignment(entries))) return null;
+    return evaluate(entries, { runId: session.id, attempts: session.attempts });
+  }
+  function compare(a, b) { return a.mistakes - b.mistakes || a.elapsedMs - b.elapsedMs; }
+  function ranks(rows) {
+    const sorted = [...rows].sort((a, b) => compare(a, b) || a.memberId.localeCompare(b.memberId));
+    let rank = 0;
+    return sorted.map((row, i) => { if (!i || compare(row, sorted[i - 1])) rank = i + 1; return { ...row, rank }; });
+  }
+  const api = { assignment, evaluate, entriesFromSession, fromSession, compare, ranks };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.BishunQuizResults = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+(function (root) {
+  'use strict';
+  const limits = Object.freeze({ bytes: 1800000, bodyBytes: 4194304, points: 200000, strokes: 256, positions: 48, coordinate: 10000, duration: 86400000 });
+  function assignment(entries, mode) {
+    if (!['copy', 'listen'].includes(mode)) throw new Error('請揀照寫或聽寫。');
+    const base = root.BishunQuizResults.assignment(entries);
+    return { version: 2, mode, entries: base.entries };
+  }
+  function positions(assigned) { return assigned.entries.flatMap((entry, wordIndex) => entry.selectedIndexes.map(index => ({ id: 'w' + wordIndex + ':' + index, word: entry.text, index, character: Array.from(entry.text)[index] }))); }
+  function start(assigned, runId, now = Date.now()) {
+    const canonical = assignment(assigned.entries, assigned.mode);
+    return { version: 2, runId, assignment: canonical, startedAt: now, elapsedMs: 0, phase: 'writing', cursor: 0, answers: positions(canonical).map(item => ({ occurrenceId: item.id, status: 'draft', strokes: [] })) };
+  }
+  function startWords(assigned, runId, now = Date.now()) {
+    const run = start(assigned, runId, now);
+    return { ...run, version: 3, presentationMode: 'copy', legacyElapsedMs: 0, wordProgress: run.assignment.entries.map((entry, index) => ({ wordId: 'w' + index, phase: 'unstarted', elapsedMs: 0, timeKnown: true })), answers: run.answers.map(answer => ({ ...answer, hintUsed: false })) };
+  }
+  const policy = 'locked-strokes-0.9-v1';
+  function startLocked(assigned, runId, now = Date.now()) {
+    const run = startWords(assigned, runId, now);
+    delete run.legacyElapsedMs;
+    return { ...run, version: 4, policy, answers: run.answers.map(answer => ({ ...answer, expectedStrokes: null })) };
+  }
+  function lockedInk(strokes, count) {
+    if (!Array.isArray(strokes) || strokes.length > 64) throw new Error('筆跡資料無效。');
+    return strokes.map(stroke => {
+      if (!Array.isArray(stroke) || stroke.length < 2 || stroke.length > 16384) throw new Error('筆跡資料無效。');
+      return stroke.map(point => {
+        if (++count.n > limits.points) throw new Error('筆跡超出容量，原稿仍然保留。');
+        if (!Array.isArray(point) || point.length !== 2 || point.some(n => !Number.isSafeInteger(n) || n < 0 || n > limits.coordinate)) throw new Error('筆跡座標無效。');
+        return [...point];
+      });
+    });
+  }
+  function targetCount(value) { return Number.isInteger(value) && value > 0 && value <= 64; }
+  function completeAnswer(answer) { return targetCount(answer.expectedStrokes) && answer.strokes.length === answer.expectedStrokes; }
+  function boardTime(milliseconds) { return Math.round(milliseconds / 100) * 100; }
+  function validateAutomatic(assigned, run, counts) {
+    const canonical = assignment(assigned.entries, assigned.mode), expected = positions(canonical), count = { n: 0 };
+    if (run?.version !== 4 || run.policy !== policy || run.presentationMode !== 'copy' || typeof run.runId !== 'string' || !/^[\w-]{1,100}$/.test(run.runId) || run.phase !== 'sealed' || JSON.stringify(run.assignment) !== JSON.stringify(canonical) || !Number.isSafeInteger(run.startedAt) || run.startedAt < 0 || !Number.isSafeInteger(run.elapsedMs) || run.elapsedMs < 0 || run.elapsedMs > limits.duration || !Array.isArray(run.answers) || run.answers.length !== expected.length || !Array.isArray(run.wordProgress) || run.wordProgress.length !== canonical.entries.length) throw new Error('小挑戰紀錄或題目不一致。');
+    const wordProgress = run.wordProgress.map((word, index) => {
+      if (!word || word.wordId !== 'w' + index || word.phase !== 'submitted' || word.timeKnown !== true || !Number.isSafeInteger(word.elapsedMs) || word.elapsedMs < 0 || word.elapsedMs > limits.duration) throw new Error('詞語用時紀錄無效。');
+      return { wordId: word.wordId, phase: 'submitted', elapsedMs: word.elapsedMs, timeKnown: true };
+    });
+    if (wordProgress.reduce((sum, word) => sum + word.elapsedMs, 0) !== run.elapsedMs) throw new Error('詞語用時紀錄不一致。');
+    const answers = run.answers.map((answer, index) => {
+      if (!answer || answer.occurrenceId !== expected[index].id || answer.status !== 'submitted' || typeof answer.hintUsed !== 'boolean' || !targetCount(answer.expectedStrokes) || counts && answer.expectedStrokes !== counts[expected[index].character]) throw new Error('請先完成每個字的筆順。');
+      const strokes = lockedInk(answer.strokes, count);
+      if (strokes.length !== answer.expectedStrokes) throw new Error('請先完成每個字的筆順。');
+      return { occurrenceId: answer.occurrenceId, status: 'submitted', strokes, hintUsed: answer.hintUsed, expectedStrokes: answer.expectedStrokes };
+    });
+    const result = { version: 4, policy, runId: run.runId, assignment: canonical, presentationMode: 'copy', startedAt: run.startedAt, elapsedMs: run.elapsedMs, phase: 'sealed', wordProgress, answers };
+    if (new TextEncoder().encode(JSON.stringify(result)).length > limits.bytes) throw new Error('筆跡超出容量，原稿仍然保留。');
+    return result;
+  }
+  function lockedTransition(run, event) {
+    if (run.phase !== 'writing') throw new Error('原卷已封存。');
+    const next = structuredClone(run), answer = next.answers[next.cursor], group = wordAt(next), word = next.wordProgress[group.wordIndex];
+    if (event.type === 'SELECT') {
+      if (!Number.isInteger(event.index) || !next.answers[event.index]) throw new Error('題目無效。');
+      next.cursor = event.index;
+    } else if (event.type === 'DATA_READY') {
+      if (!targetCount(event.count) || answer.expectedStrokes !== null && answer.expectedStrokes !== event.count || answer.strokes.length > event.count) throw new Error('字形資料不一致，原稿仍然保留。');
+      answer.expectedStrokes = event.count;
+    } else if (event.type === 'START_WORD') {
+      if (word.phase === 'submitted' || !targetCount(answer.expectedStrokes)) throw new Error('請先載入字形。');
+      word.phase = 'writing';
+    } else if (event.type === 'SEAL') {
+      next.phase = 'sealed'; return validateAutomatic(next.assignment, next);
+    } else if (event.type === 'NEXT_CHARACTER') {
+      if (answer.status !== 'submitted' || next.cursor + 1 >= group.end) throw new Error('請先交答案。');
+      next.cursor++;
+    } else {
+      if (word.phase !== 'writing' || answer.status !== 'draft') throw new Error('請先按開始。');
+      if (event.type === 'TIME') {
+        if (!Number.isSafeInteger(event.elapsedMs) || event.elapsedMs < 0) throw new Error('計時紀錄無效。');
+        const elapsed = Math.min(event.elapsedMs, limits.duration - next.elapsedMs); word.elapsedMs += elapsed; next.elapsedMs += elapsed;
+      } else if (event.type === 'STROKE_ACCEPTED') {
+        if (!targetCount(answer.expectedStrokes) || event.strokeIndex !== answer.strokes.length || answer.strokes.length >= answer.expectedStrokes) throw new Error('筆順紀錄不一致，原稿仍然保留。');
+        answer.strokes.push(event.stroke); checkLockedInk(next);
+      } else if (event.type === 'UNDO') answer.strokes.pop();
+      else if (event.type === 'HINT') answer.hintUsed = true;
+      else if (['WRITING_COMPLETE', 'SUBMIT_CHARACTER'].includes(event.type)) {
+        if (!completeAnswer(answer)) throw new Error('請先完成此字的筆順。');
+        if (event.type === 'SUBMIT_CHARACTER') {
+          answer.status = 'submitted';
+          if (next.answers.slice(group.start, group.end).every(item => item.status === 'submitted')) word.phase = 'submitted';
+        }
+      } else throw new Error('小挑戰操作無效。');
+    }
+    return next;
+  }
+  function checkLockedInk(run) {
+    const count = { n: 0 };
+    for (const answer of run.answers) {
+      lockedInk(answer.strokes, count);
+      if (answer.strokes.length && (!targetCount(answer.expectedStrokes) || answer.strokes.length > answer.expectedStrokes)) throw new Error('筆順紀錄不一致。');
+    }
+    if (new TextEncoder().encode(JSON.stringify(run)).length + 2048 > limits.bytes) throw new Error('筆跡超出容量，原稿仍然保留。');
+  }
+  function timeRanks(rows) {
+    let rank = 0;
+    return rows.slice().sort((a, b) => a.elapsedMs - b.elapsedMs || a.alias.localeCompare(b.alias)).map((row, i, sorted) => {
+      if (!i || row.elapsedMs !== sorted[i - 1].elapsedMs) rank = i + 1;
+      return { ...row, rank };
+    });
+  }
+  function actualMode(run) { return [3, 4].includes(run.version) ? run.presentationMode : run.assignment.mode; }
+  function wordAt(run, index = run.cursor) {
+    let start = 0;
+    for (let wordIndex = 0; wordIndex < run.assignment.entries.length; wordIndex++) {
+      const end = start + run.assignment.entries[wordIndex].selectedIndexes.length;
+      if (index >= start && index < end) return { wordIndex, start, end };
+      start = end;
+    }
+    throw new Error('題目無效。');
+  }
+  function upgradeWords(run) {
+    if (run.version !== 2 || run.phase !== 'writing') return run;
+    const next = startWords(run.assignment, run.runId, run.startedAt);
+    next.cursor = run.cursor; next.legacyElapsedMs = run.elapsedMs; next.elapsedMs = run.elapsedMs;
+    next.answers = structuredClone(run.answers).map(answer => ({ ...answer, hintUsed: false }));
+    for (const word of next.wordProgress) {
+      const answers = next.answers.filter(answer => answer.occurrenceId.startsWith(word.wordId + ':'));
+      const complete = answers.every(answer => answer.status === 'submitted');
+      word.phase = complete ? 'submitted' : 'unstarted'; word.timeKnown = !run.elapsedMs && !answers.some(answer => answer.strokes.length);
+      if (!complete) for (const answer of answers) answer.status = 'draft';
+    }
+    return next;
+  }
+  function ink(strokes, count) {
+    if (!Array.isArray(strokes) || strokes.length > limits.strokes) throw new Error('每字最多 256 筆，原筆跡仍然保留，請返回檢查。');
+    return strokes.map(stroke => {
+      if (!Array.isArray(stroke) || !stroke.length) throw new Error('筆跡資料無效。');
+      let previous = -1;
+      return stroke.map(point => {
+        count.n++;
+        if (count.n > limits.points) throw new Error('筆跡超出容量，原稿仍然保留，請聯絡老師。');
+        if (!Array.isArray(point) || point.length !== 3 || point.some(n => !Number.isSafeInteger(n)) || point[0] < 0 || point[0] > limits.coordinate || point[1] < 0 || point[1] > limits.coordinate || point[2] < 0 || point[2] < previous || point[2] > limits.duration) throw new Error('筆跡座標或時間無效。');
+        previous = point[2]; return [...point];
+      });
+    });
+  }
+  function validateSubmission(assigned, run) {
+    const canonical = assignment(assigned.entries, assigned.mode), expected = positions(canonical), count = { n: 0 };
+    if (![2, 3].includes(run?.version) || typeof run.runId !== 'string' || !/^[\w-]{1,100}$/.test(run.runId) || run.phase !== 'sealed' || JSON.stringify(run.assignment) !== JSON.stringify(canonical) || !Number.isSafeInteger(run.startedAt) || run.startedAt < 0 || !Number.isSafeInteger(run.elapsedMs) || run.elapsedMs < 0 || run.elapsedMs > limits.duration || !Array.isArray(run.answers) || run.answers.length !== expected.length) throw new Error('測驗紀錄或題目不一致。');
+    if (run.version === 3) {
+      if (run.presentationMode !== 'copy' || !Number.isSafeInteger(run.legacyElapsedMs) || run.legacyElapsedMs < 0 || !Array.isArray(run.wordProgress) || run.wordProgress.length !== canonical.entries.length) throw new Error('詞語用時紀錄無效。');
+      const total = run.wordProgress.reduce((sum, word, index) => {
+        if (!word || word.wordId !== 'w' + index || word.phase !== 'submitted' || !Number.isSafeInteger(word.elapsedMs) || word.elapsedMs < 0 || word.elapsedMs > limits.duration || typeof word.timeKnown !== 'boolean') throw new Error('詞語用時紀錄無效。');
+        return sum + word.elapsedMs;
+      }, run.legacyElapsedMs);
+      if (total !== run.elapsedMs || total > limits.duration) throw new Error('詞語用時紀錄不一致。');
+    }
+    const answers = run.answers.map((answer, index) => {
+      if (!answer || answer.occurrenceId !== expected[index].id || !['submitted', 'skipped'].includes(answer.status)) throw new Error('請先提交或跳過每一字。');
+      if (run.version === 3 && (answer.status !== 'submitted' || typeof answer.hintUsed !== 'boolean')) throw new Error('請先提交每個詞語。');
+      const strokes = ink(answer.strokes, count);
+      if (answer.status === 'submitted' && !strokes.length) throw new Error('未寫字，請先書寫或選跳過。');
+      return { occurrenceId: answer.occurrenceId, status: answer.status, strokes, ...(run.version === 3 ? { hintUsed: answer.hintUsed } : {}) };
+    });
+    const result = envelope({ ...run, assignment: canonical }, answers);
+    if (new TextEncoder().encode(JSON.stringify(result)).length > limits.bytes) throw new Error('筆跡超出容量，原稿仍然保留，請聯絡老師。');
+    return result;
+  }
+  function transition(run, event) {
+    if (run.version === 4) return lockedTransition(run, event);
+    if (run.phase !== 'writing') throw new Error('原卷已封存。');
+    const next = structuredClone(run), answer = next.answers[next.cursor];
+    if (run.version === 3) {
+      const group = wordAt(next), word = next.wordProgress[group.wordIndex];
+      if (event.type === 'START_WORD') { if (word.phase === 'submitted') throw new Error('此詞語已提交。'); word.phase = 'writing'; return next; }
+      if (event.type === 'TIME') {
+        if (word.phase !== 'writing' || !Number.isSafeInteger(event.elapsedMs) || event.elapsedMs < 0) throw new Error('計時紀錄無效。');
+        const elapsed = Math.min(event.elapsedMs, limits.duration - next.elapsedMs); word.elapsedMs += elapsed; next.elapsedMs += elapsed; return next;
+      }
+      if (['STROKE', 'UNDO', 'HINT', 'NEXT_CHARACTER', 'SUBMIT_WORD'].includes(event.type) && (word.phase !== 'writing' || answer.status === 'submitted')) throw new Error('請先按開始。');
+      if (event.type === 'HINT') { answer.hintUsed = true; return next; }
+      if (event.type === 'NEXT_CHARACTER') {
+        if (!answer.strokes.length) throw new Error('請先書寫。');
+        if (next.cursor + 1 >= group.end) throw new Error('請提交此詞語。');
+        answer.status = 'ready'; checkInk(next); next.cursor++; return next;
+      }
+      if (event.type === 'SUBMIT_WORD') {
+        const answers = next.answers.slice(group.start, group.end);
+        if (answers.some(item => !item.strokes.length)) throw new Error('請先完成此詞語。');
+        for (const item of answers) item.status = 'submitted'; word.phase = 'submitted'; checkInk(next); return next;
+      }
+      if (event.type === 'ANSWER') throw new Error('請提交整個詞語。');
+    }
+    if (event.type === 'STROKE') { if (!['draft', 'ready'].includes(answer.status)) throw new Error('此字已提交。'); answer.strokes.push(event.stroke); }
+    else if (event.type === 'UNDO') { if (!['draft', 'ready'].includes(answer.status)) throw new Error('此字已提交。'); answer.strokes.pop(); }
+    else if (event.type === 'ANSWER') {
+      if (answer.status !== 'draft' || !['submitted', 'skipped'].includes(event.status)) throw new Error('此字已提交。');
+      if (event.status === 'submitted' && !answer.strokes.length) throw new Error('未寫字，請先書寫或選跳過。');
+      answer.status = event.status; checkInk(next);
+      next.cursor = Math.min(next.cursor + 1, next.answers.length - 1);
+    } else if (event.type === 'SELECT') {
+      if (!Number.isInteger(event.index) || event.index < 0 || event.index >= next.answers.length) throw new Error('題目無效。');
+      next.cursor = event.index;
+    } else if (event.type === 'SEAL') {
+      next.phase = 'sealed'; if (next.version === 2) next.elapsedMs = Math.min(limits.duration, Math.max(0, Math.round(event.elapsedMs)));
+      return validateSubmission(next.assignment, next);
+    } else throw new Error('測驗操作無效。');
+    return next;
+  }
+  function checkInk(run) {
+    if (run.version === 4) return checkLockedInk(run);
+    const count = { n: 0 };
+    for (const answer of run.answers) ink(answer.strokes, count);
+    const terminal = envelope({ ...run, elapsedMs: limits.duration, ...(run.version === 3 ? { wordProgress: run.wordProgress.map(word => ({ ...word, phase: 'submitted', elapsedMs: limits.duration })) } : {}) }, run.answers.map(answer => ({ occurrenceId: answer.occurrenceId, status: ['draft', 'ready'].includes(answer.status) ? 'submitted' : answer.status, strokes: answer.strokes, ...(run.version === 3 ? { hintUsed: answer.hintUsed } : {}) })));
+    if (new TextEncoder().encode(JSON.stringify(terminal)).length > limits.bytes) throw new Error('筆跡超出容量，請撤回本字上一筆再試。原稿仍然保留。');
+  }
+  function envelope(run, answers) { return { version: run.version, runId: run.runId, assignment: run.assignment, startedAt: run.startedAt, elapsedMs: run.elapsedMs, phase: 'sealed', answers, ...(run.version === 3 ? { presentationMode: run.presentationMode, legacyElapsedMs: run.legacyElapsedMs, wordProgress: run.wordProgress.map(word => ({ wordId: word.wordId, phase: word.phase, elapsedMs: word.elapsedMs, timeKnown: word.timeKnown })) } : {}) }; }
+  function review(assigned, marks) {
+    const expected = positions(assigned);
+    if (!Array.isArray(marks) || marks.length !== expected.length) throw new Error('批改項目不完整。');
+    const result = marks.map((mark, index) => {
+      if (!mark || mark.occurrenceId !== expected[index].id || ![null, true, false].includes(mark.correct) || typeof mark.strokePractice !== 'boolean') throw new Error('批改資料無效。');
+      return { occurrenceId: mark.occurrenceId, correct: mark.correct, strokePractice: mark.strokePractice };
+    });
+    return { marks: result, score: result.some(mark => mark.correct === null) ? null : result.filter(mark => mark.correct).length };
+  }
+  function unmarked(assigned) { return positions(assigned).map(item => ({ occurrenceId: item.id, correct: null, strokePractice: false })); }
+  function ranks(rows) {
+    let rank = 0, start = 0;
+    return rows.filter(row => Number.isInteger(row.score)).sort((a, b) => (a.mode || '').localeCompare(b.mode || '') || b.score - a.score || a.alias.localeCompare(b.alias)).map((row, i, sorted) => {
+      if (!i || row.mode !== sorted[i - 1].mode) { start = i; rank = 1; }
+      else if (row.score !== sorted[i - 1].score) rank = i - start + 1;
+      return { ...row, rank };
+    });
+  }
+  const api = { policy, startLocked, validateAutomatic, completeAnswer, boardTime, timeRanks, limits, assignment, positions, start, startWords, actualMode, wordAt, upgradeWords, transition, checkInk, validateSubmission, review, unmarked, ranks };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.BishunAssessment = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+(function (root) {
+  'use strict';
+  const ns = 'http://www.w3.org/2000/svg';
+  function element(tag, attributes) {
+    const node = document.createElementNS(ns, tag);
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+    return node;
+  }
+  function path(stroke) { return stroke.map((point, i) => (i ? 'L' : 'M') + point[0] + ' ' + point[1]).join(' ') + (stroke.length === 1 ? 'l1 0' : ''); }
+  function frame(label) {
+    const svg = element('svg', { viewBox: '0 0 10000 10000', role: 'img', 'aria-label': label, class: 'freehand-ink' });
+    const grid = element('path', { d: 'M0 5000H10000M5000 0V10000M0 0L10000 10000M10000 0L0 10000', stroke: '#d4ddd6', 'stroke-width': 20, 'stroke-dasharray': '80 80', fill: 'none', 'aria-hidden': 'true' });
+    svg.append(grid); return svg;
+  }
+  function line(stroke) { return element('path', { d: path(stroke), fill: 'none', stroke: '#20392e', 'stroke-width': 110, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }); }
+  function render(container, strokes, label = '原筆跡', hint = null) {
+    const svg = frame(label);
+    if (hint) {
+      const model = element('g', { 'aria-hidden': 'true', 'data-hint': '', fill: '#bbc5b9', stroke: 'none' }), glyph = root.BishunCharacters?.[hint];
+      if (glyph) {
+        model.setAttribute('transform', 'translate(1000 8031.25) scale(7.8125 -7.8125)');
+        for (const d of glyph.strokes) model.append(element('path', { d, fill: '#bbc5b9', stroke: 'none', 'aria-hidden': 'true' }));
+      } else {
+        const text = element('text', { x: 5000, y: 5200, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 7600, 'font-family': '"Noto Serif TC","Songti TC","PMingLiU",serif', fill: '#bbc5b9', stroke: 'none' });
+        text.textContent = hint; model.append(text);
+      }
+      svg.append(model);
+    }
+    for (const stroke of strokes) svg.append(line(stroke)); container.replaceChildren(svg); return svg;
+  }
+  function replay(container, strokes) {
+    const svg = render(container, []); let stopped = false, frameId;
+    const points = strokes.reduce((total, stroke) => total + stroke.length, 0), duration = Math.max(600, Math.min(6000, points * 8)), started = performance.now();
+    function tick(now) {
+      if (stopped) return;
+      let remaining = Math.max(1, Math.floor((now - started) / duration * points));
+      svg.replaceChildren(frame('原筆跡重播').firstChild);
+      for (const stroke of strokes) { if (remaining <= 0) break; svg.append(line(stroke.slice(0, remaining))); remaining -= stroke.length; }
+      if (now - started < duration) frameId = requestAnimationFrame(tick);
+    }
+    frameId = requestAnimationFrame(tick);
+    return () => { stopped = true; cancelAnimationFrame(frameId); };
+  }
+  const api = { render, replay };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.BishunFreehand = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+(function (root) {
+  'use strict';
+  function node(tag, text, className) { const item = document.createElement(tag); if (text) item.textContent = text; if (className) item.className = className; return item; }
+  function mount(container, data, onSave) {
+    const A = root.BishunAssessment, F = root.BishunFreehand, positions = A.positions(data.run.assignment);
+    let marks = structuredClone(data.marks), revision = data.revision, stopReplay = null, disposed = false;
+    const status = node('p', '', 'review-status'); status.setAttribute('role', 'status');
+    const rows = node('div', '', 'review-answers');
+    data.run.answers.forEach((answer, index) => {
+      const position = positions[index], row = node('section', '', 'review-answer');
+      row.append(node('h3', position.word + ' · 第 ' + (position.index + 1) + ' 字「' + position.character + '」'));
+      const word = data.run.wordProgress?.[A.wordAt(data.run, index).wordIndex];
+      if (word && A.wordAt(data.run, index).start === index) row.append(node('p', (word.timeKnown ? '詞語用時 ' : '續寫用時 ') + (word.elapsedMs / 1000).toFixed(1) + ' 秒'));
+      if (answer.hintUsed) row.append(node('p', '有提示'));
+      const paper = node('div', '', 'review-paper'); F.render(paper, answer.strokes); row.append(paper);
+      row.append(node('p', answer.status === 'skipped' ? '跳過，保留原筆跡' : '已提交原筆跡'));
+      const replay = node('button', '重播原筆跡', 'button secondary');
+      replay.addEventListener('click', () => { stopReplay?.(); stopReplay = F.replay(paper, answer.strokes); }); row.append(replay);
+      const label = node('label', '字形 '), select = node('select'); select.setAttribute('aria-label', '第 ' + (index + 1) + ' 題字形');
+      for (const [value, text] of [['pending', '待批改'], ['correct', 'O 正確'], ['practice', '再練習']]) { const option = node('option', text); option.value = value; select.append(option); }
+      select.value = marks[index].correct === null ? 'pending' : marks[index].correct ? 'correct' : 'practice';
+      select.addEventListener('change', () => { marks[index].correct = select.value === 'pending' ? null : select.value === 'correct'; });
+      label.append(select); row.append(label);
+      const note = node('label', '筆順需要練習 '), checkbox = node('input'); checkbox.type = 'checkbox'; checkbox.checked = marks[index].strokePractice;
+      checkbox.addEventListener('change', () => { marks[index].strokePractice = checkbox.checked; }); note.append(checkbox); row.append(note); rows.append(row);
+    });
+    const save = node('button', '保存批改', 'button primary');
+    save.addEventListener('click', async () => {
+      if (save.disabled) return; save.disabled = true;
+      try {
+        const result = await onSave({ marks: structuredClone(marks), revision });
+        if (disposed) return;
+        revision = result.revision; marks = structuredClone(result.marks);
+        status.textContent = result.score === null ? '已保存，仍有待批改項目。' : '已保存。字形正確 ' + result.score + ' / ' + marks.length;
+      } catch (error) { if (!disposed) status.textContent = error.message; }
+      finally { if (!disposed) save.disabled = false; }
+    });
+    container.replaceChildren(node('p', (A.actualMode(data.run) === 'copy' ? '看字寫' : '聽詞寫') + ' · 書寫時間 ' + ((data.elapsedMs ?? data.run.elapsedMs) / 1000).toFixed(1) + ' 秒 · 批改版本 ' + revision), rows, save, status);
+    return () => { disposed = true; stopReplay?.(); };
+  }
+  root.BishunAssessmentReview = { mount };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+const $ = id => document.getElementById(id);
+const storageKey = 'zimanman:teacher';
+const ownerKey = 'zimanman:teacher-owner';
+const apiOrigin = "https://zimanman-classroom-1023.lokyau65.chatgpt.site";
+const defaultEntries = [{"text":"粗","selectedIndexes":[0]},{"text":"濃","selectedIndexes":[0]},{"text":"鬍鬚","selectedIndexes":[0,1]},{"text":"密","selectedIndexes":[0]},{"text":"剪草機","selectedIndexes":[0,1,2]},{"text":"推來推去","selectedIndexes":[0,1,2,3]}];
+const validCapability = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+let draft = null, stopReview = null, deleteArmed = false, expiryTimer = null;
+try {
+  let ownerCapability = localStorage.getItem(ownerKey);
+  if (!validCapability(ownerCapability)) {
+    ownerCapability = Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(ownerKey, ownerCapability);
+  }
+  draft = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+  if (draft && !validCapability(draft.ownerCapability)) draft = { requestId: crypto.randomUUID(), entries: draft.entries, ownerCapability };
+  if (location.hash.length > 1) {
+    const assignment = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+    draft = { requestId: crypto.randomUUID(), entries: assignment.entries, mode: assignment.mode || 'copy', ownerCapability };
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  if (!draft) draft = { requestId: crypto.randomUUID(), entries: defaultEntries, mode: 'copy', ownerCapability };
+  if (!draft.mode) { draft.mode = 'copy'; if (!draft.room) draft.requestId = crypto.randomUUID(); }
+  if (!Array.isArray(draft.entries) || !draft.entries.length || draft.entries.some(entry => typeof entry.text !== 'string' || !Array.isArray(entry.selectedIndexes))) throw new Error();
+  sessionStorage.setItem(storageKey, JSON.stringify(draft));
+} catch { draft = null; $('status').textContent = '設定未能保存，請允許瀏覽器儲存資料後重新開頁。'; }
+$('assignment').textContent = draft?.entries?.map(word => word.selectedIndexes.map(index => Array.from(word.text)[index]).join('、')).join(' / ') || '未能載入題目。';
+$('create').disabled = !draft || !!draft.room;
+$('mode').value = draft?.mode || 'copy'; $('mode').disabled = !draft || !!draft.room;
+$('mode').addEventListener('change', () => {
+  if ($('mode').disabled) return;
+  const next = { ...draft, mode: $('mode').value, requestId: crypto.randomUUID() };
+  try { sessionStorage.setItem(storageKey, JSON.stringify(next)); draft = next; }
+  catch { $('mode').value = draft.mode; $('status').textContent = '設定未能保存，請再試。'; }
+});
+async function request(path, options = {}) {
+  let response, data;
+  try {
+    response = await fetch(apiOrigin + '/api/v1/classes' + path, { ...options, credentials: 'omit', headers: { ...options.headers, 'X-Teacher-Capability': draft.ownerCapability } });
+    data = await response.json();
+  } catch { throw new Error('未能連線，請重試。'); }
+  if (!response.ok) throw Object.assign(new Error(data.error?.message || '未能連線，請重試。'), { code: data.error?.code });
+  return data;
+}
+function showRoom(room) {
+  $('room').hidden = false; $('code').textContent = room.code; $('expiry').textContent = '加入截止：' + new Date(room.joinExpiresAt || room.expiresAt).toLocaleString('zh-HK') + '；班級到期：' + new Date(room.expiresAt).toLocaleString('zh-HK'); $('new-class').hidden = false; $('mode').disabled = true; $('publish').hidden = true; $('delete-class').hidden = room.assignment.version !== 2;
+  $('publish').disabled = true;
+  if (globalThis.setTimeout) {
+    clearTimeout(expiryTimer);
+    expiryTimer = setTimeout(() => {
+      if (draft.room?.code !== room.code) return;
+      stopReview?.(); stopReview = null; $('review').replaceChildren(); $('members').replaceChildren(); $('board').replaceChildren(); $('room').hidden = true; $('status').textContent = '班級已到期，請開新一班。';
+    }, Math.max(0, room.expiresAt - Date.now()));
+  }
+}
+if (draft?.room) showRoom(draft.room);
+$('new-class').addEventListener('click', () => {
+  if ($('new-class').disabled) return;
+  const next = { requestId: crypto.randomUUID(), entries: draft.entries, mode: draft.mode, ownerCapability: draft.ownerCapability };
+  try { sessionStorage.setItem(storageKey, JSON.stringify(next)); }
+  catch { $('status').textContent = '設定未能保存，請允許瀏覽器儲存資料後再試。'; return; }
+  stopReview?.(); stopReview = null; deleteArmed = false; $('delete-class').textContent = '提早刪除此班';
+  draft = next; $('room').hidden = true; $('new-class').hidden = true; $('board').replaceChildren(); $('members').replaceChildren(); $('review').hidden = true; $('create').disabled = false; $('mode').disabled = false; $('status').textContent = '';
+});
+$('create').addEventListener('click', async () => {
+  if ($('create').disabled) return;
+  $('create').disabled = true; $('new-class').disabled = true; $('mode').disabled = true; $('status').textContent = '建立中…';
+  try {
+    try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); }
+    catch { throw new Error('設定未能保存，請允許瀏覽器儲存資料後再試。'); }
+    const room = await request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: draft.requestId, version: 2, mode: draft.mode, entries: draft.entries }) });
+    draft.room = room; showRoom(room);
+    try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { $('status').textContent = '已開班，請記低班級碼；此頁未能保存。'; return; }
+    $('status').textContent = '班級已建立。將班級碼交畀同學。';
+  } catch (error) { $('status').textContent = error.message; if (error.code === 'EXPIRED') $('new-class').hidden = false; }
+  finally { $('create').disabled = !!draft.room; $('mode').disabled = !!draft.room; $('new-class').disabled = false; }
+});
+$('refresh').addEventListener('click', async () => {
+  $('refresh').disabled = true;
+  try {
+    const room = draft.room;
+    if (room.assignment.version === 2) { await refreshReviewed(room); return; }
+    const data = await request('/' + room.code + '/teacher-board');
+    if (draft.room?.code !== room.code) return;
+    const table = document.createElement('table');
+    const caption = document.createElement('caption'); caption.textContent = '全份測驗最佳成績'; table.append(caption);
+    const header = document.createElement('tr');
+    for (const text of ['名次', '暱稱', '錯誤', '秒']) { const cell = document.createElement('th'); cell.textContent = text; cell.scope = 'col'; header.append(cell); } table.append(header);
+    for (const row of data.rows) { const tr = document.createElement('tr'); for (const text of [row.rank, row.alias, row.mistakes, (row.elapsedMs / 1000).toFixed(1)]) { const td = document.createElement('td'); td.textContent = text; tr.append(td); } table.append(tr); }
+    $('board').replaceChildren(table); $('status').textContent = data.rows.length ? '已更新。' : '未有可排名嘅完成紀錄。';
+  } catch (error) { $('status').textContent = error.message; }
+  finally { $('refresh').disabled = false; }
+});
+function text(tag, value) { const el = document.createElement(tag); el.textContent = value; return el; }
+function showBoard(data) {
+  const section = document.createElement('div'), submitted = data.members?.filter(member => member.runId) || [];
+  const automatic = data.members?.filter(member => member.automaticRunId) || [];
+  if (automatic.length) {
+    section.append(text('h2', '筆順小挑戰排行榜'));
+    for (const row of BishunAssessment.timeRanks(automatic.map(member => ({ alias: member.alias, elapsedMs: member.automaticElapsedMs })))) section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + (row.elapsedMs / 1000).toFixed(1) + ' 秒'));
+  }
+  if (data.published || submitted.length) {
+    section.append(text('h2', data.published ? '已公布舊版班級榜' : '舊版班級榜尚未公布'));
+    let mode;
+    for (const row of data.rows) {
+      if (row.mode && row.mode !== mode) { section.append(text('h3', row.mode === 'copy' ? '看字寫' : '聽詞寫')); mode = row.mode; }
+      section.append(text('p', row.rank + ' · ' + row.alias + ' · ' + row.score + ' 字正確'));
+    }
+  }
+  const ready = submitted.length > 0 && submitted.every(member => Number.isInteger(member.score));
+  if (submitted.length && !data.published && !ready) section.append(text('p', '請先完成已交舊版原卷的批改。'));
+  $('board').replaceChildren(section); $('publish').disabled = data.published || !ready; $('publish').hidden = !data.published && !submitted.length;
+}
+async function refreshReviewed(room) {
+  const data = await request('/' + room.code + '/reviews');
+  if (draft.room?.code !== room.code) return;
+  const list = document.createElement('div');
+  for (const member of data.members) {
+    const row = document.createElement('p');
+    row.append(text('span', member.alias + ' · ' + (member.automaticRunId ? '已完成 · ' + (member.automaticElapsedMs / 1000).toFixed(1) + ' 秒' : !member.runId ? '未交卷' : member.score === null ? '待批改' : member.score + ' 字正確')));
+    if (member.runId) {
+      const button = text('button', '查看／批改原卷');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const original = await request('/' + room.code + '/reviews/' + member.memberId);
+          if (draft.room?.code !== room.code) return;
+          stopReview?.(); $('review').hidden = false;
+          stopReview = BishunAssessmentReview.mount($('review'), original, async changes => {
+            const result = await request('/' + room.code + '/reviews/' + member.memberId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) });
+            if (draft.room?.code === room.code) await refreshReviewed(room);
+            return result;
+          });
+        } catch (error) { if (draft.room?.code === room.code) $('status').textContent = error.message; }
+        finally { button.disabled = false; }
+      }); row.append(button);
+    }
+    if (member.automaticRunId) {
+      const button = text('button', '查看筆順小挑戰原卷');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const original = await request('/' + room.code + '/automatic-original/' + member.memberId);
+          if (draft.room?.code !== room.code) return;
+          stopReview?.(); stopReview = null; $('review').hidden = false; $('review').replaceChildren();
+          $('review').append(text('h2', member.alias + ' · ' + (original.receipt.elapsedMs / 1000).toFixed(1) + ' 秒'));
+          const positions = BishunAssessment.positions(original.run.assignment), answers = document.createElement('div'); answers.className = 'review-answers';
+          original.run.answers.forEach((answer, index) => {
+            const card = document.createElement('section'), paper = document.createElement('div'); card.className = 'review-answer'; paper.className = 'review-paper';
+            card.append(text('h3', positions[index].word + ' · 第 ' + (positions[index].index + 1) + ' 字'), paper);
+            BishunFreehand.render(paper, answer.strokes); answers.append(card);
+          });
+          $('review').append(answers);
+        } catch (error) { if (draft.room?.code === room.code) $('status').textContent = error.message; }
+        finally { button.disabled = false; }
+      }); row.append(button);
+    }
+    list.append(row);
+  }
+  $('members').replaceChildren(list); showBoard(data); $('status').textContent = '收卷及排行榜已更新。';
+}
+$('publish').addEventListener('click', async () => {
+  if ($('publish').disabled) return; $('publish').disabled = true; const room = draft.room;
+  try { const data = await request('/' + room.code + '/publication', { method: 'POST' }); if (draft.room?.code === room.code) showBoard(data); }
+  catch (error) { if (draft.room?.code === room.code) { $('status').textContent = error.message; $('publish').disabled = error.code === 'MARKING_PENDING'; } }
+});
+$('delete-class').addEventListener('click', async () => {
+  if ($('delete-class').disabled) return;
+  if (!deleteArmed) { deleteArmed = true; $('delete-class').textContent = '確認刪除此班及原筆跡'; return; }
+  const room = draft.room; $('delete-class').disabled = true; $('new-class').disabled = true;
+  try {
+    await request('/' + room.code, { method: 'DELETE' });
+    stopReview?.(); stopReview = null; delete draft.room; draft.requestId = crypto.randomUUID();
+    $('room').hidden = true; $('review').replaceChildren(); $('members').replaceChildren(); $('board').replaceChildren(); $('create').disabled = false; $('mode').disabled = false; $('status').textContent = '班級及原筆跡已刪除。';
+    try { sessionStorage.setItem(storageKey, JSON.stringify(draft)); } catch { $('status').textContent = '班級及原筆跡已刪除；本頁未能保存新設定。'; }
+  } catch (error) { $('status').textContent = error.message; }
+  finally { $('delete-class').disabled = false; $('new-class').disabled = false; deleteArmed = false; $('delete-class').textContent = '提早刪除此班'; }
+});
+</script></body></html>

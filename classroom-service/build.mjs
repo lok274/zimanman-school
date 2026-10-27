@@ -3,24 +3,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 const root = path.dirname(fileURLToPath(import.meta.url));
-const source = fs.existsSync(path.join(root, '../dist/quiz-results.js')) ? '../dist/quiz-results.js' : 'shared/quiz-results.js';
+const sourceExport = fs.existsSync(path.join(root, 'shared/quiz-results.js'));
+const source = sourceExport ? 'shared/quiz-results.js' : '../dist/quiz-results.js';
 const canonical = fs.readFileSync(path.join(root, source), 'utf8');
-const shared = name => fs.readFileSync(path.join(root, fs.existsSync(path.join(root, '../dist', name)) ? '../dist/' + name : 'shared/' + name), 'utf8');
+const shared = name => fs.readFileSync(path.join(root, sourceExport ? 'shared/' + name : '../dist/' + name), 'utf8');
 const assessment = shared('assessment.js');
 const characterData = shared('character-data.js');
 const automaticSchema = fs.readFileSync(path.join(root, 'drizzle/0002_automatic_submissions.sql'), 'utf8').trim();
 const characterContext = vm.createContext({});
 vm.runInContext(characterData + '\n' + shared('data/characters.js'), characterContext);
 const targetCounts = Object.fromEntries(Object.entries(characterContext.BishunCharacters).map(([character, data]) => [character, characterContext.BishunCharacterData.validateCharacter(character, data).strokes.length]));
-const contentSource = fs.existsSync(path.join(root, '../dist/content.js')) ? '../dist/content.js' : 'shared/content.js';
 const context = vm.createContext({});
-vm.runInContext(fs.readFileSync(path.join(root, contentSource), 'utf8'), context);
+vm.runInContext(shared('content.js'), context);
 const dataUrl = context.BishunContent.dataUrl;
 const defaults = context.BishunContent.words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) }));
 const teacherScripts = [canonical, assessment, shared('freehand.js'), shared('assessment-review.js')].join('\n');
-const teacher = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8').replace('__DEFAULT_ENTRIES__', JSON.stringify(defaults))
+const teacherTemplate = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8').replace('__DEFAULT_ENTRIES__', JSON.stringify(defaults))
   .replace('__ASSESSMENT_SCRIPTS__', () => teacherScripts.replace(/<\/script/gi, '<\\/script'))
   .replace('__ASSESSMENT_CSS__', () => shared('assessment.css'));
+const teacher = teacherTemplate.replace('__API_ORIGIN__', JSON.stringify(''));
+if (!sourceExport) fs.writeFileSync(path.join(root, '../dist/teacher.html'), teacherTemplate.replace('__API_ORIGIN__', JSON.stringify('https://zimanman-classroom-1023.lokyau65.chatgpt.site')));
 fs.writeFileSync(path.join(root, 'src/quiz-results.js'), canonical + '\nexport default globalThis.BishunQuizResults;\n');
 fs.writeFileSync(path.join(root, 'src/assessment.js'), assessment + '\nexport default globalThis.BishunAssessment;\n');
 fs.writeFileSync(path.join(root, 'src/teacher-page.js'), 'export default ' + JSON.stringify(teacher) + ';\n');

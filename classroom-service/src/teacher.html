@@ -11,6 +11,7 @@ __ASSESSMENT_SCRIPTS__
 const $ = id => document.getElementById(id);
 const storageKey = 'zimanman:teacher';
 const ownerKey = 'zimanman:teacher-owner';
+const apiOrigin = __API_ORIGIN__;
 const defaultEntries = __DEFAULT_ENTRIES__;
 const validCapability = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 let draft = null, stopReview = null, deleteArmed = false, expiryTimer = null;
@@ -25,7 +26,7 @@ try {
   if (location.hash.length > 1) {
     const assignment = JSON.parse(decodeURIComponent(location.hash.slice(1)));
     draft = { requestId: crypto.randomUUID(), entries: assignment.entries, mode: assignment.mode || 'copy', ownerCapability };
-    history.replaceState(null, '', '/teacher');
+    history.replaceState(null, '', location.pathname + location.search);
   }
   if (!draft) draft = { requestId: crypto.randomUUID(), entries: defaultEntries, mode: 'copy', ownerCapability };
   if (!draft.mode) { draft.mode = 'copy'; if (!draft.room) draft.requestId = crypto.randomUUID(); }
@@ -44,7 +45,7 @@ $('mode').addEventListener('change', () => {
 async function request(path, options = {}) {
   let response, data;
   try {
-    response = await fetch('/api/v1/classes' + path, { ...options, headers: { ...options.headers, 'X-Teacher-Capability': draft.ownerCapability } });
+    response = await fetch(apiOrigin + '/api/v1/classes' + path, { ...options, credentials: 'omit', headers: { ...options.headers, 'X-Teacher-Capability': draft.ownerCapability } });
     data = await response.json();
   } catch { throw new Error('未能連線，請重試。'); }
   if (!response.ok) throw Object.assign(new Error(data.error?.message || '未能連線，請重試。'), { code: data.error?.code });

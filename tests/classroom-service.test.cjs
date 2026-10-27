@@ -33,6 +33,16 @@ test('Worker package contains exactly the canonical scorer', () => {
   assert(fs.readFileSync(path.join(root, 'dist/server/index.js'), 'utf8').includes(source));
   assert.equal(fs.readFileSync(path.join(root, 'src/quiz-results.js'), 'utf8'), source + '\nexport default globalThis.BishunQuizResults;\n');
 });
+test('Worker keeps both anonymous teacher routes on the canonical relative API page', async () => {
+  const module = await worker;
+  const expected = JSON.parse(fs.readFileSync(path.join(root, 'src/teacher-page.js'), 'utf8').slice('export default '.length, -2));
+  for (const route of ['/', '/teacher']) {
+    const response = await module.fetch(new Request('https://class.test' + route), {});
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), expected);
+    assert(expected.includes('const apiOrigin = "";'));
+  }
+});
 test('browser owner capability, separate teacher board and same-origin creation are enforced', async t => {
   const e = setup(t);
   assert.equal((await e.call('', 'POST', { requestId: 'no', entries }, { origin: 'https://class.test' })).status, 401);
@@ -45,6 +55,7 @@ test('browser owner capability, separate teacher board and same-origin creation 
   assert.equal((await e.call(path + '/teacher-board')).status, 401);
   assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, { 'x-teacher-capability': 'b'.repeat(64) })).status, 403);
   assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, teacherHeaders)).status, 200);
+  assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, { ...teacherHeaders, origin: 'http://localhost:4173' })).status, 403);
   assert.equal((await e.call(path + '/board', 'GET', undefined, teacherHeaders)).status, 401);
   const member = await e.join(room.data.code, '小星');
   assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, { authorization: 'Bearer ' + member.token })).status, 401);
@@ -74,7 +85,9 @@ test('Pages teacher creates and manages only its own class without cookies', asy
   assert.equal((await e.call(route + '/reviews', 'GET', undefined, headers)).status, 200);
   assert.equal((await e.call(route + '/reviews', 'GET', undefined, { origin: headers.origin })).status, 401);
   assert.equal((await e.call(route + '/reviews', 'GET', undefined, { ...headers, 'x-teacher-capability': 'b'.repeat(64) })).status, 403);
-  for (const origin of ['http://localhost:4173', 'http://127.0.0.1:4173', 'https://evil.test', 'null']) {
+  assert.equal((await e.call(route, 'DELETE', undefined, { origin: headers.origin })).status, 401);
+  assert.equal((await e.call(route, 'DELETE', undefined, { ...headers, 'x-teacher-capability': 'b'.repeat(64) })).status, 403);
+  for (const origin of ['http://localhost:4173', 'http://127.0.0.1:4173', 'https://evil.test', 'https://lok274.github.io.evil.test', 'https://other.github.io', 'null']) {
     assert.equal((await e.call(route + '/reviews', 'GET', undefined, { ...headers, origin })).status, 403, origin);
     assert.equal((await e.call(route, 'DELETE', undefined, { ...headers, origin })).status, 403, origin);
   }
@@ -242,7 +255,7 @@ test('reviewed originals are private, first-only, atomic and exactly idempotent'
   assert.deepEqual(own.run.answers, e.run.answers); assert.equal(own.score, null);
   assert(!Object.hasOwn(own.run, 'elapsedMs')); assert(!Object.hasOwn(own.run, 'startedAt'));
   assert.equal((await e.call(path + '/reviews', 'GET', undefined, e.own)).status, 401);
-  assert.equal((await e.call(path + '/reviews', 'GET', undefined, { ...teacherHeaders, origin: 'https://lok274.github.io' })).status, 403);
+  assert.equal((await e.call(path + '/reviews', 'GET', undefined, { ...teacherHeaders, origin: 'http://localhost:4173' })).status, 403);
   assert.equal((await e.call(path + '/reviews', 'GET', undefined, { 'x-teacher-capability': teacherCapability, 'sec-fetch-site': 'same-origin' })).status, 200);
   const teacher = (await e.call(path + '/reviews/' + e.member.data.memberId, 'GET', undefined, teacherHeaders)).data;
   assert.deepEqual(teacher.run, e.run); assert.equal(teacher.elapsedMs, 13000);
