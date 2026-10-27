@@ -93,6 +93,18 @@ test('locked challenge preserves copy presentation and original ordinal speech f
   assert.equal(new Set(e.mounts.map(mount => mount.target)).size, 1);
 });
 
+test('challenge speaks available Cantonese and Hong Kong script locales without using other voices', async () => {
+  for (const lang of ['zh-HK', 'zh-Hant-HK', 'zh_Hant_HK', 'yue-Hant-HK', 'yue_HK', 'yue', 'zh-CN', 'zh-TW', 'en-US', 'not-yue']) {
+    const e = boot();
+    e.context.speechSynthesis.getVoices = () => [{ lang }];
+    await e.ui.open(e.assigned); await begin(e); await e.click('聽題目');
+    const available = !['zh-CN', 'zh-TW', 'en-US', 'not-yue'].includes(lang);
+    assert.equal(e.spoken.length, available ? 1 : 0, lang);
+    if (available) assert.equal(e.spoken[0], '鬍。寫第 1 個字。');
+    else assert.match(e.panel.textContent, /裝置未提供粵語聲音/);
+  }
+});
+
 test('completion shows only time board and Back releases exactly its local pointer while retaining history', async () => {
   const e = boot(); await e.ui.open(e.assigned); await fill(e); const first = clone(e.record());
   assert.match(e.panel.textContent, /本機排行榜/); assert.match(e.panel.textContent, /紀錄 1/); assert.equal(e.panel.all().filter(item => item.tagName === 'BUTTON').length, 1);
