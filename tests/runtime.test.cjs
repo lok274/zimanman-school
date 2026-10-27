@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const currentSession = require('../dist/session.js');
+const classroomConfig = require('../dist/classroom.js');
+const classroomStorageKey = classroomConfig.storageKey + ':' + classroomConfig.defaultOrigin;
 const S = { ...currentSession, createSession(options) { const state = currentSession.createSession(options); if (state.mode === 'practice') { state.version = 3; delete state.wordChoices; } return state; } };
 const assigned = text => S.parseEntries(text).map(entry => ({ ...entry, selectedIndexes: entry.characters.map((_, index) => index) }));
 const source = file => fs.readFileSync(path.join(__dirname, '../dist', file), 'utf8');
@@ -69,7 +71,7 @@ function environment(html = '<html><body><div id="writer"></div></body></html>')
   const storage = { get length() { return store.size; }, key: i => [...store.keys()][i], getItem: key => store.get(key) || null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key) };
   const observers = new Set(), windowListeners = {}, motion = { reduced: false }; let nextId = 0;
   document.hidden = false;
-  const context = vm.createContext({ document, console, setTimeout: (...args) => { const timer = setTimeout(...args); timer.unref(); return timer; }, clearTimeout, performance, AbortController, NodeFilter: { SHOW_TEXT: 4 },
+  const context = vm.createContext({ document, console, setTimeout: (...args) => { const timer = setTimeout(...args); timer.unref(); return timer; }, clearTimeout, performance, AbortController, URL, NodeFilter: { SHOW_TEXT: 4 },
     localStorage: storage, sessionStorage: storage, crypto: { randomUUID: () => 'runtime-test-' + ++nextId },
     ResizeObserver: class { constructor(callback) { this.callback = callback; } observe() { observers.add(this); } disconnect() { observers.delete(this); } },
     speechSynthesis: { getVoices: () => voices.current, cancel() { voices.cancels++; }, speak(utterance) { if (voices.fail) throw new Error("speech blocked"); voices.spoken.push(utterance); }, addEventListener(_name, fn) { voices.changed = fn; } },
@@ -826,6 +828,7 @@ async function classroomApp({ uploadFails = false, holdUpload = false, restoredS
 }
 test('class quiz uses its immutable assignment and automatically opens separate leaderboard only after a whole receipt', async () => {
   const e = await classroomApp(); assert.equal(e.snapshot().entries[0].text, '二一');
+  assert.equal(e.calls[0].url, classroomConfig.defaultOrigin + '/api/v1/classes/ABCDEFGH/members');
   e.complete(); await waitFor(() => e.mounts.length === 2); assert.equal(e.calls.length, 1); assert.equal(e.navigation.length, 0);
   e.complete(); await waitFor(() => e.navigation.length === 1);
   assert.deepEqual(e.navigation, ['leaderboard.html']); assert.equal(e.calls.filter(call => call.method === 'PUT').length, 1);
@@ -868,14 +871,14 @@ test('a late committed upload does not pull a learner out of a newly started loc
   const e = await classroomApp({ holdUpload: true }); e.complete(); await waitFor(() => e.mounts.length === 2); e.complete();
   await waitFor(() => typeof e.releaseUpload === 'function');
   e.$('new-session').click(); startLocal(e); e.releaseUpload();
-  await waitFor(() => JSON.parse(e.store.get('bishun:classroom:v1')).receipt);
+  await waitFor(() => JSON.parse(e.store.get(classroomStorageKey)).receipt);
   assert.equal(e.navigation.length, 0); assert.equal(e.snapshot().mode, 'practice');
 });
 test('automatic board handoff waits until teacher tools close and the summary is visible', async () => {
   const e = await classroomApp({ holdUpload: true }); e.complete(); await waitFor(() => e.mounts.length === 2); e.complete();
   await waitFor(() => typeof e.releaseUpload === 'function');
   e.$('teacher-open').click(); e.document.hidden = true; e.document.emit('visibilitychange'); e.releaseUpload();
-  await waitFor(() => JSON.parse(e.store.get('bishun:classroom:v1')).receipt);
+  await waitFor(() => JSON.parse(e.store.get(classroomStorageKey)).receipt);
   assert.equal(e.navigation.length, 0); e.$('teacher-close').click(); assert.equal(e.navigation.length, 0);
   e.document.hidden = false; e.document.emit('visibilitychange'); assert.deepEqual(e.navigation, ['leaderboard.html']);
 });
@@ -886,10 +889,10 @@ test('dedicated board consumes immediate handoff once, polls only visibly and re
     e.context.setTimeout = callback => { timers.set(++nextTimer, callback); return nextTimer; }; e.context.clearTimeout = id => timers.delete(id);
     e.context.crypto = require('node:crypto').webcrypto;
     const member = { code: 'ABCDEFGH', memberId: 'me', alias: '小星', token: 'a'.repeat(64), expiresAt: Date.now() + 600000, assignment: { version: 1, entries: [{ text: '一', selectedIndexes: [0] }] } };
-    e.store.set('bishun:classroom:v1', JSON.stringify({ member, receipt: { runId: 'done', ranked: true } }));
+    e.store.set(classroomStorageKey, JSON.stringify({ member, receipt: { runId: 'done', ranked: true } }));
     if (immediate) e.store.set('bishun:board-handoff', JSON.stringify({ memberId: 'me', runId: 'done', at: Date.now() }));
     e.context.sessionStorage.removeItem = key => e.store.delete(key);
-    e.context.fetch = async () => { reads++; return { ok: true, json: async () => ({ rows: [{ memberId: 'me', alias: '小星', rank: 1, mistakes: 0, elapsedMs: 1000, isMe: true }], personalBest: { mistakes: 0, elapsedMs: 1000 } }) }; };
+    e.context.fetch = async url => { assert.equal(url, classroomConfig.defaultOrigin + '/api/v1/classes/ABCDEFGH/board'); reads++; return { ok: true, json: async () => ({ rows: [{ memberId: 'me', alias: '小星', rank: 1, mistakes: 0, elapsedMs: 1000, isMe: true }], personalBest: { mistakes: 0, elapsedMs: 1000 } }) }; };
     for (const file of ['quiz-results.js', 'classroom.js', 'leaderboard.js']) vm.runInContext(source(file), e.context);
     if (!immediate) { assert.equal(reads, 0); assert.equal(e.$('board-continue').hidden, false); e.$('board-continue').click(); }
     await waitFor(() => e.$('board-results').textContent.includes('小星'));
@@ -1380,13 +1383,12 @@ test('classroom last completion offers the actual submit action and never enters
   e.$('main-next').click(); await waitFor(() => e.navigation.length === 1); assert.equal(e.calls.filter(call => call.method === 'PUT').length, 1);
 });
 
-test('Pages and standalone source branding use 寫字樂 while persistent keys and classroom origin remain compatible', () => {
+test('Pages and standalone source branding use 寫字樂 while practice storage remains compatible', () => {
   for (const page of ['index.html', 'standalone.html']) assert(source(page).includes('<title>寫字樂 · 一筆一筆，慢慢學</title>'));
   assert(source('index.html').includes('aria-label="寫字樂首頁"'));
   assert(source('leaderboard.html').includes('<title>寫字樂 · 班級排行榜</title>'));
   assert(source('leaderboard.html').includes('href="index.html">寫字樂</a>'));
   assert(source('app.js').includes("const prefix = 'bishun-school:v1:'"));
-  assert(source('app.js').includes('https://zimanman-classroom-1023.lokyau65.chatgpt.site'));
 });
 
 test('component guidance covers every reviewed real glyph boundary and rejects incompatible data', () => {

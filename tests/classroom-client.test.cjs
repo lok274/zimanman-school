@@ -13,14 +13,58 @@ function setup(fetch) {
   const data = new Map(), calls = [];
   const storage = { getItem: key => data.get(key) || null, setItem: (key, value) => data.set(key, value) };
   const options = { origin: 'https://class.test', storage, crypto: webcrypto, fetch: async (url, init) => { calls.push({ url, ...init }); return fetch(url, init); } };
-  return { client: C.create(options), data, calls, storage, options };
+  return { client: C.create(options), data, calls, storage, options, key: C.storageKey + ':' + new URL(options.origin).origin };
 }
+test('classroom state belongs to its API origin and leaves old records untouched', async () => {
+  const e = setup(() => response(member));
+  await e.client.join(member.code, member.alias);
+  const original = e.data.get(e.key);
+  assert.equal(typeof original, 'string');
+  e.data.set(C.storageKey, original);
+  e.data.set('bishun-school:v1:history', 'local practice record');
+  const other = C.create({ ...e.options, origin: 'https://other.test' });
+  assert.equal(other.view().member, null);
+  assert.equal(other.view().receipt, null);
+  assert.equal(e.calls.length, 1);
+  await other.join(member.code, member.alias);
+  assert.equal(e.calls[1].url, 'https://other.test/api/v1/classes/' + member.code + '/members');
+  assert.notEqual(JSON.parse(e.calls[0].body).memberToken, JSON.parse(e.calls[1].body).memberToken);
+  other.leave();
+  const reload = C.create({ ...e.options, origin: 'https://CLASS.test:443/' });
+  assert.equal(reload.view().member.memberId, member.memberId);
+  assert.equal(reload.view().needsContinue, true);
+  assert.equal(e.data.get(e.key), original);
+  assert.equal(e.data.get(C.storageKey), original);
+  assert.equal(e.data.get('bishun-school:v1:history'), 'local practice record');
+});
+test('lost join retries keep their request and capability after a same-origin reload', async () => {
+  let offline = true;
+  const e = setup(() => { if (offline) throw new Error('offline'); return response(member); });
+  await e.client.join(member.code, member.alias);
+  const other = C.create({ ...e.options, origin: 'https://other.test' });
+  await other.join(member.code, member.alias);
+  assert.notEqual(e.calls[0].body, e.calls[1].body);
+  offline = false;
+  const reload = C.create({ ...e.options, origin: 'https://class.test/' });
+  await reload.join(member.code, member.alias);
+  assert.equal(e.calls[2].body, e.calls[0].body);
+  assert.equal(e.calls[2].url, e.calls[0].url);
+  assert.equal(reload.view().accepted, true);
+});
+test('classroom requests use the canonical default when no origin is supplied', async () => {
+  const e = setup(() => response(member));
+  const { origin, ...options } = e.options;
+  assert.equal(new URL(C.defaultOrigin).origin, C.defaultOrigin);
+  const client = C.create(options);
+  await client.join(member.code, member.alias);
+  assert.equal(e.calls[0].url, C.defaultOrigin + '/api/v1/classes/' + member.code + '/members');
+});
 test('reviewed transport keeps sealed payloads out of sessionStorage and requires explicit identity after reload', async () => {
   const reviewedMember = { ...member, assignment: BishunAssessment.assignment(assignment.entries, 'listen') };
   const run = BishunAssessment.start(reviewedMember.assignment, 'ink-run'); run.phase = 'sealed'; run.answers[0].status = 'submitted'; run.answers[0].strokes = [[[1, 2, 0], [3, 4, 10]]];
   const e = setup(url => response(url.endsWith('/members') ? reviewedMember : url.endsWith('/board') ? { published: true, rows: [{ alias: member.alias, rank: 1, score: 1 }] } : { runId: run.runId, official: true }));
   await e.client.join(member.code, member.alias); await e.client.submitReviewed(run);
-  assert(!e.data.get(C.storageKey).includes('"strokes":'));
+  assert(!e.data.get(e.key).includes('"strokes":'));
   const reload = C.create(e.options); assert.equal(reload.view().needsContinue, true);
   await assert.rejects(reload.ownAnswer(), /身份/);
   reload.continueMember(); await reload.refresh();
@@ -118,7 +162,7 @@ test('late join, upload and board responses cannot restore a previous learner af
     e.client.leave(); finish(response(stage === 'join' ? member : stage === 'board' ? { rows: [], personalBest: null } : { runId: 'run-a', ranked: true }));
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(e.client.view().member, null); assert.equal(e.client.view().receipt, null); assert.equal(e.client.view().board, null); assert.equal(e.client.view().pending, false);
-    assert.deepEqual(JSON.parse(e.data.get(C.storageKey)), {});
+    assert.deepEqual(JSON.parse(e.data.get(e.key)), {});
   }
 });
 test('completion never overwrites pending evidence and no board fetch happens before a committed receipt', async () => {
@@ -127,7 +171,7 @@ test('completion never overwrites pending evidence and no board fetch happens be
   e.client.bindRun('run-a'); e.client.finish(Q.evaluate(assignment.entries, evidence)); await settled(e.client);
   assert.throws(() => e.client.bindRun('run-b'));
   e.client.finish(Q.evaluate(assignment.entries, { ...evidence, runId: 'run-b' }));
-  assert.equal(JSON.parse(e.data.get(C.storageKey)).pending.runId, 'run-a');
+  assert.equal(JSON.parse(e.data.get(e.key)).pending.runId, 'run-a');
 });
 test('storage denial prevents joining before a network write and later denial preserves pending completion', async () => {
   const e = setup(url => response(url.endsWith('/members') ? member : { runId: 'run-a', ranked: true }));
@@ -149,7 +193,7 @@ test('failure to save a committed receipt keeps the exact retry and never releas
 });
 test('malformed persisted join drafts are discarded and cannot crash joining', async () => {
   for (const value of [{ join: {} }, { join: { code: 'ABCDEFGH', body: null } }, { pending: evidence }, []]) {
-    const e = setup(() => response(member)); e.data.set(C.storageKey, JSON.stringify(value));
+    const e = setup(() => response(member)); e.data.set(e.key, JSON.stringify(value));
     const client = C.create(e.options); await client.join('ABCDEFGH', '小星'); assert.equal(client.view().accepted, true);
   }
 });
@@ -173,7 +217,7 @@ test('automatic transport requires versioned canonical receipt, preserves only r
   const e=setup(url=>response(url.endsWith('/members')?joined:url.endsWith('/automatic-board')?board:receipt));await e.client.join(member.code,member.alias);
   await assert.rejects(e.client.submitAutomatic(run),/回應無效/);assert.equal(e.client.view().receipt,null);
   receipt={version:4,policy:BishunAssessment.policy,runId:run.runId,official:true,elapsedMs:1000};await e.client.submitAutomatic(run);
-  assert(!e.data.get(C.storageKey).includes('"strokes":'));assert(e.calls.filter(call=>call.method==='PUT').every(call=>call.url.endsWith('/automatic-answers')));
+  assert(!e.data.get(e.key).includes('"strokes":'));assert(e.calls.filter(call=>call.method==='PUT').every(call=>call.url.endsWith('/automatic-answers')));
   const reload=C.create(e.options);reload.continueMember();await reload.refresh();assert.equal(reload.view().board.automatic,true);assert.equal(reload.view().board.personalBest.elapsedMs,1000);
   receipt={...receipt,elapsedMs:1100};await assert.rejects(e.client.submitAutomatic(run),/回應無效/);
 });
