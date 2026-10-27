@@ -28,8 +28,7 @@
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let dictation = { phase: Recognition ? 'idle' : 'unsupported', token: 0, recognition: null, timer: null, deadline: 0, message: '' };
   const Q = globalThis.BishunQuizResults;
-  const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
-  const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
+  const classroom = globalThis.BishunClassroom?.create({ origin: document.body.getAttribute?.('data-classroom-origin') || undefined, changed: renderClassroom });
   const assessment = globalThis.BishunAssessmentUI?.create({ classroom, onClose: goHome });
   function assessmentMode() { return $('assessment-mode')?.value || 'copy'; }
   function refreshLocalResume() { if (assessment) assessment.hasLocal().then(found => { $('resume-assessment').hidden = !found; }).catch(() => {}); }

@@ -4,7 +4,7 @@ The Worker serves the legacy teacher page and stores assignments, anonymous memb
 
 ## Build and export
 
-Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. In the canonical repository it also produces tracked `../dist/teacher.html` from `src/teacher.html`. The Worker page uses relative API URLs. The Pages page uses the fixed existing HTTPS service origin. Both explicitly omit cookies. The Pages pipeline builds and checks this tracked page before publishing. Deploy the updated service before publishing the Pages entry.
+Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. In the canonical repository it also produces tracked `../dist/teacher.html` from `src/teacher.html`. The Worker page uses relative API URLs. The Pages page uses `defaultOrigin` from `../dist/classroom.js`, shared with the student app and leaderboard. Both explicitly omit cookies. The Pages pipeline builds and checks this tracked page before publishing. Deploy the updated service before publishing the Pages entry.
 
 Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissions.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. The API also initializes the additive automatic table once per DB binding because Sites packaging does not apply migrations. Failed initialization retries on the next request. The inline DDL is generated from migration 0002.
 
@@ -19,6 +19,14 @@ The canonical shared files are in the repository's `dist/`.
 - `assessment.css` supplies the shared review layout.
 
 An exported Sites source needs exact copies of all eight files under `shared/`. The presence of `shared/quiz-results.js` selects the export build. It uses only those shared copies and never writes a parent `dist/teacher.html`, even when sibling files exist. Tests build this isolated export and compare the resulting Worker byte for byte. Do not edit generated `src/quiz-results.js`, `src/assessment.js`, `src/teacher-page.js`, `src/character-data.js`, `src/target-counts.js`, `src/automatic-schema.js` or the output bundle. The export owner preserves the managed hosting manifest. Building does not deploy or change Site access.
+
+## Direct Cloudflare hosting
+
+The same Worker can use a new empty D1 database. Create a separate production Wrangler config with the actual account and database identifiers. Keep entry `dist/server/index.js`, binding `DB`, and migrations directory `drizzle`. The checked-in `wrangler.jsonc` is local-only and has a placeholder database ID. Apply all three migrations, 0000 through 0002, to the new database before deploying. Runtime automatic-table initialization cannot create the other tables.
+
+Verify anonymous create, join, automatic submission, private originals and board access on the actual deployed endpoint before changing `defaultOrigin`. Then regenerate the teacher page, versioned assets and standalone file. No production Cloudflare identifiers or replacement endpoint are configured by this preparation.
+
+Changing the API origin gives pupils and teachers separate sessionStorage state. Old unscoped keys stay untouched. Teacher owner localStorage, local practice and IndexedDB handwriting records stay intact. Existing old rooms are not migrated. Teachers create fresh rooms and pupils rejoin after refreshing Pages. Three-digit codes can repeat between databases, so the client never falls back to another endpoint. Keep the old service unchanged until its rooms expire. To roll back Worker code, retain the new D1 binding and origin. Keep an entry to new rooms reachable until expiry if Pages must be rolled back.
 
 ## Automatic HTTP contract
 

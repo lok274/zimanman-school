@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const client = BishunClassroom.create({ origin: document.body.getAttribute('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site', changed: render });
+  const client = BishunClassroom.create({ origin: document.body.getAttribute('data-classroom-origin') || undefined, changed: render });
   let poll = null, remaining = 120, active = !document.hidden;
   function node(tag, text, className) { const element = document.createElement(tag); element.textContent = text; if (className) element.className = className; return element; }
   function score(row) { return client.view().receipt?.version === 4 ? (row.elapsedMs / 1000).toFixed(1) + ' 秒' : Number.isInteger(row.score) ? '字形正確 ' + row.score + ' 字' : '錯誤 ' + row.mistakes + ' 次 · ' + (row.elapsedMs / 1000).toFixed(1) + ' 秒'; }
