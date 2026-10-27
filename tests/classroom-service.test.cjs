@@ -132,19 +132,20 @@ test('join retries retain capability and aliases refuse takeover under concurren
   assert.equal((await e.join(code, '小月', 'same')).data.error.code, 'CONFLICT');
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 1);
 });
-test('new three-digit classes close admission at fifteen minutes but keep existing members for a day', async t => {
+test('new eight-character classes close admission at fifteen minutes but keep existing members for a day', async t => {
   const e = setup(t), now = Date.now(), originalNow = Date.now;
   Date.now = () => now;
   try {
     const room = (await e.create()).data;
-    assert.match(room.code, /^[1-9]\d{2}$/);
+    assert.match(room.code, /^[A-HJ-NP-Z2-9]{8}$/);
     assert.equal(room.joinExpiresAt, now + 900000);
     assert.equal(room.expiresAt, now + 86400000);
-    e.sqlite.prepare('UPDATE classes SET expires_at = ? WHERE code = ?').run(now + 85500001, room.code);
+    assert.equal(e.sqlite.prepare('SELECT join_expires_at FROM classes WHERE code = ?').get(room.code).join_expires_at, now + 900000);
+    Date.now = () => now + 899999;
     const token = randomBytes(32).toString('hex');
     const admitted = await e.join(room.code, '準時', 'lost-response', token);
     assert.equal(admitted.status, 200);
-    e.sqlite.prepare('UPDATE classes SET expires_at = ? WHERE code = ?').run(now + 85500000, room.code);
+    Date.now = () => now + 900000;
     assert.equal((await e.join(room.code, '遲到')).data.error.code, 'JOIN_CLOSED');
     const retry = await e.join(room.code, '準時', 'lost-response', token);
     assert.equal(retry.status, 200);
@@ -153,6 +154,8 @@ test('new three-digit classes close admission at fifteen minutes but keep existi
     assert.equal((await e.submit(room.code, token, e.evidence())).status, 200);
     assert.equal((await e.call('/' + room.code + '/board', 'GET', undefined, { authorization: 'Bearer ' + token })).status, 200);
     assert.equal((await e.call('/' + room.code + '/teacher-board', 'GET', undefined, teacherHeaders)).status, 200);
+    assert.deepEqual((await e.create()).data, room, 'teacher retry cannot extend the admission deadline');
+    assert.equal(e.sqlite.prepare('SELECT expires_at FROM classes WHERE code = ?').get(room.code).expires_at, now + 86400000);
     assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 1);
   } finally { Date.now = originalNow; }
 });
@@ -160,13 +163,13 @@ test('a collision retries without recycling a live code and legacy eight-charact
   const e = setup(t), random = globalThis.crypto.getRandomValues;
   const picks = [0, 0, 1];
   globalThis.crypto.getRandomValues = array => {
-    if (array instanceof Uint32Array) { array[0] = picks.shift() ?? 2; return array; }
+    if (array instanceof Uint8Array && array.length === 8) { array.fill(picks.shift() ?? 2); return array; }
     return random.call(globalThis.crypto, array);
   };
   let first, second;
   try { first = (await e.create('first')).data; second = (await e.create('second')).data; }
   finally { delete globalThis.crypto.getRandomValues; }
-  assert.equal(first.code, '100'); assert.equal(second.code, '101');
+  assert.equal(first.code, 'AAAAAAAA'); assert.equal(second.code, 'BBBBBBBB');
   const now = Date.now();
   e.sqlite.prepare('INSERT INTO classes(code,owner_id,assignment_json,expires_at,request_id,payload_hash) SELECT ?,owner_id,assignment_json,?, ?,payload_hash FROM classes WHERE code = ?')
     .run('ABCDEFGH', now + 60000, 'legacy', first.code);
@@ -174,17 +177,49 @@ test('a collision retries without recycling a live code and legacy eight-charact
   assert.equal(joined.status, 200); assert.equal(joined.data.joinExpiresAt, joined.data.expiresAt);
   for (const code of ['000', '099', '12', '1000', 'ABC12345']) assert.equal((await e.join(code, '錯碼')).status, 404);
 });
-test('a six-word forty-eight-position challenge keeps its complete assignment in a numeric class', async t => {
+test('a six-word forty-eight-position challenge keeps its complete assignment in an eight-character class', async t => {
   const e = setup(t);
   const words = ['一二三四五六七八', '九十甲乙丙丁戊己', '庚辛壬癸子丑寅卯', '辰巳午未申酉戌亥', '天地玄黃宇宙洪荒', '日月盈昃辰宿列張'];
   const full = words.map(text => ({ text, selectedIndexes: Array.from({ length: 8 }, (_, index) => index) }));
   const created = await e.call('', 'POST', { requestId: 'full-class', version: 2, mode: 'copy', entries: full }, teacherHeaders);
   assert.equal(created.status, 200);
-  assert.match(created.data.code, /^[1-9]\d{2}$/);
+  assert.match(created.data.code, /^[A-HJ-NP-Z2-9]{8}$/);
   assert.deepEqual(created.data.assignment.entries, full);
   const joined = await e.join(created.data.code, '小星');
   assert.equal(joined.status, 200);
   assert.deepEqual(joined.data.assignment.entries, full);
+});
+test('an admission deadline crossed during a request is enforced by the atomic insert', async t => {
+  const e = setup(t), room = (await e.create()).data, originalNow = Date.now;
+  Date.now = () => room.joinExpiresAt - 1;
+  const db = { prepare(sql) { if (sql.startsWith('INSERT OR IGNORE INTO members')) Date.now = () => room.joinExpiresAt; return e.db.prepare(sql); } };
+  try {
+    const response = await (await worker).fetch(new Request('https://class.test/api/v1/classes/' + room.code + '/members', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ requestId: 'boundary', alias: '7號', memberToken: 'b'.repeat(64) }) }), { DB: db });
+    assert.equal(response.status, 410); assert.equal((await response.json()).error.code, 'JOIN_CLOSED');
+    assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM members').get().n, 0);
+  } finally { Date.now = originalNow; }
+});
+test('the additive join-deadline migration preserves populated legacy classes, members and originals', async t => {
+  const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON;'); t.after(() => sqlite.close());
+  for (const file of fs.readdirSync(path.join(root, 'drizzle')).filter(file => /^000[0-2].*\.sql$/.test(file))) sqlite.exec(fs.readFileSync(path.join(root, 'drizzle', file), 'utf8'));
+  const now = Date.now(), originalNow = Date.now, assignment = JSON.stringify({ version: 1, entries });
+  sqlite.prepare('INSERT INTO classes VALUES(?,?,?,?,?,?)').run('ABCDEFGH', 'owner', assignment, now + 86400000, 'legacy-eight', 'hash');
+  sqlite.prepare('INSERT INTO classes VALUES(?,?,?,?,?,?)').run('123', 'owner', assignment, now + 86400000, 'legacy-three', 'hash');
+  sqlite.prepare('INSERT INTO members VALUES(?,?,?,?,?,?,?)').run('old-member', '123', '1號', '1號', 'hash-token', 'old-join', 'hash');
+  sqlite.prepare('INSERT INTO reviewed_submissions(member_id,run_id,payload_hash,ink_json,ink_bytes,elapsed_ms,submitted_at,marks_json) VALUES(?,?,?,?,?,?,?,?)').run('old-member', 'old-run', 'hash', '{"original":"retained"}', 23, 100, now, '[]');
+  const oldClasses = sqlite.prepare('SELECT * FROM classes ORDER BY code').all(), oldMembers = sqlite.prepare('SELECT * FROM members').all(), oldInk = sqlite.prepare('SELECT * FROM reviewed_submissions').all();
+  sqlite.exec(fs.readFileSync(path.join(root, 'drizzle/0003_class_join_deadline.sql'), 'utf8'));
+  assert.deepEqual(sqlite.prepare('SELECT code,owner_id,assignment_json,expires_at,request_id,payload_hash FROM classes ORDER BY code').all(), oldClasses);
+  assert.deepEqual(sqlite.prepare('SELECT * FROM members').all(), oldMembers); assert.deepEqual(sqlite.prepare('SELECT * FROM reviewed_submissions').all(), oldInk);
+  assert(sqlite.prepare('SELECT join_expires_at FROM classes').all().every(row => row.join_expires_at === null));
+  const db = { prepare(sql) { const statement = sqlite.prepare(sql); let args = []; return { bind(...values) { args = values; return this; }, async first() { return statement.get(...args) || null; }, async all() { return { results: statement.all(...args) }; }, async run() { return statement.run(...args); } }; } };
+  const join = async code => { const response = await (await worker).fetch(new Request('https://class.test/api/v1/classes/' + code + '/members', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ requestId: randomUUID(), alias: '2號', memberToken: randomBytes(32).toString('hex') }) }), { DB: db }); return { status: response.status, data: await response.json() }; };
+  try {
+    Date.now = () => now + 900000;
+    const oldThree = await join('123'); assert.equal(oldThree.status, 410); assert.equal(oldThree.data.error.code, 'JOIN_CLOSED');
+    const oldEight = await join('ABCDEFGH'); assert.equal(oldEight.status, 200); assert.equal(oldEight.data.joinExpiresAt, now + 86400000);
+    assert.equal(sqlite.prepare('SELECT ink_json FROM reviewed_submissions').get().ink_json, oldInk[0].ink_json);
+  } finally { Date.now = originalNow; }
 });
 test('atomic class, member and run quotas hold at their concurrent boundaries', async t => {
   const e = setup(t);
