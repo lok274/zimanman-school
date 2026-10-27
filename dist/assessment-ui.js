@@ -146,7 +146,10 @@
       const grid = node('div', '', 'grid-lines'); grid.setAttribute('aria-hidden', 'true');
       paper.append(grid, target); area.append(paper, controls); panel.append(area);
       const timer = node('output', timerText(), 'assessment-timer'); timer.setAttribute('aria-label', '詞語用時'); controls.append(timer); startTimer(timer);
-      controls.append(button('聽題目', () => speak(position)));
+      const listen = button('', () => speak(position));
+      listen.setAttribute('aria-label', '聽題目');
+      listen.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8q5 4 0 8M20 5q8 7 0 14"/></svg>';
+      controls.append(listen);
       if (answer.status === 'submitted') {
         controls.append(node('p', 'O', 'assessment-correct'));
         controls.append(button('下一個字', async () => {
