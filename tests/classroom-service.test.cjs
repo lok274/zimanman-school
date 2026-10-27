@@ -38,7 +38,7 @@ test('browser owner capability, separate teacher board and same-origin creation 
   assert.equal((await e.call('', 'POST', { requestId: 'no', entries }, { origin: 'https://class.test' })).status, 401);
   assert.equal((await e.create('malformed', { 'x-teacher-capability': 'A'.repeat(64) })).status, 401);
   assert.equal((await e.call('', 'POST', { requestId: 'old-identity', entries }, { origin: 'https://class.test', 'oai-authenticated-user-id': 'teacher', 'oai-authenticated-user-email': 'teacher@example.invalid' })).status, 401);
-  assert.equal((await e.create('bad', { origin: 'https://lok274.github.io' })).status, 403);
+  assert.equal((await e.create('bad', { origin: 'http://localhost:4173' })).status, 403);
   assert.equal((await e.create('bad2', { origin: 'https://evil.test' })).status, 403);
   const room = await e.create(); assert.equal(room.status, 200);
   const path = '/' + room.data.code;
@@ -52,8 +52,47 @@ test('browser owner capability, separate teacher board and same-origin creation 
   assert.equal(stored.length, 64); assert.notEqual(stored, teacherCapability);
   const cors = await e.call(path + '/teacher-board', 'OPTIONS', undefined, { origin: 'https://lok274.github.io', 'access-control-request-headers': 'X-Teacher-Capability' });
   assert.equal(cors.headers.get('access-control-allow-origin'), 'https://lok274.github.io');
-  assert.equal(cors.headers.get('access-control-allow-headers'), 'Content-Type, Authorization');
+  assert.equal(cors.headers.get('access-control-allow-headers'), 'Content-Type, Authorization, X-Teacher-Capability');
   assert.equal(cors.headers.get('cache-control'), 'no-store');
+});
+test('Pages teacher preflight permits capability and deletion without cookies', async t => {
+  const e = setup(t), origin = 'https://lok274.github.io';
+  for (const method of ['POST', 'GET', 'PUT', 'DELETE']) {
+    const result = await e.call('', 'OPTIONS', undefined, { origin, 'access-control-request-method': method, 'access-control-request-headers': 'content-type, x-teacher-capability' });
+    assert.equal(result.status, 204);
+    assert.equal(result.headers.get('access-control-allow-origin'), origin);
+    assert(result.headers.get('access-control-allow-methods').split(/,\s*/).includes(method), method);
+    assert.match(result.headers.get('access-control-allow-headers'), /X-Teacher-Capability/);
+    assert.equal(result.headers.get('access-control-allow-credentials'), null);
+  }
+});
+test('Pages teacher creates and manages only its own class without cookies', async t => {
+  const e = setup(t), headers = { ...teacherHeaders, origin: 'https://lok274.github.io' };
+  const room = await e.call('', 'POST', { requestId: 'pages', version: 2, mode: 'copy', entries }, headers);
+  assert.equal(room.status, 200);
+  const route = '/' + room.data.code;
+  assert.equal((await e.call(route + '/reviews', 'GET', undefined, headers)).status, 200);
+  assert.equal((await e.call(route + '/reviews', 'GET', undefined, { origin: headers.origin })).status, 401);
+  assert.equal((await e.call(route + '/reviews', 'GET', undefined, { ...headers, 'x-teacher-capability': 'b'.repeat(64) })).status, 403);
+  for (const origin of ['http://localhost:4173', 'http://127.0.0.1:4173', 'https://evil.test', 'null']) {
+    assert.equal((await e.call(route + '/reviews', 'GET', undefined, { ...headers, origin })).status, 403, origin);
+    assert.equal((await e.call(route, 'DELETE', undefined, { ...headers, origin })).status, 403, origin);
+  }
+  assert.equal((await e.call(route, 'DELETE', undefined, headers)).status, 200);
+  assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM classes').get().n, 0);
+});
+test('teacher preflight rejects untrusted origins, headers and methods while student CORS stays available', async t => {
+  const e = setup(t);
+  for (const origin of ['http://localhost:4173', 'http://127.0.0.1:4173', 'https://evil.test', 'null']) {
+    assert.equal((await e.call('', 'OPTIONS', undefined, { origin, 'access-control-request-method': 'POST', 'access-control-request-headers': 'x-teacher-capability' })).status, 403, origin);
+  }
+  for (const request of [{ 'access-control-request-headers': 'x-unknown' }, { 'access-control-request-method': 'PATCH' }]) {
+    assert.equal((await e.call('', 'OPTIONS', undefined, { origin: 'https://lok274.github.io', ...request })).status, 403);
+  }
+  const student = await e.call('', 'OPTIONS', undefined, { origin: 'http://localhost:4173', 'access-control-request-method': 'PUT', 'access-control-request-headers': 'authorization, content-type' });
+  assert.equal(student.status, 204);
+  assert.equal(student.headers.get('access-control-allow-headers'), 'Content-Type, Authorization');
+  assert(!student.headers.get('access-control-allow-methods').includes('DELETE'));
 });
 test('two members see shared best results only after terminal receipts; retries, ties and conflicts are immutable', async t => {
   const e = setup(t), room = (await e.create()).data, a = await e.join(room.code, '小星'), b = await e.join(room.code, '小月');
