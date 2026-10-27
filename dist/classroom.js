@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   const storageKey = 'bishun:classroom:v1';
-  const defaultOrigin = 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
+  const defaultOrigin = 'https://xiezile-classroom.bwflc-school-tour-lok274.workers.dev';
   const codePattern = /^(?:[1-9]\d{2}|[A-Z2-9]{8})$/;
   function validateAssignment(value) { return value.version === 2 ? root.BishunAssessment.assignment(value.entries, value.mode) : root.BishunQuizResults.assignment(value.entries); }
   function create({ origin = defaultOrigin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} } = {}) {
