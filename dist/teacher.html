@@ -63,6 +63,12 @@
   .assessment-status { grid-column:1 / -1; }
   .assessment-choices { grid-template-columns:1fr; }
 }
+@media (max-width:599px) {
+  .assessment-choices.word-cards { flex:1 0 auto; grid-template-columns:minmax(0,1fr); grid-auto-rows:minmax(160px,1fr); }
+  .assessment-choices .word-card { grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto; }
+  .assessment-choices .word-card .word-name { font-size:clamp(32px,calc(150px / var(--word-length)),100px); }
+  .assessment-choices .word-card .word-photo { grid-column:2; grid-row:1; width:min(100%,140px); }
+}
 
 .review-answer { border:1px solid #bac9b9; border-radius:12px; padding:16px; background:#fffef8; }
 .assessment-writer { position:absolute; inset:0; touch-action:none; user-select:none; -webkit-user-select:none; }
