@@ -662,6 +662,19 @@ test('word audio falls back honestly for missing APIs, absent Cantonese, synchro
     assert(e.voices.spoken.every(u => u.lang !== 'zh-CN'));
   }
 });
+
+test('practice speaks available Cantonese and Hong Kong script locales without using other voices', async () => {
+  for (const lang of ['zh-HK', 'zh-Hant-HK', 'zh_Hant_HK', 'yue-Hant-HK', 'yue_HK', 'yue', 'zh-CN', 'zh-TW', 'en-US', 'not-yue']) {
+    const e = await purposeApp('粗'); await e.enter();
+    e.voices.current = [{ lang, name: 'Test voice' }]; e.voices.changed();
+    const before = JSON.stringify(e.snapshot()); e.$('speak').click();
+    const available = !['zh-CN', 'zh-TW', 'en-US', 'not-yue'].includes(lang);
+    assert.equal(e.voices.spoken.length, available ? 1 : 0, lang);
+    if (available) assert.equal(e.voices.spoken[0].text, '粗。寫第1個字。');
+    else assert.match(e.$('voice-note').textContent, /沒有粵語聲音/);
+    assert.equal(JSON.stringify(e.snapshot()), before);
+  }
+});
 test('remaining presentation controls stay readable and target-safe in independent recall', async () => {
   for (const character of ['聽', '指', '令', '精', '簡', '語', '由', '想', '再', '聲', '畫', '示', '字', '一', '更', '多', '工', '具', '其', '他', '選', '項', '開', '啟', '功', '能', '默', '憑', '記', '憶', '自', '己', '試']) {
     const e = await feedbackApp(character); e.complete(); e.$('main-next').click(); assert(!e.$('speak').attributes['aria-label'].includes(character)); e.voices.current = [{ lang: 'yue-HK', name: 'Cantonese' }]; e.$('speak').click();

@@ -778,7 +778,7 @@
   function renderWordVoiceLabel() { $('speak').setAttribute('aria-label', safeText(cantoneseVoice ? ['聽粵語詞語', '播放讀音', '聲音示範'] : ['顯示粵語聲音未能使用的說明', '請老師協助朗讀', '裝置未提供合適發音'])); }
   function updateVoices() {
     restoreRecallText();
-    try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(yue(?:-|$)|zh[-_]HK$)/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
+    try { cantoneseVoice = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function' ? speechSynthesis.getVoices().find(voice => /^(?:yue(?:[-_]|$)|zh[-_](?:[a-z]{4}[-_])?HK(?:[-_]|$))/i.test(voice.lang)) || null : null; } catch (_) { cantoneseVoice = null; }
     $('voice-note').textContent = cantoneseVoice ? '' : '暫時沒有粵語聲音。可以請老師朗讀一次。';
     renderWordVoiceLabel();
     maskRecallText();

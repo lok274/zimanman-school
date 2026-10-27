@@ -84,7 +84,7 @@
       }
     }
     function speak(position) {
-      const synth = root.speechSynthesis, voice = synth?.getVoices().find(item => /yue|zh[-_]HK/i.test(item.lang));
+      const synth = root.speechSynthesis, voice = synth?.getVoices().find(item => /^(?:yue(?:[-_]|$)|zh[-_](?:[a-z]{4}[-_])?HK(?:[-_]|$))/i.test(item.lang));
       if (!synth || !voice) { status('裝置未提供粵語聲音，請老師讀出題目。'); return; }
       synth.cancel(); const utterance = new SpeechSynthesisUtterance(position.character + '。寫第 ' + (position.index + 1) + ' 個字。'); utterance.voice = voice; utterance.lang = voice.lang; utterance.rate = 0.85;
       const owner = context; utterance.onerror = () => { if (owner === context) status('聲音未能播放，請老師讀出題目。'); }; synth.speak(utterance);
