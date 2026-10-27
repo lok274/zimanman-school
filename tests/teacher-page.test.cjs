@@ -7,27 +7,28 @@ const vm = require('node:vm');
 const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 const { webcrypto } = require('node:crypto');
+const { defaultOrigin } = require('../dist/classroom.js');
 const root = path.join(__dirname, '../classroom-service');
 execFileSync(process.execPath, [path.join(root, 'build.mjs')]);
 const page = fs.readFileSync(path.join(root, 'src/teacher-page.js'), 'utf8');
 const html = JSON.parse(page.slice('export default '.length, -2));
 const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
 const pagesHTML = fs.readFileSync(path.join(__dirname, '../dist/teacher.html'), 'utf8');
-function boot({ data = new Map(), owners = new Map(), hash = '', pathname = '/teacher', search = '', pageScript = script, blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
+function boot({ data = new Map(), owners = new Map(), origin = 'https://worker.test', hash = '', pathname = '/teacher', search = '', pageScript = script, blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
   const nodes = new Map();
   const node = () => ({ textContent: '', children: [], listeners: {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; }, addEventListener(type, handler) { this.listeners[type] = handler; } });
   for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board', 'mode', 'publish', 'delete-class', 'members', 'review']) nodes.set(id, { ...node(), hidden: ['room', 'new-class', 'publish'].includes(id) });
   const controls = { blocked, blockedOwners };
   const storage = (map, flag) => ({ getItem: key => map.get(key) || null, setItem(key, value) { if (controls[flag]) throw new Error('blocked'); map.set(key, value); } });
   const calls = [], navigation = [];
-  vm.runInNewContext(pageScript, { document: { getElementById: id => nodes.get(id), createElement: node }, crypto: webcrypto, Uint8Array, localStorage: storage(owners, 'blockedOwners'), sessionStorage: storage(data, 'blocked'), location: { hash, pathname, search }, history: { replaceState(...args) { navigation.push(args); } }, fetch(url, options) { calls.push({ url, options }); return send(url, options); } });
-  return { nodes, get draft() { return JSON.parse(data.get('zimanman:teacher') || 'null'); }, data, owners, controls, calls, navigation, click: id => nodes.get(id).listeners.click() };
+  const key = vm.runInNewContext(pageScript + '\n;storageKey;', { document: { getElementById: id => nodes.get(id), createElement: node }, crypto: webcrypto, Uint8Array, URL, localStorage: storage(owners, 'blockedOwners'), sessionStorage: storage(data, 'blocked'), location: { origin, hash, pathname, search }, history: { replaceState(...args) { navigation.push(args); } }, fetch(url, options) { calls.push({ url, options }); return send(url, options); } });
+  return { nodes, get draft() { return JSON.parse(data.get(key) || 'null'); }, data, owners, controls, calls, navigation, click: id => nodes.get(id).listeners.click() };
 }
 const room = { code: 'ABCDEFGH', expiresAt: Date.now() + 86400000, assignment: { version: 1, entries: [{ text: '一', selectedIndexes: [0] }] } };
 const response = (data, ok = true) => ({ ok, json: async () => data });
 
 test('Pages and legacy teacher use the canonical page, omit cookies and retain assignment, path, query and retry identity', async () => {
-  const serviceOrigin = 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
+  const serviceOrigin = defaultOrigin;
   assert.equal(pagesHTML, html.replace('const apiOrigin = "";', 'const apiOrigin = "' + serviceOrigin + '";'));
   assert(!/__API_ORIGIN__|__DEFAULT_ENTRIES__|__ASSESSMENT_/.test(pagesHTML));
   for (const [document, prefix, pathname] of [[html, '', '/teacher'], [pagesHTML, serviceOrigin, '/zimanman-school/teacher.html']]) {
@@ -54,6 +55,39 @@ test('Pages and legacy teacher use the canonical page, omit cookies and retain a
       assert(!Object.keys(call.options.headers).some(name => /cookie|authorization/i.test(name)));
     }
   }
+});
+
+test('teacher drafts stay with the API origin while owner identity and old records survive', async () => {
+  const old = boot({ fetch: async () => response(room) });
+  await old.click('create');
+  const oldDraft = JSON.stringify(old.draft), owner = old.draft.ownerCapability;
+  old.data.set('zimanman:teacher', oldDraft);
+  old.data.set('bishun-school:v1:history', 'local practice record');
+  const pageScript = pagesHTML.match(/<script>([\s\S]*)<\/script>/)[1];
+  const options = { data: old.data, owners: old.owners, pageScript, origin: 'https://lok274.github.io', fetch: async () => response(room) };
+  const next = boot(options);
+  assert.equal(next.draft.room, undefined);
+  assert.equal(next.nodes.get('room').hidden, true);
+  assert.notEqual(next.draft.requestId, old.draft.requestId);
+  assert.equal(next.draft.ownerCapability, owner);
+  assert.equal(next.calls.length, 0);
+  const requestId = next.draft.requestId;
+  const pendingReload = boot(options);
+  assert.equal(pendingReload.draft.requestId, requestId);
+  await pendingReload.click('create');
+  assert.equal(pendingReload.calls[0].url, defaultOrigin + '/api/v1/classes');
+  assert.equal(pendingReload.calls[0].options.headers['X-Teacher-Capability'], owner);
+  const reload = boot(options);
+  assert.equal(reload.draft.requestId, requestId);
+  assert.equal(reload.draft.room.code, room.code);
+  assert.equal(reload.draft.ownerCapability, owner);
+  const sameAPI = boot({ ...options, origin: 'https://another-static.test' });
+  assert.equal(sameAPI.draft.requestId, requestId);
+  const oldReload = boot({ data: old.data, owners: old.owners });
+  assert.equal(JSON.stringify(oldReload.draft), oldDraft);
+  assert.equal(old.data.get('zimanman:teacher'), oldDraft);
+  assert.equal(old.data.get('bishun-school:v1:history'), 'local practice record');
+  assert.equal(old.owners.get('zimanman:teacher-owner'), owner);
 });
 
 test('ordinary teacher page gets canonical six-word scope and retains its request after reload', () => {

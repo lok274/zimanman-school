@@ -22,7 +22,12 @@ const teacherTemplate = fs.readFileSync(path.join(root, 'src/teacher.html'), 'ut
   .replace('__ASSESSMENT_SCRIPTS__', () => teacherScripts.replace(/<\/script/gi, '<\\/script'))
   .replace('__ASSESSMENT_CSS__', () => shared('assessment.css'));
 const teacher = teacherTemplate.replace('__API_ORIGIN__', JSON.stringify(''));
-if (!sourceExport) fs.writeFileSync(path.join(root, '../dist/teacher.html'), teacherTemplate.replace('__API_ORIGIN__', JSON.stringify('https://zimanman-classroom-1023.lokyau65.chatgpt.site')));
+if (!sourceExport) {
+  vm.runInContext(shared('classroom.js'), context);
+  const defaultOrigin = context.BishunClassroom.defaultOrigin;
+  if (!defaultOrigin || new URL(defaultOrigin).origin !== defaultOrigin) throw new Error('Classroom default must be an absolute API origin.');
+  fs.writeFileSync(path.join(root, '../dist/teacher.html'), teacherTemplate.replace('__API_ORIGIN__', JSON.stringify(defaultOrigin)));
+}
 fs.writeFileSync(path.join(root, 'src/quiz-results.js'), canonical + '\nexport default globalThis.BishunQuizResults;\n');
 fs.writeFileSync(path.join(root, 'src/assessment.js'), assessment + '\nexport default globalThis.BishunAssessment;\n');
 fs.writeFileSync(path.join(root, 'src/teacher-page.js'), 'export default ' + JSON.stringify(teacher) + ';\n');

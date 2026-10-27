@@ -55,9 +55,9 @@ Android 平板請用更新版 Chrome，iPad 請用 Safari，直接開啟上述 H
 
 暱稱和瀏覽器憑證不是已驗證帳戶。同名不會接管他人紀錄，遺失憑證不能靠暱稱取回。老師權限由開班瀏覽器自動保存，清除瀏覽器資料後不能恢復。班級最多 100 人，每個開班瀏覽器最多同時 10 班，全服務最多同時 100 班。原卷每份最多 1,800,000 bytes、200,000 點、每字 256 筆；超出時保留當前原稿，必須在該字提交前處理，沒有自動刪點或縮減筆跡。班級及全服務的原筆跡容量分別為 64 MiB 和 256 MiB。
 
-老師工具的開班按鈕會在同一分頁開啟 Pages 的 `teacher.html`，保留所選題目。老師頁與 Worker 的 `/teacher` 由同一模板產生。服務地址仍為 `https://zimanman-classroom-1023.lokyau65.chatgpt.site`，老師請求明確不帶 Cookie。單檔版保留本機測驗及批改，跨平板班級功能使用網上頁面。服務 API、建置及本機 D1 驗證見 [classroom-service/README.md](classroom-service/README.md)。程式提交與實際部署分開記錄。
+老師工具的開班按鈕會在同一分頁開啟 Pages 的 `teacher.html`，保留所選題目。老師頁與 Worker 的 `/teacher` 由同一模板產生。服務地址由 `dist/classroom.js` 的 `defaultOrigin` 統一設定，目前直接連接 `https://xiezile-classroom.bwflc-school-tour-lok274.workers.dev`，不經 ChatGPT Sites，也不依賴 ChatGPT 帳戶。老師請求明確不帶 Cookie。新舊服務的班級分開，沒有搬移原有班級；更新網頁後，老師須開新班，同學須重新加入。原有本機練習及筆跡保留。單檔版保留本機測驗及批改，跨平板班級功能使用網上頁面。服務 API、正式部署指令、建置及本機 D1 驗證見 [classroom-service/README.md](classroom-service/README.md)。程式提交與實際部署分開記錄。
 
-Pages 和原有服務網址的老師權限分開保存。原有班級仍須用原來瀏覽器的 `/teacher` 管理，不會自動轉移老師憑證。服務只額外信任 `https://lok274.github.io`，這個範圍包含該帳戶所有 Pages 專案，並非只限本專案路徑。發佈時須先更新服務的來源權限，再發佈 Pages 老師頁。未登入裝置原本遇到的登入畫面尚未在真實瀏覽器重測，程式及無 Cookie API 測試不能代替這項驗證。
+Pages 和原有服務網址的老師權限分開保存。原有班級仍須用原來瀏覽器的 `/teacher` 管理，不會自動轉移老師憑證。服務只額外信任 `https://lok274.github.io`，這個範圍包含該帳戶所有 Pages 專案，並非只限本專案路徑。發佈時須先更新服務的來源權限，再發佈 Pages 老師頁。舊服務在手機重測仍要求登入。新端點須通過無登入 API 及手機實測，才可確認問題已解決。
 
 既有練習仍使用版本 4 和 Hanzi Writer。練習原筆跡只留在當節記憶體，不寫入舊歷史；版本 1 至 3 紀錄仍可讀取。新小挑戰使用版本 3 assessment 原卷及版本 2 assignment，版本 2 已封存原卷仍可讀取。舊錯誤次數和時間成績不會轉成老師字形分數。
 

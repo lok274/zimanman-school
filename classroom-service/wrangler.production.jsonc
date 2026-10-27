@@ -1,0 +1,9 @@
+{
+  "name": "xiezile-classroom",
+  "account_id": "7171dee57a62c7406d3774457d416b27",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-05-22",
+  "workers_dev": true,
+  "preview_urls": false,
+  "d1_databases": [{ "binding": "DB", "database_name": "xiezile-classroom", "database_id": "9a091c4d-c9f9-4808-8fc2-da9788ae3a9f", "migrations_dir": "drizzle" }]
+}

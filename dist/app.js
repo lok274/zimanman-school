@@ -28,8 +28,7 @@
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let dictation = { phase: Recognition ? 'idle' : 'unsupported', token: 0, recognition: null, timer: null, deadline: 0, message: '' };
   const Q = globalThis.BishunQuizResults;
-  const classOrigin = document.body.getAttribute?.('data-classroom-origin') || 'https://zimanman-classroom-1023.lokyau65.chatgpt.site';
-  const classroom = globalThis.BishunClassroom?.create({ origin: classOrigin, changed: renderClassroom });
+  const classroom = globalThis.BishunClassroom?.create({ origin: document.body.getAttribute?.('data-classroom-origin') || undefined, changed: renderClassroom });
   const assessment = globalThis.BishunAssessmentUI?.create({ classroom, onClose: goHome });
   function assessmentMode() { return $('assessment-mode')?.value || 'copy'; }
   function refreshLocalResume() { if (assessment) assessment.hasLocal().then(found => { $('resume-assessment').hidden = !found; }).catch(() => {}); }
@@ -614,7 +613,7 @@
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
       const candidate = sessionCandidate('quiz', draftEntries, draftSelected);
       const assigned = globalThis.BishunAssessment ? globalThis.BishunAssessment.assignment(Q.entriesFromSession(candidate), assessmentMode()) : Q.assignment(Q.entriesFromSession(candidate));
-      window.location.assign('teacher.html#' + encodeURIComponent(JSON.stringify(assigned)));
+      window.location.assign('teacher.html?v=' + encodeURIComponent(globalThis.BishunClassroom.defaultOrigin) + '#' + encodeURIComponent(JSON.stringify(assigned)));
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
   function selectedOptions() {

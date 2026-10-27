@@ -9,9 +9,9 @@
 <script>
 __ASSESSMENT_SCRIPTS__
 const $ = id => document.getElementById(id);
-const storageKey = 'zimanman:teacher';
 const ownerKey = 'zimanman:teacher-owner';
 const apiOrigin = __API_ORIGIN__;
+const storageKey = 'zimanman:teacher:' + new URL(apiOrigin || location.origin).origin;
 const defaultEntries = __DEFAULT_ENTRIES__;
 const validCapability = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 let draft = null, stopReview = null, deleteArmed = false, expiryTimer = null;

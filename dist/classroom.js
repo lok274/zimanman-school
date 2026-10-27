@@ -1,12 +1,15 @@
 (function (root) {
   'use strict';
   const storageKey = 'bishun:classroom:v1';
+  const defaultOrigin = 'https://xiezile-classroom.bwflc-school-tour-lok274.workers.dev';
   const codePattern = /^(?:[1-9]\d{2}|[A-Z2-9]{8})$/;
   function validateAssignment(value) { return value.version === 2 ? root.BishunAssessment.assignment(value.entries, value.mode) : root.BishunQuizResults.assignment(value.entries); }
-  function create({ origin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} }) {
+  function create({ origin = defaultOrigin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} } = {}) {
+    origin = new URL(origin).origin;
+    const key = storageKey + ':' + origin;
     let saved = {}, accepted = false, generation = 0, controller = null, busy = false, message = '', board = null, storageOkay = true;
     try {
-      const raw = storage.getItem(storageKey);
+      const raw = storage.getItem(key);
       if (raw && raw.length < 300000) {
         const value = JSON.parse(raw);
         if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Invalid saved classroom');
@@ -19,7 +22,7 @@
         saved = value;
       }
     } catch { storageOkay = false; }
-    function persist() { try { storage.setItem(storageKey, JSON.stringify(saved)); storageOkay = true; } catch { storageOkay = false; } return storageOkay; }
+    function persist() { try { storage.setItem(key, JSON.stringify(saved)); storageOkay = true; } catch { storageOkay = false; } return storageOkay; }
     function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message: message.replaceAll('測驗', '小挑戰'), pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
     function notify() { changed(view()); }
     function invalidate() { generation++; controller?.abort(); controller = null; busy = false; }
@@ -150,7 +153,7 @@
     return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed, submitAutomatic, ownAutomaticAnswer, automaticBoard: async () => validateAutomaticBoard(await reviewedRequest('automatic-board', 'GET')),
       ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: async () => validateReviewedBoard(await reviewedRequest('board', 'GET')) };
   }
-  const api = { create, storageKey };
+  const api = { create, storageKey, defaultOrigin };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.BishunClassroom = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

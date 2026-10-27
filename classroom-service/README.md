@@ -4,7 +4,7 @@ The Worker serves the legacy teacher page and stores assignments, anonymous memb
 
 ## Build and export
 
-Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. In the canonical repository it also produces tracked `../dist/teacher.html` from `src/teacher.html`. The Worker page uses relative API URLs. The Pages page uses the fixed existing HTTPS service origin. Both explicitly omit cookies. The Pages pipeline builds and checks this tracked page before publishing. Deploy the updated service before publishing the Pages entry.
+Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without runtime dependencies. In the canonical repository it also produces tracked `../dist/teacher.html` from `src/teacher.html`. The Worker page uses relative API URLs. The Pages page uses `defaultOrigin` from `../dist/classroom.js`, shared with the student app and leaderboard. Both explicitly omit cookies. The Pages pipeline builds and checks this tracked page before publishing. Deploy the updated service before publishing the Pages entry.
 
 Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissions.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. The API also initializes the additive automatic table once per DB binding because Sites packaging does not apply migrations. Failed initialization retries on the next request. The inline DDL is generated from migration 0002.
 
@@ -19,6 +19,24 @@ The canonical shared files are in the repository's `dist/`.
 - `assessment.css` supplies the shared review layout.
 
 An exported Sites source needs exact copies of all eight files under `shared/`. The presence of `shared/quiz-results.js` selects the export build. It uses only those shared copies and never writes a parent `dist/teacher.html`, even when sibling files exist. Tests build this isolated export and compare the resulting Worker byte for byte. Do not edit generated `src/quiz-results.js`, `src/assessment.js`, `src/teacher-page.js`, `src/character-data.js`, `src/target-counts.js`, `src/automatic-schema.js` or the output bundle. The export owner preserves the managed hosting manifest. Building does not deploy or change Site access.
+
+## Direct Cloudflare hosting
+
+The direct deployment is `https://xiezile-classroom.bwflc-school-tour-lok274.workers.dev`. `wrangler.production.jsonc` targets Worker `xiezile-classroom` and its separate D1 database in account `7171dee57a62c7406d3774457d416b27`. D1 database `xiezile-classroom` has ID `9a091c4d-c9f9-4808-8fc2-da9788ae3a9f` and binding `DB`. All three migrations, 0000 through 0002, have been applied. The checked-in `wrangler.jsonc` remains local-only with its placeholder database ID. The managed Sites export and hosting manifest remain separate.
+
+From `classroom-service/`, build and deploy with the installed pinned tools after Cloudflare authentication:
+
+```sh
+node build.mjs
+npx wrangler d1 migrations apply xiezile-classroom --remote --config wrangler.production.jsonc
+npx wrangler deploy --config wrangler.production.jsonc
+```
+
+Always specify the production config for remote operations. Runtime automatic-table initialization cannot create the other tables. The first deployed bundle came from `e7b05485bd2194ac723b1b46df6dbbc2d79e4c4f`, with SHA-256 `BD6B31287013CD5907FC347719964E0D1C01A254A69FF8FBEC3989369AE6FF16` and Worker version `5607165a-5a75-44cd-ac5c-e0ba12359a26`. Changing `defaultOrigin` changes Pages output, not that Worker bundle.
+
+`defaultOrigin` now points directly to this Worker. New class requests do not pass through ChatGPT Sites or depend on a ChatGPT account. Before publishing the Pages cutover, verify unsigned create, join, automatic submission, private originals and board access on the deployed endpoint. Confirm teacher create and student join on a phone before reporting that the sign-in problem is resolved. Regenerate the teacher page, versioned assets and standalone file for Pages publication.
+
+Changing the API origin gives pupils and teachers separate sessionStorage state. Old unscoped keys stay untouched. Teacher owner localStorage, local practice and IndexedDB handwriting records stay intact. Existing old rooms are not migrated. Teachers create fresh rooms and pupils rejoin after refreshing Pages. Three-digit codes can repeat between databases, so the client never falls back to another endpoint. Keep the old service unchanged until its rooms expire. To roll back Worker code, retain the new D1 binding and origin. Keep an entry to new rooms reachable until expiry if Pages must be rolled back.
 
 ## Automatic HTTP contract
 
@@ -118,4 +136,4 @@ npx wrangler dev --local --ip 127.0.0.1 --port 8788 --inspector-port 9231
 
 Run `node classroom-service/smoke.mjs http://127.0.0.1:8788` from another terminal at the repository root. It refuses non-loopback hosts. It checks legacy behavior, reviewed original and grading routes, and a full 12-position, 151-stroke, 77,312-point JSON round trip. That fixture is constructed capacity evidence, not a pupil trial.
 
-A student frontend preview can serve `dist/` at port 4173 and inject only `data-classroom-origin="http://127.0.0.1:8788"` on the two page bodies. Preview teacher management through the local Worker `/teacher`, since localhost is not a trusted cross-origin teacher. Production keeps the existing service URL. Source verification does not prove deployed parity, physical iPad or Android input, or scheduled cleanup.
+A student frontend preview can serve `dist/` at port 4173 and inject only `data-classroom-origin="http://127.0.0.1:8788"` on the two page bodies. Preview teacher management through the local Worker `/teacher`, since localhost is not a trusted cross-origin teacher. Production uses the direct Worker origin above. Source verification does not prove deployed parity, physical iPad or Android input, or scheduled cleanup.
