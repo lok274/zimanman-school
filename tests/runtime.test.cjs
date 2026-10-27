@@ -144,8 +144,9 @@ function dictationApp({ prefixed = false, unsupported = false } = {}) {
   return e;
 }
 
-test('teacher class stays on Pages in the same tab with selected assignment', () => {
+test('teacher class stays on Pages with selected assignment and a stable service-specific cache key', () => {
   const e = dictationApp(), navigation = [];
+  vm.runInContext(source('classroom.js'), e.context);
   e.context.location.href = 'https://lok274.github.io/zimanman-school/index.html?lesson=one';
   e.context.location.assign = url => navigation.push(url);
   e.$('teacher-open').click();
@@ -157,10 +158,21 @@ test('teacher class stays on Pages in the same tab with selected assignment', ()
   const url = new URL(navigation[0], e.context.location.href);
   assert.equal(url.origin, 'https://lok274.github.io');
   assert.equal(url.pathname, '/zimanman-school/teacher.html');
+  assert.equal(url.searchParams.get('v'), classroomConfig.defaultOrigin);
   const assignment = JSON.parse(decodeURIComponent(url.hash.slice(1)));
   assert.deepEqual(Array.from(assignment.entries, entry => entry.text), ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去']);
   assert.equal(assignment.entries.reduce((total, entry) => total + entry.selectedIndexes.length, 0), 11);
   assert.deepEqual(Array.from(assignment.entries.at(-1).selectedIndexes), [0, 1, 2]);
+  e.$('teacher-class').click();
+  assert.equal(navigation[1], navigation[0], 'repeated opens reuse the same cache key');
+  e.context.BishunClassroom.defaultOrigin = 'https://replacement-classroom.example';
+  e.$('teacher-class').click();
+  const updated = new URL(navigation[2], e.context.location.href);
+  assert.equal(updated.searchParams.get('v'), e.context.BishunClassroom.defaultOrigin);
+  assert.notEqual(updated.search, url.search, 'a service cutover changes the teacher cache key');
+  assert.equal(updated.origin, url.origin);
+  assert.equal(updated.pathname, url.pathname);
+  assert.equal(updated.hash, url.hash);
 });
 
 test('Cantonese dictation starts only on tap, reviews an editable final phrase and appends to the current draft once', () => {
