@@ -25,6 +25,12 @@
   let undoRestart = null;
   let clockTick = null;
   let boardNavigationRun = null;
+  let requestedCode = null, selectedSeat = null, classSwitchArmed = false;
+  const classSeatButtons = [];
+  try {
+    const code = new URL(location.href).searchParams.get('class');
+    if (document.body.getAttribute('data-standalone') === null && /^(?:[1-9]\d{2}|[A-Z2-9]{8})$/.test(code || '')) requestedCode = code;
+  } catch {}
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let dictation = { phase: Recognition ? 'idle' : 'unsupported', token: 0, recognition: null, timer: null, deadline: 0, message: '' };
   const Q = globalThis.BishunQuizResults;
@@ -534,22 +540,34 @@
   function scoreLabel(score) { return '錯誤 ' + score.mistakes + ' 次 · ' + (score.elapsedMs / 1000).toFixed(1) + ' 秒'; }
   function renderClassroom() {
     if (!classroom) return;
-    const view = classroom.view(), member = view.member;
-    $('class-join-fields').hidden = !!member;
-    $('class-join').disabled = view.busy;
-    $('class-identity').textContent = member ? '班級 ' + member.code + ' · ' + member.alias : '';
-    $('class-status').textContent = view.message;
+    const view = classroom.view(), member = view.member, identity = member || view.joining;
+    $('class-title').textContent = requestedCode && !identity ? '班級 ' + requestedCode : '班級小挑戰';
+    $('class-join-fields').hidden = !!identity;
+    $('class-code-fields').hidden = !!requestedCode;
+    $('class-code').disabled = view.busy;
+    $('class-alias').disabled = view.busy;
+    $('class-join').disabled = view.busy || !selectedSeat && !$('class-alias').value;
+    $('class-join').textContent = selectedSeat ? '我是 ' + selectedSeat + ' 號，開始' : $('class-alias').value ? '加入' : '開始';
+    for (const button of classSeatButtons) { button.disabled = view.busy; button.setAttribute('aria-pressed', String(button.getAttribute('data-seat') === String(selectedSeat))); }
+    $('class-identity').textContent = identity ? '班級 ' + identity.code + ' · ' + identity.alias : '';
+    $('class-status').textContent = view.message || (requestedCode && identity && requestedCode !== identity.code ? '此平板仍有另一班紀錄，請找老師。' : '');
     $('class-storage').hidden = view.storageOkay;
     $('class-continue').hidden = !view.needsContinue;
+    $('class-continue').textContent = member ? '我是 ' + member.alias + '，繼續' : '繼續';
+    $('class-continue').disabled = view.busy;
+    $('class-join-retry').hidden = !view.joining;
+    $('class-join-retry').textContent = view.joining ? '我是 ' + view.joining.alias + '，重試' : '重試加入';
+    $('class-join-retry').disabled = view.busy;
     $('class-start').hidden = !view.accepted || view.pending;
     $('class-start').disabled = view.busy;
     $('class-pending-retry').hidden = !view.accepted || !view.pending;
     $('class-pending-retry').disabled = view.busy;
-    $('class-leave').hidden = !member;
-    $('class-leave').textContent = view.pending ? '換下一位（未交紀錄會清除）' : '換下一位同學';
-    $('class-switch-note').hidden = !member;
+    $('class-leave').hidden = !identity;
+    $('class-leave').textContent = classSwitchArmed ? '確認更換使用者' : '換下一位同學';
+    $('class-switch-note').hidden = !identity;
+    $('class-switch-note').textContent = classSwitchArmed ? '更換後無法只靠座號取回此身份，未交紀錄可能無法再交。' : view.pending ? '請先交回上次紀錄，再更換使用者。' : '請確認是自己的座號。';
     $('class-dialog-board-link').hidden = member?.assignment.version === 2 || !view.accepted || !view.receipt;
-    if (member?.assignment.version === 2) { $('class-start').textContent = '開始／繼續原卷'; $('class-switch-note').textContent = '換人後，上一位的原稿不會顯示。'; }
+    if (member?.assignment.version === 2) $('class-start').textContent = '開始';
     const classSummary = state?.active.phase === 'summary' && view.boundRunId === state.id;
     $('class-result-status').textContent = classSummary ? view.message + (!view.storageOkay ? ' 此頁未能保存待交紀錄，請勿關閉。' : '') : '';
     $('class-retry').hidden = !classSummary || !view.pending;
@@ -591,18 +609,38 @@
   }
   function startClassQuiz() {
     try {
-      const member = classroom.view().member;
+      const view = classroom.view(), member = view.member;
+      if (!member || !view.accepted || view.pending || view.busy || !view.storageOkay) throw new Error('請先確認身份，並保存參加紀錄。');
       if (member.assignment.version === 2 && assessment) { stopEffects(); localMode = null; $('class-dialog').close(); assessment.open(member.assignment, member); return; }
       const candidate = S.createSession({ id: id(), entries: member.assignment.entries, startedAt: Date.now(), mode: 'quiz' });
       classroom.bindRun(candidate.id); localMode = null; $('class-dialog').close(); startSession(candidate);
     } catch (error) { $('class-status').textContent = error.message.replaceAll('測驗', '小挑戰'); }
   }
-  $('class-open').addEventListener('click', () => { renderClassroom(); $('class-dialog').showModal(); });
+  function openClassroom() { classSwitchArmed = false; renderClassroom(); $('class-dialog').showModal(); }
+  for (let seat = 1; seat <= 40; seat++) {
+    const button = document.createElement('button');
+    button.className = 'class-seat'; button.textContent = String(seat); button.setAttribute('data-seat', seat); button.setAttribute('aria-label', seat + ' 號'); button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('click', () => { if (classroom?.view().busy) return; selectedSeat = seat; $('class-alias').value = ''; renderClassroom(); });
+    classSeatButtons.push(button); $('class-seats').append(button);
+  }
+  async function joinClassroom(code, alias, start) {
+    if (!classroom || classroom.view().member || classroom.view().busy) return;
+    await classroom?.join(code, alias);
+    const view = classroom?.view();
+    if (start && $('class-dialog').open && view?.accepted && view.storageOkay && !view.busy && view.member?.code === code.trim().toUpperCase() && view.member.alias === alias.trim()) startClassQuiz();
+  }
+  $('class-open').addEventListener('click', openClassroom);
   $('class-close').addEventListener('click', () => $('class-dialog').close());
-  $('class-dialog').addEventListener('close', renderClassroom);
-  $('class-join').addEventListener('click', () => classroom?.join($('class-code').value || '', $('class-alias').value || ''));
-  $('class-continue').addEventListener('click', () => classroom?.continueMember());
-  $('class-leave').addEventListener('click', () => { boardNavigationRun = null; classroom?.leave(); $('class-alias').value = ''; $('class-code').value = ''; });
+  $('class-dialog').addEventListener('close', () => { classSwitchArmed = false; renderClassroom(); });
+  $('class-alias').addEventListener('input', () => { selectedSeat = null; renderClassroom(); });
+  $('class-code').addEventListener('input', renderClassroom);
+  $('class-join').addEventListener('click', () => joinClassroom(requestedCode || $('class-code').value || '', selectedSeat ? selectedSeat + '號' : $('class-alias').value || '', !!selectedSeat));
+  $('class-join-retry').addEventListener('click', () => { const joining = classroom?.view().joining; if (joining) joinClassroom(joining.code, joining.alias, /^(?:[1-9]|[1-3]\d|40)號$/.test(joining.alias)); });
+  $('class-continue').addEventListener('click', () => { classroom?.continueMember(); if (classroom?.view().member?.assignment.version === 2 && !classroom.view().pending) startClassQuiz(); });
+  $('class-leave').addEventListener('click', () => {
+    if (!classSwitchArmed) { classSwitchArmed = true; renderClassroom(); return; }
+    boardNavigationRun = null; classSwitchArmed = false; selectedSeat = null; $('class-alias').value = ''; $('class-code').value = ''; classroom?.leave();
+  });
   $('class-start').addEventListener('click', startClassQuiz); $('class-again').addEventListener('click', startClassQuiz);
   function retryClassResult() { boardNavigationRun = classroom?.view().boundRunId; classroom?.retry(); }
   $('class-retry').addEventListener('click', retryClassResult); $('class-pending-retry').addEventListener('click', retryClassResult);
@@ -613,7 +651,7 @@
       if (parsed.map(e => e.text).join('\n') !== draftEntries.map(e => e.text).join('\n')) throw new Error('詞語有改動，請先更新可選詞語。');
       const candidate = sessionCandidate('quiz', draftEntries, draftSelected);
       const assigned = globalThis.BishunAssessment ? globalThis.BishunAssessment.assignment(Q.entriesFromSession(candidate), assessmentMode()) : Q.assignment(Q.entriesFromSession(candidate));
-      window.location.assign('teacher.html?v=' + encodeURIComponent(globalThis.BishunClassroom.defaultOrigin) + '#' + encodeURIComponent(JSON.stringify(assigned)));
+      window.location.assign('teacher.html?v=seats1-' + encodeURIComponent(globalThis.BishunClassroom.defaultOrigin) + '#' + encodeURIComponent(JSON.stringify(assigned)));
     } catch (error) { $('teacher-error').textContent = error.message; }
   });
   function selectedOptions() {
@@ -817,4 +855,5 @@
     if (previousId) { const raw = localStorage.getItem(prefix + previousId); if (raw && raw.length < 1000000) { const previous = JSON.parse(raw); if (S.validateSnapshot(previous) && previous.active.phase !== 'summary') { const ended = S.transition(previous, { type: 'END_SESSION', at: Date.now() }); localStorage.setItem(prefix + previousId, JSON.stringify(ended)); } } }
   } catch (_) { storageError(); }
   updateVoices(); render();
+  if (requestedCode && classroom) openClassroom();
 })();

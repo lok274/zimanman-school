@@ -8,6 +8,16 @@ Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without ru
 
 Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissions.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. The API also initializes the additive automatic table once per DB binding because Sites packaging does not apply migrations. Failed initialization retries on the next request. The inline DDL is generated from migration 0002.
 
+Migration `0003_class_join_deadline.sql` adds a nullable `classes.join_expires_at` without rewriting existing data. Apply it before deploying this Worker. New eight-character classes set a 15-minute join deadline separately from their 24-hour record expiry. Existing numeric classes with a null deadline retain their original 15-minute admission window; historical eight-character classes with a null deadline retain their original admission until expiry. Changing the code format never extends a new class's join window. Runtime table initialization does not apply migration 0003.
+
+## Simple pupil joining
+
+老師按「建立班級」，顯示該班 QR code。學生掃碼後，選擇自己的座號，再按「開始」。座號提供 1 至 40 號，不需輸入暱稱或登入。老師也可按「複製學生連結」，預先在平板開啟，學生便不用自行操作相機。未能掃碼時，仍可在首頁輸入八位班級碼。QR 及連結只含公開班級碼。
+
+共用平板若仍保留上一位身份，先核對座號，再繼續或確認更換使用者。座號已有人使用時，請老師處理；相同座號不能取回另一部裝置的身份。重試加入會保留原有請求，不另建身份。
+
+`vendor/qrcode.js` is the pinned, locally bundled QR encoder. Its provenance and full MIT licence are in `vendor/README.md` and `vendor/qrcode-LICENSE`. Both teacher pages generate QR SVG locally and retain a plain-link fallback. There is no runtime QR service or CDN.
+
 The canonical shared files are in the repository's `dist/`.
 
 - `quiz-results.js` retains legacy assignment and score behavior.
@@ -22,7 +32,7 @@ An exported Sites source needs exact copies of all eight files under `shared/`. 
 
 ## Direct Cloudflare hosting
 
-The direct deployment is `https://xiezile-classroom.bwflc-school-tour-lok274.workers.dev`. `wrangler.production.jsonc` targets Worker `xiezile-classroom` and its separate D1 database in account `7171dee57a62c7406d3774457d416b27`. D1 database `xiezile-classroom` has ID `9a091c4d-c9f9-4808-8fc2-da9788ae3a9f` and binding `DB`. All three migrations, 0000 through 0002, have been applied. The checked-in `wrangler.jsonc` remains local-only with its placeholder database ID. The managed Sites export and hosting manifest remain separate.
+The direct deployment is `https://xiezile-classroom.bwflc-school-tour-lok274.workers.dev`. `wrangler.production.jsonc` targets Worker `xiezile-classroom` and its separate D1 database in account `7171dee57a62c7406d3774457d416b27`. D1 database `xiezile-classroom` has ID `9a091c4d-c9f9-4808-8fc2-da9788ae3a9f` and binding `DB`. Apply all checked-in migrations before deploying a new bundle. The checked-in `wrangler.jsonc` remains local-only with its placeholder database ID. The managed Sites export and hosting manifest remain separate.
 
 From `classroom-service/`, build and deploy with the installed pinned tools after Cloudflare authentication:
 
@@ -66,7 +76,7 @@ All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Con
 
 | Method and relative path | Authority | Result |
 | --- | --- | --- |
-| `POST /` | Trusted-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns a three-digit code, assignment, `joinExpiresAt` and `expiresAt`. |
+| `POST /` | Trusted-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns an eight-character uppercase letter/digit code, assignment, `joinExpiresAt` and `expiresAt`. Ambiguous `I`, `O`, `0` and `1` are excluded from new codes. |
 | `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken}` during the first 15 minutes of a new class; returns membership and assignment. An identical saved request remains retryable after admission closes. |
 | `PUT /:code/answers` | Current member | Accepts one complete sealed original; returns `{runId,official:true,version:3}` for version 3, or the legacy receipt without version. |
 | `GET /:code/answers` | Current member | Returns only that member's original, marks and revision, or `answer:null`. Aggregate elapsed time is omitted. |
@@ -108,7 +118,7 @@ The reviewed request body is capped at 4 MiB. Canonical original JSON is capped 
 
 The other limits are 200,000 points per original, 256 strokes per historical character or 64 per v4 character, 48 selected positions, 64 MiB of original JSON per class, and 256 MiB globally. Current draft aggregate limits are checked before each character is locked. A v4 stroke that exceeds capacity is rejected before accepted progress advances; prior accepted ink stays visible. There is no silent thinning or point truncation. A server quota rejection returns `507 INK_CAPACITY` and leaves the local sealed retry intact. Legacy bodies remain capped at 256 KiB.
 
-Class limits remain 100 members, 10 active classes per owner and 100 active classes globally. New class codes use the decimal range 100–999 and remain reserved for 24 hours. Admission to a new code closes exactly 15 minutes after creation. `expiresAt` remains the 24-hour room access cutoff; `joinExpiresAt` is the separate admission cutoff. Existing eight-character codes retain their original admission window and data. All reads and writes require an unexpired class. Owner deletion cascades immediately. Creation and the public maintenance endpoint each delete at most 10 expired classes. Caller-supplied cutoffs and class selectors do not affect cleanup. Periodic background cleanup has not been enabled. There is no MCP endpoint. Provider backups are outside this application deletion guarantee.
+Class limits remain 100 members, 10 active classes per owner and 100 active classes globally. New class codes use eight uppercase letters and digits from the original alphabet and remain reserved for 24 hours. Admission closes exactly 15 minutes after creation, using the stored `join_expires_at` deadline. `expiresAt` remains the 24-hour room access cutoff; `joinExpiresAt` is the separate admission cutoff. Legacy rooms without a stored deadline retain their original three-digit or eight-character admission window and data. All reads and writes require an unexpired class. Owner deletion cascades immediately. Creation and the public maintenance endpoint each delete at most 10 expired classes. Caller-supplied cutoffs and class selectors do not affect cleanup. Periodic background cleanup has not been enabled. There is no MCP endpoint. Provider backups are outside this application deletion guarantee.
 
 Local drafts, originals and challenge cards stop displaying at their expiry and are purged when the app next runs. Clearing browser data can lose a capability or local original. A browser capability is not a verified school identity.
 

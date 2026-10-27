@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="zh-Hant-HK"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>寫字樂 · 班級小挑戰</title>
 <style>__ASSESSMENT_CSS__</style>
-<style>body{font:18px/1.7 system-ui,sans-serif;background:#f6f3e9;color:#243d32;margin:0}main{max-width:800px;padding:24px;margin:auto}button,a{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px}button{background:#214b3b;color:white;border:0;cursor:pointer}button:disabled{opacity:.5}a{color:#214b3b}section{background:#fffdf6;padding:20px;border:1px solid #d9dece;border-radius:12px;margin:20px 0}#code{font-size:42px;letter-spacing:5px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #d9dece}p{overflow-wrap:anywhere}[hidden]{display:none!important}:focus-visible{outline:3px solid #ba642d;outline-offset:4px}</style></head>
+<style>body{font:18px/1.7 system-ui,sans-serif;background:#f6f3e9;color:#243d32;margin:0}main{max-width:800px;padding:24px;margin:auto}button,a{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px}button{background:#214b3b;color:white;border:0;cursor:pointer}button:disabled{opacity:.5}a{color:#214b3b}section{background:#fffdf6;padding:20px;border:1px solid #d9dece;border-radius:12px;margin:20px 0}#code{font-size:42px;letter-spacing:5px;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #d9dece}p{overflow-wrap:anywhere}[hidden]{display:none!important}:focus-visible{outline:3px solid #ba642d;outline-offset:4px}</style><style>#join-qr{width:min(100%,280px);background:white}#join-qr svg{display:block;width:100%;height:auto}</style></head>
 <body><main><h1>寫字樂 · 班級小挑戰</h1>
 <section><h2>今次題目</h2><p id="assignment"></p><label for="mode">題型 </label><select id="mode"><option value="copy">看字寫</option><option value="listen" hidden>看字寫</option></select> <button id="create">建立班級</button> <button id="new-class" hidden>開新一班</button></section>
 <p id="status" role="status"></p>
-<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><p><a href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">學生頁面</a></p><button id="refresh">更新收卷及排行榜</button> <button id="publish" hidden>公布舊版班級榜</button> <button id="delete-class">提早刪除此班</button><div id="members"></div><div id="board"></div><section id="review" hidden></section></section></main>
+<section id="room" hidden><h2>班級碼</h2><strong id="code"></strong><p id="expiry"></p><div id="join-qr" role="img" aria-label="掃碼加入班級"></div><p><a id="student-link" href="https://lok274.github.io/zimanman-school/" target="_blank" rel="noopener noreferrer">學生頁面</a> <button id="copy-student-link">複製學生連結</button></p><button id="refresh">更新收卷及排行榜</button> <button id="publish" hidden>公布舊版班級榜</button> <button id="delete-class">提早刪除此班</button><div id="members"></div><div id="board"></div><section id="review" hidden></section></section></main>
 <script>
 __ASSESSMENT_SCRIPTS__
 const $ = id => document.getElementById(id);
@@ -52,6 +52,10 @@ async function request(path, options = {}) {
   return data;
 }
 function showRoom(room) {
+  const student = new URL('https://lok274.github.io/zimanman-school/'); student.searchParams.set('class', room.code);
+  $('student-link').href = student.href;
+  try { const qr = qrcode(0, 'M'); qr.addData(student.href, 'Byte'); qr.make(); $('join-qr').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 24, scalable: true }); }
+  catch { $('join-qr').replaceChildren(); }
   $('room').hidden = false; $('code').textContent = room.code; $('expiry').textContent = '加入截止：' + new Date(room.joinExpiresAt || room.expiresAt).toLocaleString('zh-HK') + '；班級到期：' + new Date(room.expiresAt).toLocaleString('zh-HK'); $('new-class').hidden = false; $('mode').disabled = true; $('publish').hidden = true; $('delete-class').hidden = room.assignment.version !== 2;
   $('publish').disabled = true;
   if (globalThis.setTimeout) {
@@ -62,6 +66,10 @@ function showRoom(room) {
     }, Math.max(0, room.expiresAt - Date.now()));
   }
 }
+$('copy-student-link').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('student-link').href); $('status').textContent = '學生連結已複製。'; }
+  catch { $('status').textContent = '請長按學生頁面連結複製。'; }
+});
 if (draft?.room) showRoom(draft.room);
 $('new-class').addEventListener('click', () => {
   if ($('new-class').disabled) return;

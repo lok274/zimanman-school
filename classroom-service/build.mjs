@@ -17,7 +17,9 @@ const context = vm.createContext({});
 vm.runInContext(shared('content.js'), context);
 const dataUrl = context.BishunContent.dataUrl;
 const defaults = context.BishunContent.words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) }));
-const teacherScripts = [canonical, assessment, shared('freehand.js'), shared('assessment-review.js')].join('\n');
+const qr = fs.readFileSync(path.join(root, 'vendor/qrcode.js'), 'utf8');
+const qrLicense = fs.readFileSync(path.join(root, 'vendor/qrcode-LICENSE'), 'utf8');
+const teacherScripts = ['/*\n' + qrLicense + '\n*/\n' + qr, canonical, assessment, shared('freehand.js'), shared('assessment-review.js')].join('\n');
 const teacherTemplate = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8').replace('__DEFAULT_ENTRIES__', JSON.stringify(defaults))
   .replace('__ASSESSMENT_SCRIPTS__', () => teacherScripts.replace(/<\/script/gi, '<\\/script'))
   .replace('__ASSESSMENT_CSS__', () => shared('assessment.css'));
@@ -40,7 +42,7 @@ const worker = fs.readFileSync(path.join(root, 'src/worker.js'), 'utf8')
   .replace("import { counts, dataUrl } from './target-counts.js';", 'const counts = ' + JSON.stringify(targetCounts) + ', dataUrl = ' + JSON.stringify(dataUrl) + ';')
   .replace("import Q from './quiz-results.js';", canonical + '\nconst Q = globalThis.BishunQuizResults;')
   .replace("import A from './assessment.js';", assessment + '\nconst A = globalThis.BishunAssessment;')
-  .replace("import teacherHTML from './teacher-page.js';", 'const teacherHTML = ' + JSON.stringify(teacher) + ';');
+  .replace("import teacherHTML from './teacher-page.js';", () => 'const teacherHTML = ' + JSON.stringify(teacher) + ';');
 fs.mkdirSync(path.join(root, 'dist/server'), { recursive: true });
 fs.writeFileSync(path.join(root, 'dist/server/index.js'), worker);
 console.log('Built dist/server/index.js from canonical content, quiz scorer and Worker source.');

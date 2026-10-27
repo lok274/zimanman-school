@@ -22,6 +22,13 @@
       "when": 1792986866640,
       "tag": "0002_automatic_submissions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793103530905,
+      "tag": "0003_class_join_deadline",
+      "breakpoints": true
     }
   ]
 }

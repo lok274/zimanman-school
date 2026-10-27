@@ -23,7 +23,7 @@
       }
     } catch { storageOkay = false; }
     function persist() { try { storage.setItem(key, JSON.stringify(saved)); storageOkay = true; } catch { storageOkay = false; } return storageOkay; }
-    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message: message.replaceAll('測驗', '小挑戰'), pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
+    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, joining: saved.join ? { code: saved.join.code, alias: saved.join.body.alias } : null, needsContinue: !!saved.member && !accepted, accepted, busy, message: message.replaceAll('測驗', '小挑戰'), pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
     function notify() { changed(view()); }
     function invalidate() { generation++; controller?.abort(); controller = null; busy = false; }
     async function request(path, method = 'GET', value, token) {
@@ -48,7 +48,8 @@
     async function join(code, alias) {
       if (busy) return;
       code = code.trim().toUpperCase(); alias = alias.normalize('NFC').trim();
-      if (!codePattern.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 3 位數字班級碼和 1 至 20 字暱稱。'; notify(); return; }
+      if (!codePattern.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 8 位班級碼和 1 至 20 字暱稱。'; notify(); return; }
+      if (saved.member || saved.join && (saved.join.code !== code || saved.join.body.alias !== alias)) { message = '請先確認或更換目前的使用者。'; notify(); return; }
       if (!saved.join || saved.join.code !== code || saved.join.body.alias !== alias) {
         const token = [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join('');
         saved = { join: { code, body: { requestId: crypto.randomUUID(), alias, memberToken: token } } };
@@ -60,7 +61,7 @@
         if (!member || member.code !== pending.code || typeof member.memberId !== 'string' || typeof member.alias !== 'string' || !Number.isFinite(member.expiresAt)) throw new Error('班級回應無效，請重試。');
         validateAssignment(member.assignment);
         saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始小挑戰。'; persist();
-      } catch (error) { if (error.stale) return; message = error.message || '班級服務未能連線。'; }
+      } catch (error) { if (error.stale) return; message = error.code === 'ALIAS_TAKEN' && /^(?:[1-9]|[1-3]\d|40)號$/.test(alias) ? '此座號已有人使用，請找老師。' : error.message || '班級服務未能連線。'; }
       notify();
     }
     function continueMember() { if (saved.member) { accepted = true; message = saved.pending ? '上次小挑戰尚未交到班級榜，請重試交卷。' : '已確認參加身份。'; notify(); } }

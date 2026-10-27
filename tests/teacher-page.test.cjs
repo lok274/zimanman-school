@@ -14,18 +14,41 @@ const page = fs.readFileSync(path.join(root, 'src/teacher-page.js'), 'utf8');
 const html = JSON.parse(page.slice('export default '.length, -2));
 const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
 const pagesHTML = fs.readFileSync(path.join(__dirname, '../dist/teacher.html'), 'utf8');
-function boot({ data = new Map(), owners = new Map(), origin = 'https://worker.test', hash = '', pathname = '/teacher', search = '', pageScript = script, blocked = false, blockedOwners = false, fetch: send = async () => { throw new Error('offline'); } } = {}) {
+function boot({ data = new Map(), owners = new Map(), origin = 'https://worker.test', hash = '', pathname = '/teacher', search = '', pageScript = script, blocked = false, blockedOwners = false, clipboard, fetch: send = async () => { throw new Error('offline'); } } = {}) {
   const nodes = new Map();
   const node = () => ({ textContent: '', children: [], listeners: {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; }, addEventListener(type, handler) { this.listeners[type] = handler; } });
-  for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board', 'mode', 'publish', 'delete-class', 'members', 'review']) nodes.set(id, { ...node(), hidden: ['room', 'new-class', 'publish'].includes(id) });
+  for (const id of ['status', 'assignment', 'create', 'new-class', 'room', 'code', 'expiry', 'refresh', 'board', 'mode', 'publish', 'delete-class', 'members', 'review', 'join-qr', 'student-link', 'copy-student-link']) nodes.set(id, { ...node(), hidden: ['room', 'new-class', 'publish'].includes(id) });
   const controls = { blocked, blockedOwners };
   const storage = (map, flag) => ({ getItem: key => map.get(key) || null, setItem(key, value) { if (controls[flag]) throw new Error('blocked'); map.set(key, value); } });
   const calls = [], navigation = [];
-  const key = vm.runInNewContext(pageScript + '\n;storageKey;', { document: { getElementById: id => nodes.get(id), createElement: node }, crypto: webcrypto, Uint8Array, URL, localStorage: storage(owners, 'blockedOwners'), sessionStorage: storage(data, 'blocked'), location: { origin, hash, pathname, search }, history: { replaceState(...args) { navigation.push(args); } }, fetch(url, options) { calls.push({ url, options }); return send(url, options); } });
+  const key = vm.runInNewContext(pageScript + '\n;storageKey;', { document: { getElementById: id => nodes.get(id), createElement: node }, crypto: webcrypto, Uint8Array, URL, navigator: { clipboard }, localStorage: storage(owners, 'blockedOwners'), sessionStorage: storage(data, 'blocked'), location: { origin, hash, pathname, search }, history: { replaceState(...args) { navigation.push(args); } }, fetch(url, options) { calls.push({ url, options }); return send(url, options); } });
   return { nodes, get draft() { return JSON.parse(data.get(key) || 'null'); }, data, owners, controls, calls, navigation, click: id => nodes.get(id).listeners.click() };
 }
 const room = { code: 'ABCDEFGH', expiresAt: Date.now() + 86400000, assignment: { version: 1, entries: [{ text: '一', selectedIndexes: [0] }] } };
 const response = (data, ok = true) => ({ ok, json: async () => data });
+
+test('teacher shares only the public class link, creates its QR locally and restores both after reload', async () => {
+  const copied = [], numericRoom = { ...room, code: '123' };
+  const e = boot({ clipboard: { writeText: async value => copied.push(value) }, fetch: async () => response(numericRoom) });
+  await e.click('create');
+  const student = 'https://lok274.github.io/zimanman-school/?class=123';
+  assert.equal(e.nodes.get('student-link').href, student);
+  assert.match(e.nodes.get('join-qr').innerHTML, /^<svg/);
+  const qrContext = {}; vm.runInNewContext(fs.readFileSync(path.join(root, 'vendor/qrcode.js'), 'utf8'), qrContext);
+  const qr = qrContext.qrcode(0, 'M'); qr.addData(student, 'Byte'); qr.make();
+  assert.equal(e.nodes.get('join-qr').innerHTML, qr.createSvgTag({ cellSize: 6, margin: 24, scalable: true }));
+  await e.click('copy-student-link'); assert.deepEqual(copied, [student]);
+  assert(!student.includes(e.draft.ownerCapability)); assert.deepEqual([...new URL(student).searchParams.keys()], ['class']);
+  const reload = boot({ data: e.data, owners: e.owners });
+  assert.equal(reload.nodes.get('student-link').href, student); assert.equal(reload.nodes.get('join-qr').innerHTML, e.nodes.get('join-qr').innerHTML);
+  await reload.click('copy-student-link'); assert.match(reload.nodes.get('status').textContent, /長按學生頁面連結/);
+  reload.click('new-class');
+  assert.equal(reload.nodes.get('room').hidden, true);
+  const next = boot({ data: reload.data, owners: reload.owners, fetch: async () => response({ ...room, code: '456' }) });
+  await next.click('create'); assert.equal(next.nodes.get('student-link').href, 'https://lok274.github.io/zimanman-school/?class=456');
+  assert.notEqual(next.nodes.get('join-qr').innerHTML, e.nodes.get('join-qr').innerHTML);
+  assert.match(html, /MIT License/); assert(!/<script[^>]+src=/.test(html));
+});
 
 test('Pages and legacy teacher use the canonical page, omit cookies and retain assignment, path, query and retry identity', async () => {
   const serviceOrigin = defaultOrigin;

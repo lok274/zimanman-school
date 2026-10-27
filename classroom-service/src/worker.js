@@ -63,7 +63,7 @@ async function body(request, maximum = 262144) {
 }
 function key(value) { if (typeof value !== 'string' || !keyPattern.test(value)) fail(400, 'INVALID_ID', '紀錄編號無效。'); return value; }
 function canonicalAssignment(data) { try { if (data.version !== undefined && ![1, 2].includes(data.version)) throw new Error('測驗版本不支援。'); return data.version === 2 ? A.assignment(data.entries, data.mode) : Q.assignment(data.entries); } catch (error) { fail(400, 'INVALID_ASSIGNMENT', error.message); } }
-function joinExpiresAt(room) { return /^\d{3}$/.test(room.code) ? room.expires_at - 85500000 : room.expires_at; }
+function joinExpiresAt(room) { return room.join_expires_at ?? (/^\d{3}$/.test(room.code) ? room.expires_at - 85500000 : room.expires_at); }
 function roomReply(room) { return { code: room.code, assignment: JSON.parse(room.assignment_json), joinExpiresAt: joinExpiresAt(room), expiresAt: room.expires_at }; }
 async function roomFor(db, code) {
   const room = await db.prepare('SELECT * FROM classes WHERE code = ?').bind(code).first();
@@ -123,12 +123,13 @@ async function api(request, env, url) {
     if (existing) { if (existing.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (existing.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(existing); }
     await cleanup(db);
     for (let attempt = 0; attempt < 12; attempt++) {
-      const code = String(100 + crypto.getRandomValues(new Uint32Array(1))[0] % 900);
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const code = Array.from(crypto.getRandomValues(new Uint8Array(8)), value => alphabet[value % alphabet.length]).join('');
       const now = Date.now();
-      await db.prepare(`INSERT OR IGNORE INTO classes(code, owner_id, assignment_json, expires_at, request_id, payload_hash)
-        SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM classes WHERE owner_id = ? AND expires_at > ?) < 10
+      await db.prepare(`INSERT OR IGNORE INTO classes(code, owner_id, assignment_json, expires_at, join_expires_at, request_id, payload_hash)
+        SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM classes WHERE owner_id = ? AND expires_at > ?) < 10
         AND (SELECT COUNT(*) FROM classes WHERE expires_at > ?) < 100`)
-        .bind(code, owner, JSON.stringify(assignment), now + 86400000, requestId, payloadHash, owner, now, now).run();
+        .bind(code, owner, JSON.stringify(assignment), now + 86400000, now + 900000, requestId, payloadHash, owner, now, now).run();
       const saved = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
       if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); return roomReply(saved); }
       const count = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE owner_id = ? AND expires_at > ?').bind(owner, now).first();
@@ -258,7 +259,7 @@ async function api(request, env, url) {
     const tokenHash = await hash(data.memberToken), aliasKey = alias.toLocaleLowerCase('en-US'), payloadHash = await hash(JSON.stringify({ alias, tokenHash }));
     await db.prepare(`INSERT OR IGNORE INTO members(id, code, alias, alias_key, token_hash, request_id, payload_hash)
       SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM members WHERE code = ?) < 100
-      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND (length(code) = 8 OR expires_at - 85500000 > ?))`)
+      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?)`)
       .bind(crypto.randomUUID(), code, alias, aliasKey, tokenHash, requestId, payloadHash, code, code, Date.now(), Date.now()).run();
     const saved = await db.prepare('SELECT * FROM members WHERE code = ? AND request_id = ?').bind(code, requestId).first();
     if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同加入編號已有另一份資料。'); return { ...roomReply(room), memberId: saved.id, alias: saved.alias }; }

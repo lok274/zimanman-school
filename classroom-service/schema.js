@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer, uniqueIndex, index, primaryKey } from 'drizzle-orm/sqlite-core';
 export const classes = sqliteTable('classes', {
   code: text('code').primaryKey(), ownerId: text('owner_id').notNull(), assignmentJson: text('assignment_json').notNull(),
-  expiresAt: integer('expires_at').notNull(), requestId: text('request_id').notNull(), payloadHash: text('payload_hash').notNull(),
+  expiresAt: integer('expires_at').notNull(), joinExpiresAt: integer('join_expires_at'), requestId: text('request_id').notNull(), payloadHash: text('payload_hash').notNull(),
 }, table => [uniqueIndex('classes_owner_request').on(table.ownerId, table.requestId), index('classes_expiry').on(table.expiresAt)]);
 export const members = sqliteTable('members', {
   id: text('id').primaryKey(), code: text('code').notNull().references(() => classes.code, { onDelete: 'cascade' }),

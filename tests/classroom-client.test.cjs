@@ -102,6 +102,34 @@ test('lost join responses retry the exact request ID and pre-generated capabilit
   await e.client.join('abcdefgh', ' 小星 '); fail = false; await e.client.join('ABCDEFGH', '小星');
   assert.equal(e.calls[0].body, e.calls[1].body); assert.match(JSON.parse(e.calls[0].body).memberToken, /^[a-f0-9]{64}$/); assert.equal(e.client.view().accepted, true);
 });
+test('a new link or seat cannot replace a saved identity or an unresolved join', async () => {
+  let offline = true;
+  const e = setup(() => { if (offline) throw new Error('offline'); return response(member); });
+  await e.client.join(member.code, member.alias);
+  const pending = e.data.get(e.key);
+  assert.deepEqual(e.client.view().joining, { code: member.code, alias: member.alias });
+  assert(!JSON.stringify(e.client.view()).includes(JSON.parse(pending).join.body.memberToken));
+  await e.client.join('123', '2號');
+  assert.equal(e.calls.length, 1); assert.equal(e.data.get(e.key), pending);
+  offline = false; await e.client.join(member.code, member.alias);
+  const joined = e.data.get(e.key);
+  await e.client.join('456', '3號');
+  assert.equal(e.calls.length, 2); assert.equal(e.data.get(e.key), joined);
+  e.client.bindRun('run-a'); e.client.finish(Q.evaluate(assignment.entries, evidence)); await settled(e.client);
+  const saved = e.data.get(e.key), count = e.calls.length;
+  await e.client.join('456', '3號');
+  assert.equal(e.calls.length, count); assert.equal(e.data.get(e.key), saved);
+  e.client.leave(); await e.client.join('456', '3號');
+  assert.equal(e.calls.length, count + 1, 'only an explicit switch permits another join');
+});
+test('a duplicate seat asks for teacher help and retains the exact retry identity', async () => {
+  const e = setup(() => response({ error: { code: 'ALIAS_TAKEN', message: 'duplicate' } }, 409));
+  await e.client.join('123', '7號');
+  assert.match(e.client.view().message, /座號已有人使用，請找老師/);
+  assert.equal(e.client.view().member, null);
+  await e.client.join('123', '7號');
+  assert.equal(e.calls[0].body, e.calls[1].body);
+});
 test('three-digit membership survives reload while malformed and legacy code forms stay distinct', async () => {
   const numeric = { ...member, code: '123', joinExpiresAt: Date.now() + 900000 };
   const e = setup(() => response(numeric));
