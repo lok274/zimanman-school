@@ -189,6 +189,24 @@ test('seat table is bounded to forty rows per class and follows class cleanup', 
   assert.equal((await e.call('/' + code + '/seats')).status, 410);
   await e.call('/cleanup', 'POST', {}); assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM seat_leases').get().n, 0);
 });
+test('seat claims and renewals enforce deadlines crossed while preparing their atomic write', async t => {
+  const originalNow = Date.now;
+  for (const action of ['claim', 'renew']) for (const boundary of ['request', 'admission']) {
+    const e = setup(t), room = (await e.create()).data, now = originalNow(), token = 'a'.repeat(64);
+    if (action === 'renew') await seatRequest(e, room.code, 'claim', 1, token);
+    const original = e.sqlite.prepare('SELECT * FROM seat_leases').get();
+    const deadline = boundary === 'request' ? now + 1000 : room.joinExpiresAt;
+    const before = boundary === 'request' ? now : room.joinExpiresAt - 1;
+    Date.now = () => before;
+    const db = { prepare(sql) { if (sql.startsWith(action === 'claim' ? 'INSERT INTO seat_leases' : 'UPDATE seat_leases SET')) Date.now = () => deadline; return e.db.prepare(sql); } };
+    try {
+      const result = await (await worker).fetch(new Request('https://class.test/api/v1/classes/' + room.code + '/seats', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, seat: 1, token, expiresAt: deadline }) }), { DB: db });
+      assert.equal(result.status, boundary === 'request' ? 409 : 410);
+      assert.equal((await result.json()).error.code, boundary === 'request' ? 'LEASE_EXPIRED' : 'JOIN_CLOSED');
+      assert.deepEqual(e.sqlite.prepare('SELECT * FROM seat_leases').get(), original, action + ' ' + boundary);
+    } finally { Date.now = originalNow; }
+  }
+});
 test('new eight-character classes close admission at fifteen minutes but keep existing members for a day', async t => {
   const e = setup(t), now = Date.now(), originalNow = Date.now;
   Date.now = () => now;

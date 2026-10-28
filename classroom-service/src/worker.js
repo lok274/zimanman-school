@@ -83,23 +83,24 @@ async function selectSeat(request, db, room) {
   }
   if (joinExpiresAt(room) <= now) fail(410, 'JOIN_CLOSED', '班級加入時間已過。');
   if (!Number.isSafeInteger(expiresAt) || expiresAt <= now || expiresAt > now + 30000 || expiresAt > joinExpiresAt(room)) fail(409, 'LEASE_EXPIRED', '請重新選擇座號。');
-  const values = [expiresAt, room.code, seat, tokenHash, now, room.code, seat + '號', room.code, now, now];
   let lease;
   if (action === 'renew') {
     lease = await db.prepare(`UPDATE seat_leases SET expires_at = MAX(expires_at, ?) WHERE code = ? AND seat = ? AND token_hash = ? AND expires_at > ?
       AND NOT EXISTS (SELECT 1 FROM members WHERE code = ? AND alias_key = ?)
-      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?) RETURNING expires_at`)
-      .bind(...values).first();
+      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?) AND ? > ? RETURNING expires_at`)
+      .bind(expiresAt, room.code, seat, tokenHash, Date.now(), room.code, seat + '號', room.code, Date.now(), Date.now(), expiresAt, Date.now()).first();
   } else {
     lease = await db.prepare(`INSERT INTO seat_leases(code, seat, token_hash, expires_at) SELECT ?, ?, ?, ?
       WHERE NOT EXISTS (SELECT 1 FROM members WHERE code = ? AND alias_key = ?)
-      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?)
+      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?) AND ? > ?
       ON CONFLICT(code, seat) DO UPDATE SET token_hash = excluded.token_hash, expires_at = CASE WHEN seat_leases.token_hash = excluded.token_hash THEN MAX(seat_leases.expires_at, excluded.expires_at) ELSE excluded.expires_at END
       WHERE seat_leases.expires_at <= ? OR seat_leases.token_hash = excluded.token_hash RETURNING expires_at`)
-      .bind(room.code, seat, tokenHash, expiresAt, room.code, seat + '號', room.code, now, now, now).first();
+      .bind(room.code, seat, tokenHash, expiresAt, room.code, seat + '號', room.code, Date.now(), Date.now(), expiresAt, Date.now(), Date.now()).first();
   }
+  if (joinExpiresAt(room) <= Date.now()) fail(410, 'JOIN_CLOSED', '班級加入時間已過。');
+  if (expiresAt <= Date.now()) fail(409, 'LEASE_EXPIRED', '請重新選擇座號。');
   if (!lease) fail(409, action === 'renew' ? 'LEASE_EXPIRED' : 'SEAT_TAKEN', action === 'renew' ? '請重新選擇座號。' : '此座號已被選用，請選擇其他座號。');
-  return { seat, expiresAt: lease.expires_at, serverNow: now, joinExpiresAt: joinExpiresAt(room) };
+  return { seat, expiresAt: lease.expires_at, serverNow: Date.now(), joinExpiresAt: joinExpiresAt(room) };
 }
 async function roomFor(db, code) {
   const room = await db.prepare('SELECT * FROM classes WHERE code = ?').bind(code).first();
