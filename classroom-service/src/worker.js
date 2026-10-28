@@ -64,7 +64,7 @@ async function body(request, maximum = 262144) {
 function key(value) { if (typeof value !== 'string' || !keyPattern.test(value)) fail(400, 'INVALID_ID', '紀錄編號無效。'); return value; }
 function canonicalAssignment(data) { try { if (data.version !== undefined && ![1, 2].includes(data.version)) throw new Error('測驗版本不支援。'); return data.version === 2 ? A.assignment(data.entries, data.mode) : Q.assignment(data.entries); } catch (error) { fail(400, 'INVALID_ASSIGNMENT', error.message); } }
 function joinExpiresAt(room) { return room.join_expires_at ?? (/^\d{3}$/.test(room.code) ? room.expires_at - 85500000 : room.expires_at); }
-function roomReply(room) { return { code: room.code, assignment: JSON.parse(room.assignment_json), joinExpiresAt: joinExpiresAt(room), expiresAt: room.expires_at }; }
+function roomReply(room) { return { code: room.code, ...(room.join_code ? { joinCode: room.join_code } : {}), assignment: JSON.parse(room.assignment_json), joinExpiresAt: joinExpiresAt(room), expiresAt: room.expires_at }; }
 function seatNumber(alias) { return /^(?:[1-9]|[1-3]\d|40)號$/.test(alias) ? Number(alias.slice(0, -1)) : null; }
 async function seatSnapshot(db, room) {
   const now = Date.now();
@@ -103,7 +103,7 @@ async function selectSeat(request, db, room) {
   return { seat, expiresAt: lease.expires_at, serverNow: Date.now(), joinExpiresAt: joinExpiresAt(room) };
 }
 async function roomFor(db, code) {
-  const room = await db.prepare('SELECT * FROM classes WHERE code = ?').bind(code).first();
+  const room = await db.prepare('SELECT c.*, j.join_code FROM classes c LEFT JOIN class_join_codes j ON j.room_code = c.code WHERE c.code = ?').bind(code).first();
   if (!room) fail(404, 'CLASS_NOT_FOUND', '搵唔到呢個班級，請核對班級碼。');
   if (room.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期，請老師開新一班。');
   return room;
@@ -156,28 +156,43 @@ async function api(request, env, url) {
   if (!route.length && request.method === 'POST') {
     const owner = await teacher(request), data = await body(request);
     const requestId = key(data.requestId), assignment = canonicalAssignment(data), payloadHash = await hash(JSON.stringify(assignment));
-    const existing = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
+    const existing = await db.prepare('SELECT c.*, j.join_code FROM classes c LEFT JOIN class_join_codes j ON j.room_code = c.code WHERE c.owner_id = ? AND c.request_id = ?').bind(owner, requestId).first();
     if (existing) { if (existing.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (existing.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(existing); }
     await cleanup(db);
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      const code = Array.from(crypto.getRandomValues(new Uint8Array(8)), value => alphabet[value % alphabet.length]).join('');
-      const now = Date.now();
-      await db.prepare(`INSERT OR IGNORE INTO classes(code, owner_id, assignment_json, expires_at, join_expires_at, request_id, payload_hash)
+    const now = Date.now(), expiry = now + 30 * 86400000;
+    const code = 'r_' + Array.from(crypto.getRandomValues(new Uint8Array(16)), value => value.toString(16).padStart(2, '0')).join('');
+    const start = crypto.getRandomValues(new Uint32Array(1))[0] % 100;
+    const slots = 'WITH RECURSIVE slots(n) AS (VALUES(0) UNION ALL SELECT n+1 FROM slots WHERE n<99) ';
+    await db.batch([
+      db.prepare('DELETE FROM class_join_codes WHERE room_code IN (SELECT code FROM classes WHERE expires_at <= ?)').bind(now),
+      db.prepare(slots + `INSERT OR IGNORE INTO classes(code, owner_id, assignment_json, expires_at, join_expires_at, request_id, payload_hash)
         SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM classes WHERE owner_id = ? AND expires_at > ?) < 10
-        AND (SELECT COUNT(*) FROM classes WHERE expires_at > ?) < 100`)
-        .bind(code, owner, JSON.stringify(assignment), now + 86400000, now + 900000, requestId, payloadHash, owner, now, now).run();
-      const saved = await db.prepare('SELECT * FROM classes WHERE owner_id = ? AND request_id = ?').bind(owner, requestId).first();
-      if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); return roomReply(saved); }
-      const count = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE owner_id = ? AND expires_at > ?').bind(owner, now).first();
-      if (count.n >= 10) fail(429, 'CLASS_LIMIT', '最多同時開 10 班，請等舊班到期。');
-      const total = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE expires_at > ?').bind(now).first();
-      if (total.n >= 100) fail(429, 'SERVICE_LIMIT', '服務最多同時開 100 班，請等舊班到期。');
-    }
+        AND (SELECT COUNT(*) FROM classes WHERE expires_at > ?) < 100
+        AND EXISTS (SELECT 1 FROM slots WHERE NOT EXISTS (SELECT 1 FROM class_join_codes WHERE join_code = printf('%02d', n)))`)
+        .bind(code, owner, JSON.stringify(assignment), expiry, expiry, requestId, payloadHash, owner, now, now),
+      db.prepare(slots + `INSERT INTO class_join_codes(join_code, room_code)
+        SELECT printf('%02d', n), c.code FROM slots, classes c
+        WHERE c.owner_id = ? AND c.request_id = ? AND c.payload_hash = ? AND c.expires_at > ?
+        AND NOT EXISTS (SELECT 1 FROM class_join_codes WHERE room_code = c.code)
+        AND NOT EXISTS (SELECT 1 FROM class_join_codes WHERE join_code = printf('%02d', n))
+        ORDER BY (n - ? + 100) % 100 LIMIT 1`).bind(owner, requestId, payloadHash, now, start),
+    ]);
+    const saved = await db.prepare('SELECT c.*, j.join_code FROM classes c LEFT JOIN class_join_codes j ON j.room_code = c.code WHERE c.owner_id = ? AND c.request_id = ?').bind(owner, requestId).first();
+    if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同編號已有另一份設定。'); if (saved.expires_at <= Date.now()) fail(410, 'EXPIRED', '班級已到期。'); return roomReply(saved); }
+    const count = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE owner_id = ? AND expires_at > ?').bind(owner, now).first();
+    if (count.n >= 10) fail(429, 'CLASS_LIMIT', '最多同時開 10 班，請等舊班到期。');
+    const total = await db.prepare('SELECT COUNT(*) AS n FROM classes WHERE expires_at > ?').bind(now).first();
+    if (total.n >= 100) fail(429, 'SERVICE_LIMIT', '服務最多同時開 100 班，請等舊班到期。');
     fail(503, 'TRY_AGAIN', '暫未能建立班級，請重試。');
   }
   const [code, action, runId] = route;
-  if (!/^(?:[1-9]\d{2}|[A-Z2-9]{8})$/.test(code || '') || route.length > 3) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
+  if (/^\d{2}$/.test(code || '') && route.length === 1 && request.method === 'GET') {
+    const mapping = await db.prepare('SELECT room_code FROM class_join_codes WHERE join_code = ?').bind(code).first();
+    if (!mapping) fail(404, 'CLASS_NOT_FOUND', '搵唔到呢個班級，請核對班級碼。');
+    const resolved = await roomFor(db, mapping.room_code);
+    return { code: resolved.code, joinCode: code, expiresAt: resolved.expires_at };
+  }
+  if (!/^(?:[1-9]\d{2}|[A-Z2-9]{8}|r_[a-f0-9]{32})$/.test(code || '') || route.length > 3) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
   const room = await roomFor(db, code);
   const assigned = JSON.parse(room.assignment_json);
   if (action === 'seats' && route.length === 2) return selectSeat(request, db, room);
@@ -290,9 +305,18 @@ async function api(request, env, url) {
   if (assigned.version === 2 && ['runs', 'teacher-board'].includes(action)) fail(409, 'ASSESSMENT_VERSION', '本班採用原筆跡批改，請開新版測驗。');
   if (action === 'members' && route.length === 2 && request.method === 'POST') {
     const data = await body(request), requestId = key(data.requestId);
-    if (typeof data.alias !== 'string') fail(400, 'INVALID_ALIAS', '請輸入暱稱。');
-    const alias = data.alias.normalize('NFC').trim();
-    if (!alias || Array.from(alias).length > 20 || /[\p{Cc}\p{Cf}]/u.test(alias)) fail(400, 'INVALID_ALIAS', '暱稱限 1 至 20 個字，不可用控制字元。');
+    if (typeof data.alias !== 'string') fail(400, 'INVALID_ALIAS', '請輸入班別及學號。');
+    let alias = data.alias.normalize('NFC').trim();
+    if (typeof data.memberToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.memberToken)) fail(400, 'INVALID_TOKEN', '參加身份無效。');
+    const existing = await db.prepare('SELECT * FROM members WHERE code = ? AND request_id = ?').bind(code, requestId).first();
+    if (existing && existing.payload_hash === await hash(JSON.stringify({ alias, tokenHash: await hash(data.memberToken) }))) return { ...roomReply(room), memberId: existing.id, alias: existing.alias };
+
+    if (code.startsWith('r_')) {
+      const match = /^([1-9][0-9]?)([A-Z]{1,2})([0-9]{1,2})$/.exec(data.alias.normalize('NFKC').replace(/[ \u3000]/g, '').toUpperCase());
+      if (!match || Number(match[3]) < 1) fail(400, 'INVALID_ALIAS', '請輸入班別及學號，例如 2A01。');
+      alias = match[1] + match[2] + match[3].padStart(2, '0');
+    }
+    if (!alias || Array.from(alias).length > 20 || /[\p{Cc}\p{Cf}]/u.test(alias)) fail(400, 'INVALID_ALIAS', '學生名稱限 1 至 20 個字，不可用控制字元。');
     if (typeof data.memberToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.memberToken)) fail(400, 'INVALID_TOKEN', '參加身份無效。');
     if (data.seatToken !== undefined && (!seatNumber(alias) || typeof data.seatToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.seatToken))) fail(400, 'INVALID_SEAT', '座號資料無效。');
     const tokenHash = await hash(data.memberToken), aliasKey = alias.toLocaleLowerCase('en-US'), payloadHash = await hash(JSON.stringify({ alias, tokenHash }));
@@ -307,7 +331,7 @@ async function api(request, env, url) {
     if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同加入編號已有另一份資料。'); return { ...roomReply(room), memberId: saved.id, alias: saved.alias }; }
     if (joinExpiresAt(room) <= Date.now()) fail(410, 'JOIN_CLOSED', '班級加入時間已過，已加入同學仍可繼續。');
     const taken = await db.prepare('SELECT id FROM members WHERE code = ? AND alias_key = ?').bind(code, aliasKey).first();
-    if (taken) fail(409, 'ALIAS_TAKEN', '呢個暱稱已有人用，請用另一個；同名唔會接管原有紀錄。');
+    if (taken) fail(409, 'ALIAS_TAKEN', '此班別及學號已有人使用，請找老師。');
     if (seat) {
       const lease = await db.prepare('SELECT token_hash, expires_at FROM seat_leases WHERE code = ? AND seat = ?').bind(code, seat).first();
       if (lease?.expires_at > Date.now() && lease.token_hash !== seatHash) fail(409, 'SEAT_TAKEN', '此座號已被選用，請選擇其他座號。');
