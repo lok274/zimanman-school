@@ -20,9 +20,10 @@
       clearTimeout(expiryTimer); const owner = context;
       expiryTimer = setTimeout(async () => {
         if (owner !== context) return;
+        if (Math.min(owner.expiresAt, record?.expiresAt || owner.expiresAt) > Date.now()) { armExpiry(); return; }
         clock(false); stopBoard(); context = null; busy = false; record = null; shell('小挑戰已到期'); panel.append(message('請老師開新一班。')); footer(close);
         try { await store.purge(Date.now()); } catch { if (!context && visible) status('原稿已停止顯示。恢復儲存後會再清理。'); }
-      }, Math.max(0, Math.min(owner.expiresAt, record?.expiresAt || owner.expiresAt) - Date.now()));
+      }, Math.min(2147483647, Math.max(0, Math.min(owner.expiresAt, record?.expiresAt || owner.expiresAt) - Date.now())));
     }
     async function persist(value = record, owner = context) {
       current(owner, value);

@@ -7,10 +7,10 @@
   function score(row) { return client.view().receipt?.version === 4 ? (row.elapsedMs / 1000).toFixed(1) + ' 秒' : Number.isInteger(row.score) ? '字形正確 ' + row.score + ' 字' : '錯誤 ' + row.mistakes + ' 次 · ' + (row.elapsedMs / 1000).toFixed(1) + ' 秒'; }
   function render() {
     const view = client.view(), member = view.member, automatic = view.receipt?.version === 4, reviewed = member?.assignment.version === 2 && !automatic;
-    $('board-identity').textContent = member ? '班級 ' + member.code + ' · ' + member.alias : '';
-    $('board-status').textContent = !member ? '尚未加入班級。請先加入班級，完成全部題目後再查看排行榜。' : view.needsContinue ? '共用平板請先核對暱稱；如非本人，請返回首頁更換使用者。' : !view.receipt ? '完成全部題目並交卷後才可查看排行榜。' : view.message;
+    $('board-identity').textContent = member ? '班級 ' + (member.joinCode || member.code) + ' · ' + member.alias : '';
+    $('board-status').textContent = !member ? '尚未加入班級。請先加入班級，完成全部題目後再查看排行榜。' : view.needsContinue ? '共用平板請先核對學生；如非本人，請返回首頁更換使用者。' : !view.receipt ? '完成全部題目並交卷後才可查看排行榜。' : view.message;
     $('board-continue').hidden = !view.needsContinue;
-    $('board-continue').textContent = member ? '繼續以「' + member.alias + '」查看' : '確認暱稱並查看';
+    $('board-continue').textContent = member ? '繼續以「' + member.alias + '」查看' : '確認學生並查看';
     $('board-refresh').hidden = !view.accepted || !view.receipt;
     $('board-refresh').disabled = view.busy;
     $('board-join').hidden = !!member && !!view.receipt;
@@ -28,7 +28,7 @@
       rows.filter(row => row.rank <= 3).forEach(row => { const card = node('div', '', 'podium-place'); card.append(node('strong', '第 ' + row.rank + ' 名'), node('span', row.alias), node('small', score(row))); podium.append(card); });
       const table = document.createElement('table'), header = document.createElement('tr');
       table.append(node('caption', automatic ? '每位同學第一份筆順小挑戰' : reviewed ? '每位同學第一份原卷' : '每位同學全份小挑戰的最佳成績'));
-      for (const text of automatic ? ['名次', '暱稱', '時間（秒）'] : reviewed ? ['名次', '暱稱', '字形正確'] : ['名次', '暱稱', '錯誤', '時間（秒）']) { const cell = node('th', text); cell.setAttribute('scope', 'col'); header.append(cell); } table.append(header);
+      for (const text of automatic ? ['名次', '學生', '時間（秒）'] : reviewed ? ['名次', '學生', '字形正確'] : ['名次', '學生', '錯誤', '時間（秒）']) { const cell = node('th', text); cell.setAttribute('scope', 'col'); header.append(cell); } table.append(header);
       for (const row of rows) { const tr = document.createElement('tr'); if (row.isMe) tr.className = 'is-me'; for (const text of automatic ? [row.rank, row.alias + (row.isMe ? '（你）' : ''), (row.elapsedMs / 1000).toFixed(1)] : reviewed ? [row.rank, row.alias, row.score] : [row.rank, row.alias + (row.isMe ? '（你）' : ''), row.mistakes, (row.elapsedMs / 1000).toFixed(1)]) tr.append(node('td', String(text))); table.append(tr); }
       container.append(podium, table);
     }

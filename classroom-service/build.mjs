@@ -17,9 +17,7 @@ const context = vm.createContext({});
 vm.runInContext(shared('content.js'), context);
 const dataUrl = context.BishunContent.dataUrl;
 const defaults = context.BishunContent.words.map(text => ({ text, selectedIndexes: Array.from(text, (_, index) => index) }));
-const qr = fs.readFileSync(path.join(root, 'vendor/qrcode.js'), 'utf8');
-const qrLicense = fs.readFileSync(path.join(root, 'vendor/qrcode-LICENSE'), 'utf8');
-const teacherScripts = ['/*\n' + qrLicense + '\n*/\n' + qr, canonical, assessment, shared('freehand.js'), shared('assessment-review.js')].join('\n');
+const teacherScripts = [canonical, assessment, shared('freehand.js'), shared('assessment-review.js')].join('\n');
 const teacherTemplate = fs.readFileSync(path.join(root, 'src/teacher.html'), 'utf8').replace('__DEFAULT_ENTRIES__', JSON.stringify(defaults))
   .replace('__ASSESSMENT_SCRIPTS__', () => teacherScripts.replace(/<\/script/gi, '<\\/script'))
   .replace('__ASSESSMENT_CSS__', () => shared('assessment.css'));

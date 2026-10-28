@@ -317,7 +317,6 @@ async function api(request, env, url) {
       alias = match[1] + match[2] + match[3].padStart(2, '0');
     }
     if (!alias || Array.from(alias).length > 20 || /[\p{Cc}\p{Cf}]/u.test(alias)) fail(400, 'INVALID_ALIAS', '學生名稱限 1 至 20 個字，不可用控制字元。');
-    if (typeof data.memberToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.memberToken)) fail(400, 'INVALID_TOKEN', '參加身份無效。');
     if (data.seatToken !== undefined && (!seatNumber(alias) || typeof data.seatToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.seatToken))) fail(400, 'INVALID_SEAT', '座號資料無效。');
     const tokenHash = await hash(data.memberToken), aliasKey = alias.toLocaleLowerCase('en-US'), payloadHash = await hash(JSON.stringify({ alias, tokenHash }));
     const seat = seatNumber(alias), seatHash = data.seatToken ? await hash(data.seatToken) : null;

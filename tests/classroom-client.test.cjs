@@ -125,7 +125,7 @@ test('a new link or seat cannot replace a saved identity or an unresolved join',
 test('a duplicate seat asks for teacher help and retains the exact retry identity', async () => {
   const e = setup(() => response({ error: { code: 'ALIAS_TAKEN', message: 'duplicate' } }, 409));
   await e.client.join('123', '7號');
-  assert.match(e.client.view().message, /座號已有人使用，請找老師/);
+  assert.match(e.client.view().message, /班別及學號已有人使用，請找老師/);
   assert.equal(e.client.view().member, null);
   await e.client.join('123', '7號');
   assert.equal(e.calls[0].body, e.calls[1].body);
@@ -260,4 +260,66 @@ test('automatic failed receipt persistence reports recoverable error and never f
   const joined={...member,assignment:BishunAssessment.assignment(assignment.entries,'copy')},run=lockedRun(joined.assignment),receipt={version:4,policy:BishunAssessment.policy,runId:run.runId,official:true,elapsedMs:1000};
   const e=setup(url=>response(url.endsWith('/members')?joined:receipt));await e.client.join(member.code,member.alias);e.storage.setItem=()=>{throw new Error('quota');};await assert.rejects(e.client.submitAutomatic(run),/回條/);
   assert(e.calls.at(-1).url.endsWith('/automatic-answers'));assert.equal(e.calls.filter(call=>call.url.endsWith('/answers')).length,0);
+});
+
+const modernMember = { ...member, code: 'r_' + '1'.repeat(32), joinCode: '07', alias: '2A01', expiresAt: Date.now() + 30 * 86400000 };
+test('manual joining resolves exactly once and normalizes the pupil before saving the immutable request', async () => {
+  for (const alias of ['2a1', '２ａ１', '2 A01']) {
+    let e;
+    e = setup((url, init) => {
+      if (init.method === 'GET') return response({ code: modernMember.code, joinCode: '07', expiresAt: modernMember.expiresAt });
+      const pending = JSON.parse(e.data.get(e.key)).join;
+      assert.equal(pending.code, modernMember.code); assert.equal(pending.joinCode, '07'); assert.equal(pending.body.alias, '2A01'); assert.equal(init.body, JSON.stringify(pending.body));
+      return response(modernMember);
+    });
+    assert.equal(await e.client.join('07', alias), true);
+    assert.equal(e.calls.length, 2); assert.equal(e.calls[1].url, 'https://class.test/api/v1/classes/' + modernMember.code + '/members');
+    assert.equal(e.client.view().member.joinCode, '07'); assert.equal(e.client.view().member.code, modernMember.code);
+  }
+});
+test('saved manual joins never resolve a reused label and preserve the exact body on reload', async () => {
+  let failed = true;
+  const e = setup((_url, init) => { if (init.method === 'GET') return response(modernMember); if (failed) throw new Error('lost'); return response(modernMember); });
+  assert.equal(await e.client.join('07', '2a1'), false);
+  const original = e.calls[1], reload = C.create(e.options); failed = false;
+  assert.equal(await reload.join('08', '2A01'), false); assert.equal(e.calls.length, 2);
+  assert.equal(await reload.join('07', '2A01'), true);
+  assert.equal(e.calls.length, 3); assert.equal(e.calls[2].url, original.url); assert.equal(e.calls[2].body, original.body);
+});
+test('leaving during public resolution never saves or posts a stale identity', async () => {
+  let resolve;
+  const e = setup(() => new Promise(done => { resolve = done; }));
+  const joining = e.client.join('07', '2A01'); e.client.leave(); resolve(response(modernMember));
+  assert.equal(await joining, false); assert.equal(e.calls.length, 1); assert.equal(e.client.view().member, null); assert.equal(e.client.view().joining, null);
+  assert.deepEqual(JSON.parse(e.data.get(e.key)), {});
+});
+test('manual validation and storage failure never send a membership write', async () => {
+  const e = setup(() => response(modernMember));
+  for (const alias of ['2A00', '2ABC01', '0A01', '2-A01', '2\tA01']) assert.equal(await e.client.join('07', alias), false);
+  assert.equal(e.calls.length, 0);
+  e.storage.setItem = () => { throw new Error('quota'); };
+  assert.equal(await e.client.join('07', '2A01'), false); assert.equal(e.calls.length, 1); assert.equal(e.calls[0].method, 'GET');
+  assert.equal(e.client.view().storageOkay, false);
+});
+
+test('two-digit joining normalizes class numbers beyond 40 and keeps the immutable room identity', async () => {
+  for (const [typed, canonical] of [['２ａ４１', '2A41'], ['2 A99', '2A99'], ['2a1', '2A01']]) {
+    const room = { code: 'r_' + 'a'.repeat(32), joinCode: '00', expiresAt: Date.now() + 30 * 86400000 };
+    const e = setup((url, init) => response(url.endsWith('/members') ? { ...member, ...room, alias: JSON.parse(init.body).alias } : room));
+    assert.equal(await e.client.join('00', typed), true);
+    assert.equal(e.client.view().member.alias, canonical); assert.equal(e.client.view().member.joinCode, '00');
+    assert.equal(e.calls[1].url, 'https://class.test/api/v1/classes/' + room.code + '/members');
+    assert.equal(e.calls[0].method, 'GET'); assert.equal(JSON.parse(e.calls[1].body).seatToken, undefined);
+  }
+});
+
+test('invalid fresh student identifiers never resolve or post', async () => {
+  for (const code of ['7', '000', 'r_bad']) {
+    const e = setup(() => { throw new Error('unexpected network'); });
+    assert.equal(await e.client.join(code, '2A01'), false); assert.equal(e.calls.length, 0);
+  }
+  for (const alias of ['2A00', 'A01', '2A', '0A01', '100A01', '2AAA01', '2A100', '2A-1', '2\tA01']) {
+    const e = setup(() => { throw new Error('unexpected network'); });
+    assert.equal(await e.client.join('07', alias), false); assert.equal(e.calls.length, 0);
+  }
 });

@@ -2,13 +2,12 @@
   'use strict';
   const storageKey = 'bishun:classroom:v1';
   const defaultOrigin = 'https://xiezile-classroom.bwflc-school-tour-lok274.workers.dev';
-  const codePattern = /^(?:[1-9]\d{2}|[A-Z2-9]{8})$/;
+  const codePattern = /^(?:[1-9]\d{2}|[A-Z2-9]{8}|r_[a-f0-9]{32})$/;
   function validateAssignment(value) { return value.version === 2 ? root.BishunAssessment.assignment(value.entries, value.mode) : root.BishunQuizResults.assignment(value.entries); }
   function create({ origin = defaultOrigin, storage = root.sessionStorage, fetch = root.fetch.bind(root), crypto = root.crypto, changed = () => {} } = {}) {
     origin = new URL(origin).origin;
     const key = storageKey + ':' + origin;
     let saved = {}, accepted = false, generation = 0, controller = null, busy = false, joinOperation = null, message = '', board = null, storageOkay = true;
-    let seats = { code: null, status: 'inactive', occupied: [], message: '' }, selection = null, seatGeneration = 0, seatTimer = null, seatRead = null, seatClock = null, seatMutations = Promise.resolve();
     const monotonic = () => root.performance.now();
     const randomToken = () => [...crypto.getRandomValues(new Uint8Array(32))].map(n => n.toString(16).padStart(2, '0')).join('');
     try {
@@ -26,8 +25,7 @@
       }
     } catch { storageOkay = false; }
     function persist() { try { storage.setItem(key, JSON.stringify(saved)); storageOkay = true; } catch { storageOkay = false; } return storageOkay; }
-    function view() { return { member: saved.member ? { code: saved.member.code, memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, joining: saved.join ? { code: saved.join.code, alias: saved.join.body.alias } : null, needsContinue: !!saved.member && !accepted, accepted, busy: busy || !!joinOperation, message: message.replaceAll('測驗', '小挑戰'), pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null,
-      seats: { ...seats, occupied: [...seats.occupied], selected: selection?.phase === 'held' && selection.validUntil > monotonic() ? selection.seat : null, choosing: !!selection && selection.phase !== 'held' } }; }
+    function view() { return { member: saved.member ? { code: saved.member.code, ...(saved.member.joinCode ? { joinCode: saved.member.joinCode } : {}), memberId: saved.member.memberId, alias: saved.member.alias, assignment: saved.member.assignment, expiresAt: saved.member.expiresAt } : null, joining: saved.join ? { code: saved.join.code, ...(saved.join.joinCode ? { joinCode: saved.join.joinCode } : {}), alias: saved.join.body.alias } : null, needsContinue: !!saved.member && !accepted, accepted, busy: busy || !!joinOperation, message: message.replaceAll('測驗', '小挑戰'), pending: !!saved.pending, receipt: saved.receipt || null, board, storageOkay, boundRunId: saved.boundRunId || null }; }
     function notify() { changed(view()); }
     async function seatRequest(code, value, keepalive = false, abort = new AbortController()) {
       let timer;
@@ -48,78 +46,10 @@
       if (!data || !Array.isArray(data.occupied) || data.occupied.length > 40 || new Set(data.occupied).size !== data.occupied.length || data.occupied.some(seat => !Number.isInteger(seat) || seat < 1 || seat > 40) || ![data.serverNow, data.joinExpiresAt, data.expiresAt].every(Number.isSafeInteger) || data.serverNow < 0 || data.joinExpiresAt > data.expiresAt) throw new Error('座號同步回應無效。');
       return data;
     }
-    function setSeatClock(data) { seatClock = { serverNow: data.serverNow, joinExpiresAt: data.joinExpiresAt, at: monotonic() }; }
-    function seatDeadline(clock = seatClock) { return Math.floor(Math.min(clock.joinExpiresAt, clock.serverNow + monotonic() - clock.at + 29000)); }
-    function queueSeat(action) { const pending = seatMutations.catch(() => {}).then(action); seatMutations = pending; return pending; }
+    function seatDeadline(clock) { return Math.floor(Math.min(clock.joinExpiresAt, clock.serverNow + monotonic() - clock.at + 29000)); }
     async function releaseSeat(held) {
       if (!held || saved.join?.body.seatToken === held.token) return;
       try { await seatRequest(held.code, { action: 'release', seat: held.seat, token: held.token }, true); } catch {}
-    }
-    function seatCurrent(held, ownGeneration) { return ownGeneration === seatGeneration && selection === held && seats.code === held.code && seats.status !== 'inactive' && !saved.member && !saved.join; }
-    async function claimSeat(held, ownGeneration, action) {
-      if (!seatCurrent(held, ownGeneration)) return;
-      const sentAt = monotonic(), deadline = action === 'claim' ? held.requestDeadline : seatDeadline();
-      held.requestDeadline = deadline;
-      try {
-        const data = await seatRequest(held.code, { action, seat: held.seat, token: held.token, expiresAt: deadline });
-        if (!seatCurrent(held, ownGeneration)) { await releaseSeat(held); return; }
-        if (!data || data.seat !== held.seat || ![data.serverNow, data.expiresAt, data.joinExpiresAt].every(Number.isSafeInteger) || data.expiresAt <= data.serverNow || data.expiresAt > deadline || data.expiresAt > data.joinExpiresAt) throw new Error('座號同步回應無效。');
-        held.validUntil = sentAt + data.expiresAt - data.serverNow; held.renewedAt = monotonic(); held.phase = 'held';
-        if (held.validUntil <= monotonic()) { selection = null; await releaseSeat(held); }
-        seats.message = ''; notify();
-      } catch (error) {
-        if (!seatCurrent(held, ownGeneration)) { await releaseSeat(held); return; }
-        if (['SEAT_TAKEN', 'LEASE_EXPIRED', 'JOIN_CLOSED', 'EXPIRED', 'CLASS_NOT_FOUND'].includes(error.code)) {
-          selection = null;
-          if (error.code === 'SEAT_TAKEN') seats.occupied = [...new Set([...seats.occupied, held.seat])];
-          if (['JOIN_CLOSED', 'EXPIRED', 'CLASS_NOT_FOUND'].includes(error.code)) seats.status = 'closed';
-        } else held.phase = 'uncertain';
-        seats.message = error.message || '座號未能同步，請稍後重試。'; notify();
-      }
-    }
-    async function pollSeats(ownGeneration) {
-      if (ownGeneration !== seatGeneration || seats.status === 'inactive' || saved.member || saved.join) return;
-      const code = seats.code, abort = new AbortController(); seatRead = abort;
-      try {
-        const data = readSeats(await seatRequest(code, undefined, false, abort));
-        if (ownGeneration !== seatGeneration) return;
-        setSeatClock(data); seats.occupied = data.occupied; seats.status = data.joinExpiresAt > data.serverNow ? 'ready' : 'closed';
-        if (seats.status === 'closed') { const previous = selection; selection = null; queueSeat(() => releaseSeat(previous)); seats.message = '班級加入時間已過。'; }
-        else if (!selection || selection.phase === 'held') seats.message = '';
-        const held = selection;
-        if (held && (held.phase === 'uncertain' || held.phase === 'held' && (held.validUntil <= monotonic() || monotonic() - held.renewedAt >= 10000))) {
-          if (held.phase === 'held' && held.validUntil <= monotonic() || held.phase === 'uncertain' && seatClock.serverNow >= held.requestDeadline) { selection = null; queueSeat(() => releaseSeat(held)); }
-          else await queueSeat(() => claimSeat(held, ownGeneration, held.phase === 'uncertain' ? 'claim' : 'renew'));
-        }
-      } catch (error) {
-        if (ownGeneration !== seatGeneration) return;
-        seats.status = ['JOIN_CLOSED', 'EXPIRED', 'CLASS_NOT_FOUND'].includes(error.code) ? 'closed' : 'offline'; seats.message = error.message || '座號未能同步，請稍後重試。';
-      } finally {
-        if (ownGeneration === seatGeneration) {
-          seatRead = null; notify();
-          if (!['inactive', 'closed'].includes(seats.status) && !saved.member && !saved.join) seatTimer = setTimeout(() => pollSeats(ownGeneration), 1500);
-        }
-      }
-    }
-    function seatPicker({ code = '', active = false } = {}) {
-      code = code.trim().toUpperCase(); active = active && codePattern.test(code) && !saved.member && !saved.join;
-      if (active && seats.code === code && seats.status !== 'inactive') return;
-      if (!active && seats.status === 'inactive') return;
-      seatGeneration++; clearTimeout(seatTimer); seatTimer = null; seatRead?.abort(); seatRead = null;
-      const previous = selection; selection = null; seatClock = null;
-      if (previous && !saved.join) queueSeat(() => releaseSeat(previous));
-      seats = { code: active ? code : null, status: active ? 'loading' : 'inactive', occupied: [], message: '' }; notify();
-      if (active) pollSeats(seatGeneration);
-    }
-    async function selectSeat(seat) {
-      if (saved.member || saved.join || busy) return;
-      if (seat !== null && (!Number.isInteger(seat) || seat < 1 || seat > 40 || seats.status !== 'ready' || !seatClock)) return;
-      if (seat === selection?.seat && selection.phase === 'held') return;
-      const previous = selection; selection = null;
-      const ownGeneration = seatGeneration;
-      const held = seat === null ? null : { code: seats.code, seat, token: randomToken(), phase: 'claiming', requestDeadline: seatDeadline() };
-      selection = held; seats.message = held ? '確認座號中…' : ''; notify();
-      await queueSeat(async () => { await releaseSeat(previous); if (held) await claimSeat(held, ownGeneration, 'claim'); });
     }
     function invalidate() { generation++; controller?.abort(); controller = null; busy = false; joinOperation = null; }
     async function request(path, method = 'GET', value, token) {
@@ -142,39 +72,54 @@
       } finally { if (ownGeneration === generation) { busy = false; controller = null; } }
     }
     async function join(code, alias) {
-      if (busy || joinOperation) return;
-      code = code.trim().toUpperCase(); alias = alias.normalize('NFC').trim();
-      if (!codePattern.test(code) || !alias || Array.from(alias).length > 20) { message = '請輸入 8 位班級碼和 1 至 20 字暱稱。'; notify(); return; }
-      if (saved.member || saved.join && (saved.join.code !== code || saved.join.body.alias !== alias)) { message = '請先確認或更換目前的使用者。'; notify(); return; }
-      if (!saved.join || saved.join.code !== code || saved.join.body.alias !== alias) {
-        const seatToken = selection?.code === code && alias === selection.seat + '號' && selection.phase === 'held' && selection.validUntil > monotonic() ? selection.token : null;
-        saved = { join: { code, body: { requestId: crypto.randomUUID(), alias, memberToken: randomToken(), ...(seatToken ? { seatToken } : {}) } } };
-      }
-      if (!persist()) { message = '此瀏覽器未能保存參加身份，暫時不能加入班級。可以返回首頁做本機小挑戰。'; seatPicker({ active: false }); notify(); return; }
-      const pending = saved.join, operation = {}; joinOperation = operation; message = '加入中…'; seatPicker({ active: false });
+      if (busy || joinOperation) return false;
+      code = code.trim(); if (!code.startsWith('r_')) code = code.toUpperCase();
+      if (saved.member || saved.join && (![saved.join.code, saved.join.joinCode].includes(code) || saved.join.body.alias !== alias)) { message = '請先確認或更換目前的使用者。'; notify(); return false; }
+      const operation = {}; joinOperation = operation;
+      let pending = saved.join;
       try {
+        if (!pending) {
+          const match = /^([1-9][0-9]?)([A-Z]{1,2})([0-9]{1,2})$/.exec(alias.normalize('NFKC').replace(/[ \u3000]/g, '').toUpperCase());
+          const modern = /^(?:\d{2}|r_[a-f0-9]{32})$/.test(code);
+          if (!(modern || codePattern.test(code)) || modern && (!match || Number(match[3]) < 1)) throw new Error('請輸入兩位班級碼和班別及學號，例如 2A01。');
+          alias = modern ? match[1] + match[2] + match[3].padStart(2, '0') : alias.normalize('NFC').trim();
+          if (!alias || Array.from(alias).length > 20 || /[\p{Cc}\p{Cf}]/u.test(alias)) throw new Error('班別及學號無效。');
+          let joinCode;
+          if (/^\d{2}$/.test(code)) {
+            joinCode = code;
+            const room = await request('/' + joinCode);
+            if (joinOperation !== operation) return false;
+            if (!room || !/^r_[a-f0-9]{32}$/.test(room.code) || room.joinCode !== joinCode || !Number.isSafeInteger(room.expiresAt) || room.expiresAt <= Date.now()) throw new Error('班級回應無效，請重試。');
+            code = room.code;
+          }
+          pending = { code, ...(joinCode ? { joinCode } : {}), body: { requestId: crypto.randomUUID(), alias, memberToken: randomToken() } };
+          saved = { join: pending };
+        }
+        if (!persist()) throw new Error('此瀏覽器未能保存參加身份，暫時不能加入班級。可以返回首頁做本機小挑戰。');
+        message = '加入中…';
         let member;
         try { member = await request('/' + pending.code + '/members', 'POST', pending.body); }
         catch (error) {
           if (error.code !== 'LEASE_EXPIRED' || !pending.body.seatToken) throw error;
           const snapshot = readSeats(await seatRequest(pending.code));
-          if (saved.join !== pending) return;
+          if (joinOperation !== operation || saved.join !== pending) return false;
           const clock = { serverNow: snapshot.serverNow, joinExpiresAt: snapshot.joinExpiresAt, at: monotonic() };
           const held = { code: pending.code, seat: Number(pending.body.alias.slice(0, -1)), token: pending.body.seatToken };
           try { await seatRequest(pending.code, { action: 'claim', seat: held.seat, token: held.token, expiresAt: seatDeadline(clock) }); }
-          finally { if (saved.join !== pending) await releaseSeat(held); }
-          if (saved.join !== pending) return;
+          finally { if (joinOperation !== operation || saved.join !== pending) await releaseSeat(held); }
+          if (joinOperation !== operation || saved.join !== pending) return false;
           member = await request('/' + pending.code + '/members', 'POST', pending.body);
         }
-        if (!member || member.code !== pending.code || typeof member.memberId !== 'string' || typeof member.alias !== 'string' || !Number.isFinite(member.expiresAt)) throw new Error('班級回應無效，請重試。');
+        if (joinOperation !== operation || saved.join !== pending) return false;
+        if (!member || member.code !== pending.code || typeof member.memberId !== 'string' || member.alias !== pending.body.alias || !Number.isFinite(member.expiresAt) || pending.joinCode && member.joinCode !== pending.joinCode) throw new Error('班級回應無效，請重試。');
         validateAssignment(member.assignment);
-        saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始小挑戰。'; persist();
-      } catch (error) { if (error.stale || saved.join !== pending) return; message = error.code === 'ALIAS_TAKEN' && /^(?:[1-9]|[1-3]\d|40)號$/.test(alias) ? '此座號已有人使用，請找老師。' : error.message || '班級服務未能連線。'; }
+        saved = { member: { ...member, token: pending.body.memberToken } }; accepted = true; message = '已加入。準備好就開始小挑戰。';
+        return persist();
+      } catch (error) { if (error.stale || joinOperation !== operation) return false; message = error.code === 'ALIAS_TAKEN' ? '此班別及學號已有人使用，請找老師。' : error.message || '班級服務未能連線。'; return false; }
       finally { if (joinOperation === operation) { joinOperation = null; notify(); } }
-      notify();
     }
     function continueMember() { if (saved.member) { accepted = true; message = saved.pending ? '上次小挑戰尚未交到班級榜，請重試交卷。' : '已確認參加身份。'; notify(); } }
-    function leave() { seatPicker({ active: false }); invalidate(); saved = {}; accepted = false; board = null; message = ''; persist(); notify(); }
+    function leave() { invalidate(); saved = {}; accepted = false; board = null; message = ''; persist(); notify(); }
     function bindRun(runId) {
       if (!accepted || !saved.member || saved.pending || busy) throw new Error('請先確認身份，並交回上次小挑戰。');
       saved.boundRunId = runId; saved.receipt = null; board = null; message = '';
@@ -260,7 +205,7 @@
       if (result.answer !== null) throw new Error('原卷回應無效。');
       return result;
     }
-    return { view, seatPicker, selectSeat, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed, submitAutomatic, ownAutomaticAnswer, automaticBoard: async () => validateAutomaticBoard(await reviewedRequest('automatic-board', 'GET')),
+    return { view, join, continueMember, leave, bindRun, finish, retry, refresh, cancelRequests: invalidate, submitReviewed, submitAutomatic, ownAutomaticAnswer, automaticBoard: async () => validateAutomaticBoard(await reviewedRequest('automatic-board', 'GET')),
       ownAnswer: () => reviewedRequest('answers', 'GET'), reviewedBoard: async () => validateReviewedBoard(await reviewedRequest('board', 'GET')) };
   }
   const api = { create, storageKey, defaultOrigin };

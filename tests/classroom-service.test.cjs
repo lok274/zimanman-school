@@ -246,7 +246,7 @@ test('a collision retries without recycling a live code and legacy eight-charact
   assert.equal(joined.status, 200); assert.equal(joined.data.joinExpiresAt, joined.data.expiresAt);
   for (const code of ['000', '099', '12', '1000', 'ABC12345']) assert.equal((await e.join(code, '錯碼')).status, 404);
 });
-test('a six-word forty-eight-position challenge keeps its complete assignment in an eight-character class', async t => {
+test('a six-word forty-eight-position challenge keeps its complete assignment in an immutable room', async t => {
   const e = setup(t);
   const words = ['一二三四五六七八', '九十甲乙丙丁戊己', '庚辛壬癸子丑寅卯', '辰巳午未申酉戌亥', '天地玄黃宇宙洪荒', '日月盈昃辰宿列張'];
   const full = words.map(text => ({ text, selectedIndexes: Array.from({ length: 8 }, (_, index) => index) }));
@@ -641,7 +641,7 @@ test('cold automatic retries reconcile stored originals without character data',
   assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,1);
 });
 
-test('automatic expiry denies private reads and cleanup cascades after twenty-four hours', async t=>{
+test('automatic expiry denies private reads and cleanup cascades expired originals', async t=>{
   const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'2C16'),headers={authorization:'Bearer '+a.token},path='/'+room.code;
   await e.call(path+'/automatic-answers','PUT',automaticRun(assigned),headers);e.sqlite.prepare('UPDATE classes SET expires_at=? WHERE code=?').run(Date.now()-1,room.code);
   for(const route of ['automatic-answers','automatic-board'])assert.equal((await e.call(path+'/'+route,'GET',undefined,headers)).status,410);

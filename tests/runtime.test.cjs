@@ -823,7 +823,7 @@ test('visible timer ticks read the sole controller clock without storage writes 
   assert.equal(e.$('quiz-clock-value').textContent, '1.7 秒'); const doneWrites = writes; e.clock = 20000; tick(); assert.equal(writes, doneWrites); assert.equal(timers.size, 0);
 });
 
-function easyClassroom({ href = 'https://lok274.github.io/zimanman-school/?class=123', restoredStore, standalone = false, send, occupied = [] } = {}) {
+function easyClassroom({ href = 'https://lok274.github.io/zimanman-school/?class=07', restoredStore, standalone = false, send } = {}) {
   const e = environment(source('index.html')); e.calls = []; e.opens = [];
   e.context.location.href = href;
   if (standalone) e.document.body.setAttribute('data-standalone', '');
@@ -833,50 +833,48 @@ function easyClassroom({ href = 'https://lok274.github.io/zimanman-school/?class
   e.context.BishunAssessmentUI = { create: () => ({ hasLocal: async () => false, open: (...args) => e.opens.push(args) }) };
   e.context.fetch = async (url, options) => {
     e.calls.push({ url, ...options });
-    if (url.endsWith('/seats')) {
-      const now = Date.now(), data = options.body ? JSON.parse(options.body) : null;
-      return { ok: true, json: async () => data ? data.action === 'release' ? { released: true } : { seat: data.seat, expiresAt: data.expiresAt, serverNow: now, joinExpiresAt: now + 900000 } : { occupied, serverNow: now, joinExpiresAt: now + 900000, expiresAt: now + 86400000 } };
-    }
+    if (/classes\/\d{2}$/.test(url)) return { ok: true, json: async () => ({ code: 'r_' + 'a'.repeat(32), joinCode: url.split('/').at(-1), expiresAt: Date.now() + 30 * 86400000 }) };
     if (send) return send(url, options);
-    return { ok: true, json: async () => ({ code: url.split('/').at(-2), memberId: 'seat-member', alias: JSON.parse(options.body).alias, expiresAt: Date.now() + 86400000, assignment: { version: 2, mode: 'copy', entries: [{ text: '粗', selectedIndexes: [0] }] } }) };
+    return { ok: true, json: async () => ({ code: url.split('/').at(-2), ...(url.includes('/r_') ? { joinCode: '07' } : {}), memberId: 'student-member', alias: JSON.parse(options.body).alias, expiresAt: Date.now() + 86400000, assignment: { version: 2, mode: 'copy', entries: [{ text: '粗', selectedIndexes: [0] }] } }) };
   };
   for (const file of ['content.js', 'quiz-results.js', 'assessment.js', 'classroom.js', 'app.js']) vm.runInContext(source(file), e.context);
   return e;
 }
-test('teacher link opens a keyboard-free seat picker and one Start joins and opens the assigned challenge', async () => {
-  const e = easyClassroom({ href: 'https://lok274.github.io/zimanman-school/?class=ABCDEFGH' });
-  assert.equal(e.$('class-dialog').open, true); assert(!e.calls.some(call => call.url.endsWith('/members')));
-  assert.equal(e.$('class-code-fields').hidden, true); assert.equal(e.$('class-seats').childNodes.length, 40);
+function typeStudent(e, alias = '２ａ４１') {
+  e.$('class-alias').value = alias; e.$('class-alias').emit('input');
+}
+test('manual code and student number join once and open the assigned challenge', async () => {
+  const e = easyClassroom({ href: 'https://lok274.github.io/zimanman-school/' });
+  e.$('class-open').click(); assert.equal(e.$('class-code-fields').hidden, false);
   assert.equal(e.$('class-join').disabled, true);
-  const seven = e.$('class-seats').childNodes[6]; await waitFor(() => !seven.disabled); seven.click();
-  assert.equal(e.$('class-join').disabled, true);
-  await waitFor(() => seven.getAttribute('aria-pressed') === 'true');
-  assert(!e.calls.some(call => call.url.endsWith('/members')));
-  assert.equal(e.$('class-join').textContent, '我是 7 號，開始');
-  e.$('class-join').click(); e.$('class-join').click();
-  await waitFor(() => e.opens.length === 1);
+  e.$('class-code').value = '07'; e.$('class-code').emit('input'); typeStudent(e);
+  e.$('class-join').click(); e.$('class-join').click(); await waitFor(() => e.opens.length === 1);
   const joins = e.calls.filter(call => call.url.endsWith('/members'));
-  assert.equal(joins.length, 1); assert.equal(JSON.parse(joins[0].body).alias, '7號'); assert.match(JSON.parse(joins[0].body).seatToken, /^[a-f0-9]{64}$/);
-  assert.equal(joins[0].url, classroomConfig.defaultOrigin + '/api/v1/classes/ABCDEFGH/members');
-  assert.equal(e.opens[0][1].code, 'ABCDEFGH'); assert.equal(e.$('class-dialog').open, false);
+  assert.equal(joins.length, 1); assert.equal(JSON.parse(joins[0].body).alias, '2A41');
+  assert.equal(JSON.parse(joins[0].body).seatToken, undefined);
+  assert.equal(e.opens[0][1].code, 'r_' + 'a'.repeat(32)); assert.equal(e.$('class-dialog').open, false);
+  assert(!e.calls.some(call => call.url.endsWith('/seats')));
+  assert(!/class-seats|class-seat|暱稱/.test(source('index.html')));
 });
+
 test('invalid and portable classroom links never open or join automatically', () => {
   for (const options of [{ href: 'https://lok274.github.io/zimanman-school/?class=000' }, { href: 'https://lok274.github.io/zimanman-school/?class=abc' }, { standalone: true }]) {
     const e = easyClassroom(options); assert(!e.$('class-dialog').open); assert.equal(e.calls.length, 0); assert.equal(e.opens.length, 0);
   }
 });
-test('failed seat joins retain their exact tuple across reload and a different incoming link', async () => {
+test('failed joins retain their immutable tuple across reload and a different incoming code', async () => {
   const first = easyClassroom({ send: async () => { throw new Error('offline'); } });
-  await waitFor(() => !first.$('class-seats').childNodes[6].disabled);
-  first.$('class-seats').childNodes[6].click(); await waitFor(() => !first.$('class-join').disabled); first.$('class-join').click();
+  typeStudent(first); first.$('class-join').click();
   await waitFor(() => first.$('class-status').textContent.includes('未能連線'));
   assert.equal(first.opens.length, 0); const original = first.calls.find(call => call.url.endsWith('/members')).body;
-  const reload = easyClassroom({ href: 'https://lok274.github.io/zimanman-school/?class=456', restoredStore: first.store });
+  const reload = easyClassroom({ href: 'https://lok274.github.io/zimanman-school/?class=99', restoredStore: first.store });
   assert.equal(reload.calls.length, 0); assert.equal(reload.$('class-join-fields').hidden, true);
-  assert.equal(reload.$('class-identity').textContent, '班級 123 · 7號');
+  assert.equal(reload.$('class-identity').textContent, '班級 07 · 2A41');
   reload.$('class-join-retry').click(); await waitFor(() => reload.opens.length === 1);
-  assert.equal(reload.calls[0].body, original); assert.equal(reload.opens[0][1].code, '123');
+  assert.equal(reload.calls.length, 1); assert.equal(reload.calls[0].body, original);
+  assert.equal(reload.opens[0][1].code, 'r_' + 'a'.repeat(32));
 });
+
 test('saved members require confirmation and cannot be replaced by an incoming class link', async () => {
   const member = { code: '123', memberId: 'saved-member', alias: '8號', token: 'a'.repeat(64), expiresAt: Date.now() + 86400000, assignment: { version: 2, mode: 'copy', entries: [{ text: '粗', selectedIndexes: [0] }] } };
   const data = new Map([[classroomStorageKey, JSON.stringify({ member })]]);
@@ -887,49 +885,25 @@ test('saved members require confirmation and cannot be replaced by an incoming c
   assert.equal(JSON.parse(e.store.get(classroomStorageKey)).member.token, member.token);
   e.$('class-open').click(); e.$('class-leave').click();
   assert.equal(JSON.parse(e.store.get(classroomStorageKey)).member.memberId, 'saved-member');
-  assert.match(e.$('class-switch-note').textContent, /無法只靠座號取回/);
+  assert.match(e.$('class-switch-note').textContent, /無法只靠班別及學號取回/);
   e.$('class-leave').click(); assert.equal(JSON.parse(e.store.get(classroomStorageKey)).member, undefined);
   assert.equal(e.$('class-join-fields').hidden, false);
 });
-test('seat join errors and storage denial keep the child out of the challenge', async () => {
-  for (const error of [{ code: 'ALIAS_TAKEN', message: 'duplicate' }, { code: 'JOIN_CLOSED', message: '加入時間已過，請找老師。' }]) {
-    const e = easyClassroom({ send: async () => ({ ok: false, json: async () => ({ error }) }) });
-    await waitFor(() => !e.$('class-seats').childNodes[2].disabled);
-    e.$('class-seats').childNodes[2].click(); await waitFor(() => !e.$('class-join').disabled); e.$('class-join').click();
-    await waitFor(() => !e.$('class-join-retry').disabled && !e.$('class-join-retry').hidden);
-    assert.equal(e.opens.length, 0); assert.match(e.$('class-status').textContent, error.code === 'ALIAS_TAKEN' ? /座號已有人使用，請找老師/ : /加入時間已過/);
-  }
+test('duplicate joins and storage denial keep the child out of the challenge', async () => {
+  const e = easyClassroom({ send: async () => ({ ok: false, json: async () => ({ error: { code: 'ALIAS_TAKEN', message: 'duplicate' } }) }) });
+  typeStudent(e); e.$('class-join').click();
+  await waitFor(() => !e.$('class-join-retry').disabled && !e.$('class-join-retry').hidden);
+  assert.equal(e.opens.length, 0); assert.match(e.$('class-status').textContent, /班別及學號已有人使用，請找老師/);
   const denied = easyClassroom(); denied.context.sessionStorage.setItem = () => { throw new Error('quota'); };
-  await waitFor(() => !denied.$('class-seats').childNodes[0].disabled);
-  denied.$('class-seats').childNodes[0].click(); await waitFor(() => !denied.$('class-join').disabled); denied.$('class-join').click();
-  await new Promise(resolve => setImmediate(resolve));
+  typeStudent(denied); denied.$('class-join').click(); await new Promise(resolve => setImmediate(resolve));
   assert(!denied.calls.some(call => call.url.endsWith('/members'))); assert.equal(denied.opens.length, 0); assert.equal(denied.$('class-storage').hidden, false);
 });
 
-test('other occupied seats show X and cannot be selected while an own confirmed number stays selected', async () => {
-  const e = easyClassroom({ occupied: [1, 40] });
-  const buttons = e.$('class-seats').childNodes;
-  await waitFor(() => !buttons[1].disabled);
-  for (const index of [0, 39]) { assert.equal(buttons[index].disabled, true); assert.equal(buttons[index].textContent, String(index + 1) + 'X'); assert.equal(buttons[index].getAttribute('aria-label'), (index + 1) + ' 號，已被選用'); }
-  buttons[0].click(); assert.equal(e.$('class-join').disabled, true);
-  buttons[1].click(); await waitFor(() => buttons[1].getAttribute('aria-pressed') === 'true');
-  assert.equal(buttons[1].textContent, '2'); assert.equal(e.$('class-join').textContent, '我是 2 號，開始');
-  e.$('class-close').click(); assert.equal(e.$('class-join').disabled, true);
-});
-
-test('hiding or leaving the page clears a held seat and requires a fresh selection on return', async () => {
-  for (const action of ['hidden', 'pagehide']) {
-    const e = easyClassroom(), one = e.$('class-seats').childNodes[0];
-    await waitFor(() => !one.disabled); one.click(); await waitFor(() => !e.$('class-join').disabled);
-    if (action === 'hidden') { e.document.hidden = true; e.document.emit('visibilitychange'); }
-    else e.emitWindow('pagehide');
-    assert.equal(e.$('class-join').disabled, true); assert.equal(one.getAttribute('aria-pressed'), 'false');
-    await waitFor(() => e.calls.some(call => call.body && JSON.parse(call.body).action === 'release'));
-    if (action === 'hidden') { e.document.hidden = false; e.document.emit('visibilitychange'); }
-    else e.emitWindow('pageshow');
-    await waitFor(() => !one.disabled); assert.equal(e.$('class-join').disabled, true);
-    assert(!e.calls.some(call => call.url.endsWith('/members'))); e.$('class-close').click();
-  }
+test('closing the join dialog before a response never opens a challenge', async () => {
+  let finish;
+  const e = easyClassroom({ send: (_url, options) => new Promise(resolve => { finish = () => resolve({ ok: true, json: async () => ({ code: 'r_' + 'a'.repeat(32), joinCode: '07', alias: JSON.parse(options.body).alias, memberId: 'one', expiresAt: Date.now() + 86400000, assignment: { version: 2, mode: 'copy', entries: [{ text: '粗', selectedIndexes: [0] }] } }) }); }) });
+  typeStudent(e); e.$('class-join').click(); await waitFor(() => finish); e.$('class-close').click(); finish();
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(e.opens.length, 0);
 });
 
 async function classroomApp({ uploadFails = false, holdUpload = false, restoredStore, assignment = [{ text: '二一', selectedIndexes: [0, 1] }] } = {}) {
@@ -1023,13 +997,15 @@ test('dedicated board consumes immediate handoff once, polls only visibly and re
     e.context.setTimeout = callback => { timers.set(++nextTimer, callback); return nextTimer; }; e.context.clearTimeout = id => timers.delete(id);
     e.context.crypto = require('node:crypto').webcrypto;
     const member = { code: 'ABCDEFGH', memberId: 'me', alias: '小星', token: 'a'.repeat(64), expiresAt: Date.now() + 600000, assignment: { version: 1, entries: [{ text: '一', selectedIndexes: [0] }] } };
+    if (immediate) { member.code = 'r_' + 'a'.repeat(32); member.joinCode = '07'; }
     e.store.set(classroomStorageKey, JSON.stringify({ member, receipt: { runId: 'done', ranked: true } }));
     if (immediate) e.store.set('bishun:board-handoff', JSON.stringify({ memberId: 'me', runId: 'done', at: Date.now() }));
     e.context.sessionStorage.removeItem = key => e.store.delete(key);
-    e.context.fetch = async url => { assert.equal(url, classroomConfig.defaultOrigin + '/api/v1/classes/ABCDEFGH/board'); reads++; return { ok: true, json: async () => ({ rows: [{ memberId: 'me', alias: '小星', rank: 1, mistakes: 0, elapsedMs: 1000, isMe: true }], personalBest: { mistakes: 0, elapsedMs: 1000 } }) }; };
+    e.context.fetch = async url => { assert.equal(url, classroomConfig.defaultOrigin + '/api/v1/classes/' + member.code + '/board'); reads++; return { ok: true, json: async () => ({ rows: [{ memberId: 'me', alias: '小星', rank: 1, mistakes: 0, elapsedMs: 1000, isMe: true }], personalBest: { mistakes: 0, elapsedMs: 1000 } }) }; };
     for (const file of ['quiz-results.js', 'classroom.js', 'leaderboard.js']) vm.runInContext(source(file), e.context);
     if (!immediate) { assert.equal(reads, 0); assert.equal(e.$('board-continue').hidden, false); e.$('board-continue').click(); }
     await waitFor(() => e.$('board-results').textContent.includes('小星'));
+    assert.equal(e.$('board-identity').textContent, '班級 ' + (immediate ? '07' : 'ABCDEFGH') + ' · 小星');
     assert.equal(reads, 1); assert.equal(e.store.has('bishun:board-handoff'), false); assert.equal(timers.size, 1);
     e.document.hidden = true; e.document.emit('visibilitychange'); assert.equal(timers.size, 0);
     e.document.hidden = false; e.document.emit('visibilitychange'); await waitFor(() => reads === 2 && timers.size === 1);
@@ -1786,7 +1762,7 @@ test('student menus remove generic descriptions and keep privacy notices', () =>
   const e = environment(source('index.html'));
   assert.equal(e.$('start-practice').textContent, '練習'); assert.equal(e.$('start-quiz').textContent, '小挑戰');
   assert(!e.$('class-dialog').textContent.includes('交卷後可查看自己的原卷'));
-  assert(e.$('class-dialog').textContent.includes('暱稱（請勿使用真名）')); assert(e.$('class-switch-note').textContent.includes('清除'));
+  assert(e.$('class-dialog').textContent.includes('班別及學號')); assert(e.$('class-switch-note').textContent.includes('清除'));
   assert.equal(e.$('rest'), undefined); assert(e.$('class-storage').textContent.includes('可能遺失'));
 });
 
