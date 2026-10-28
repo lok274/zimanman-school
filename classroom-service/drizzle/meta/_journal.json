@@ -29,6 +29,13 @@
       "when": 1793103530905,
       "tag": "0003_class_join_deadline",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793149582977,
+      "tag": "0004_seat_leases",
+      "breakpoints": true
     }
   ]
 }
