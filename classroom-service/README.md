@@ -10,11 +10,17 @@ Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissi
 
 Migration `0003_class_join_deadline.sql` adds a nullable `classes.join_expires_at` without rewriting existing data. Apply it before deploying this Worker. New eight-character classes set a 15-minute join deadline separately from their 24-hour record expiry. Existing numeric classes with a null deadline retain their original 15-minute admission window; historical eight-character classes with a null deadline retain their original admission until expiry. Changing the code format never extends a new class's join window. Runtime table initialization does not apply migration 0003.
 
+Migration `0004_seat_leases.sql` adds temporary seat holds without changing existing memberships or originals. Apply it before deploying this Worker. Each class has at most 40 hold rows. Class deletion cascades to these rows. Only hashed random capabilities are stored.
+
 ## Simple pupil joining
 
 老師按「建立班級」，顯示該班 QR code。學生掃碼後，選擇自己的座號，再按「開始」。座號提供 1 至 40 號，不需輸入暱稱或登入。老師也可按「複製學生連結」，預先在平板開啟，學生便不用自行操作相機。未能掃碼時，仍可在首頁輸入八位班級碼。QR 及連結只含公開班級碼。
 
 共用平板若仍保留上一位身份，先核對座號，再繼續或確認更換使用者。座號已有人使用時，請老師處理；相同座號不能取回另一部裝置的身份。重試加入會保留原有請求，不另建身份。
+
+`GET /api/v1/classes/:code/seats` returns `occupied` numbers 1 through 40, `serverNow`, `joinExpiresAt` and `expiresAt`. It exposes no member names or capabilities. `POST` to that path accepts `{action,seat,token,expiresAt}` for `claim` or `renew`, and `{action:'release',seat,token}` for release. Tokens are 64 lowercase hexadecimal characters. Claim and renew deadlines must be future server timestamps within 30 seconds and the admission deadline. Renew only updates a live matching hold. Release only removes a matching token. All seat responses use `Cache-Control: no-store`.
+
+The foreground picker polls every 1.5 seconds after each completed read and renews approximately every 10 seconds. It uses server timestamps and a monotonic clock, not the device wall clock. Requests time out after eight seconds. Closing or hiding the picker invalidates late replies and releases temporary holds; an undelivered release leaves a hold until its original deadline. Atomic SQL arbitrates claims and canonical `1號` through `40號` member joins, including old clients. A confirmed picker join adds `seatToken` to its once-persisted member request. Lost replies retry the same request ID, alias and tokens. If the hold expired, that pending request can reacquire the same seat token before retrying; it cannot take over another live holder or existing member.
 
 `vendor/qrcode.js` is the pinned, locally bundled QR encoder. Its provenance and full MIT licence are in `vendor/README.md` and `vendor/qrcode-LICENSE`. Both teacher pages generate QR SVG locally and retain a plain-link fallback. There is no runtime QR service or CDN.
 
@@ -77,7 +83,7 @@ All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Con
 | Method and relative path | Authority | Result |
 | --- | --- | --- |
 | `POST /` | Trusted-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns an eight-character uppercase letter/digit code, assignment, `joinExpiresAt` and `expiresAt`. Ambiguous `I`, `O`, `0` and `1` are excluded from new codes. |
-| `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken}` during the first 15 minutes of a new class; returns membership and assignment. An identical saved request remains retryable after admission closes. |
+| `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken,seatToken?}` during the first 15 minutes of a new class; returns membership and assignment. A picker seat token must match its live hold. An identical saved request remains retryable after admission closes. |
 | `PUT /:code/answers` | Current member | Accepts one complete sealed original; returns `{runId,official:true,version:3}` for version 3, or the legacy receipt without version. |
 | `GET /:code/answers` | Current member | Returns only that member's original, marks and revision, or `answer:null`. Aggregate elapsed time is omitted. |
 | `GET /:code/reviews` | Trusted-origin owner | Lists members, submission status, scores, revisions and elapsed time. |
