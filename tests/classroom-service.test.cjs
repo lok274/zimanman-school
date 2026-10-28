@@ -18,16 +18,17 @@ function setup(t) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON;');
   for (const file of fs.readdirSync(path.join(root, 'drizzle')).filter(file => file.endsWith('.sql'))) sqlite.exec(fs.readFileSync(path.join(root, 'drizzle', file), 'utf8'));
   t.after(() => sqlite.close());
-  const db = { prepare(sql) { const statement = sqlite.prepare(sql); let args = []; return { bind(...values) { args = values; return this; }, async first() { return statement.get(...args) || null; }, async all() { return { results: statement.all(...args) }; }, async run() { return statement.run(...args); } }; } };
+  const db = { async batch(statements) { sqlite.exec('BEGIN'); try { const results = statements.map(statement => statement.execute()); sqlite.exec('COMMIT'); return results; } catch (error) { sqlite.exec('ROLLBACK'); throw error; } }, prepare(sql) { const statement = sqlite.prepare(sql); let args = []; return { bind(...values) { args = values; return this; }, async first() { return statement.get(...args) || null; }, async all() { return { results: statement.all(...args) }; }, execute() { return statement.run(...args); }, async run() { return statement.run(...args); } }; } };
   const call = async (route, method = 'GET', body, headers = {}) => {
     const response = await (await worker).fetch(new Request('https://class.test/api/v1/classes' + route, { method, headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) }), { DB: db });
     return { status: response.status, headers: response.headers, data: response.status === 204 ? null : await response.json() };
   };
   const create = (requestId = 'class-one', extra = {}) => call('', 'POST', { requestId, entries }, { ...teacherHeaders, ...extra });
   const join = (code, alias, requestId = randomUUID(), token = randomBytes(32).toString('hex')) => call('/' + code + '/members', 'POST', { alias, requestId, memberToken: token }).then(result => ({ ...result, token }));
+  const legacy = async () => { const room = (await create()).data; sqlite.prepare('DELETE FROM class_join_codes WHERE room_code = ?').run(room.code); sqlite.prepare('UPDATE classes SET code = ?, join_expires_at = ? WHERE code = ?').run('ABCDEFGH', Date.now() + 900000, room.code); return { ...room, code: 'ABCDEFGH', joinExpiresAt: Date.now() + 900000 }; };
   const evidence = (runId = 'run', mistakes = 1, extra = {}) => ({ runId, attempts: [0, 2].map((index, i) => ({ id: 'attempt-' + i, occurrenceId: 'w0:' + index, phase: 'quiz', outcome: 'complete', mistakes, elapsedMs: 1049, help: [], ...extra })) });
   const submit = (code, token, data) => call('/' + code + '/runs/' + data.runId, 'PUT', data, { authorization: 'Bearer ' + token });
-  return { sqlite, db, call, create, join, evidence, submit };
+  return { sqlite, db, call, create, legacy, join, evidence, submit };
 }
 test('Worker package contains exactly the canonical scorer', () => {
   const source = fs.readFileSync(path.join(__dirname, '../dist/quiz-results.js'), 'utf8');
@@ -58,7 +59,7 @@ test('browser owner capability, separate teacher board and same-origin creation 
   assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, teacherHeaders)).status, 200);
   assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, { ...teacherHeaders, origin: 'http://localhost:4173' })).status, 403);
   assert.equal((await e.call(path + '/board', 'GET', undefined, teacherHeaders)).status, 401);
-  const member = await e.join(room.data.code, '小星');
+  const member = await e.join(room.data.code, '2C01');
   assert.equal((await e.call(path + '/teacher-board', 'GET', undefined, { authorization: 'Bearer ' + member.token })).status, 401);
   const stored = e.sqlite.prepare('SELECT owner_id FROM classes').get().owner_id;
   assert.equal(stored.length, 64); assert.notEqual(stored, teacherCapability);
@@ -109,7 +110,7 @@ test('teacher preflight rejects untrusted origins, headers and methods while stu
   assert(!student.headers.get('access-control-allow-methods').includes('DELETE'));
 });
 test('two members see shared best results only after terminal receipts; retries, ties and conflicts are immutable', async t => {
-  const e = setup(t), room = (await e.create()).data, a = await e.join(room.code, '小星'), b = await e.join(room.code, '小月');
+  const e = setup(t), room = (await e.create()).data, a = await e.join(room.code, '2C01'), b = await e.join(room.code, '2C02');
   const get = token => e.call('/' + room.code + '/board', 'GET', undefined, { authorization: 'Bearer ' + token });
   assert.equal((await get(a.token)).status, 403);
   const data = e.evidence(); data.attempts.unshift({ ...data.attempts[0], id: 'retry', outcome: 'abandoned', mistakes: 4, elapsedMs: 1051 });
@@ -121,21 +122,21 @@ test('two members see shared best results only after terminal receipts; retries,
   let board = (await get(a.token)).data; assert.deepEqual(board.rows.map(row => row.rank), [1, 1]); assert.equal(board.personalBest.mistakes, 0); assert.equal(board.personalBest.elapsedMs, 2100);
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM runs').get().n, 3);
   assert(!JSON.stringify(e.sqlite.prepare('SELECT * FROM members').all()).includes(a.token));
-  const skipped = await e.join(room.code, '小雨'); assert.equal((await e.submit(room.code, skipped.token, e.evidence('skip', 0, { outcome: 'skipped' }))).data.ranked, false);
+  const skipped = await e.join(room.code, '2C03'); assert.equal((await e.submit(room.code, skipped.token, e.evidence('skip', 0, { outcome: 'skipped' }))).data.ranked, false);
   assert.equal((await get(skipped.token)).data.rows.length, 2);
   const incomplete = e.evidence('short'); incomplete.attempts.pop(); assert.equal((await e.submit(room.code, skipped.token, incomplete)).status, 422);
 });
 test('join retries retain capability and aliases refuse takeover under concurrent requests', async t => {
   const e = setup(t), code = (await e.create()).data.code, token = randomBytes(32).toString('hex');
-  const [a, b] = await Promise.all([e.join(code, '小星', 'same', token), e.join(code, '小星', 'same', token)]);
+  const [a, b] = await Promise.all([e.join(code, '2C01', 'same', token), e.join(code, '2C01', 'same', token)]);
   assert.equal(a.status, 200); assert.equal(b.status, 200); assert.equal(a.data.memberId, b.data.memberId);
-  assert.equal((await e.join(code, '小星', 'other')).data.error.code, 'ALIAS_TAKEN');
-  assert.equal((await e.join(code, '小月', 'same')).data.error.code, 'CONFLICT');
+  assert.equal((await e.join(code, '2C01', 'other')).data.error.code, 'ALIAS_TAKEN');
+  assert.equal((await e.join(code, '2C02', 'same')).data.error.code, 'CONFLICT');
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 1);
 });
 
 test('pre-start seat claims are atomic, private and protect legacy manual joins', async t => {
-  const e = setup(t), code = (await e.create()).data.code, a = 'a'.repeat(64), b = 'b'.repeat(64);
+  const e = setup(t), code = (await e.legacy()).code, a = 'a'.repeat(64), b = 'b'.repeat(64);
   const results = await Promise.all([seatRequest(e, code, 'claim', 1, a), seatRequest(e, code, 'claim', 1, b)]);
   assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
   const token = results[0].status === 200 ? a : b, other = token === a ? b : a;
@@ -156,14 +157,14 @@ test('pre-start seat claims are atomic, private and protect legacy manual joins'
 });
 
 test('claim and legacy join racing for the same seat cannot both win', async t => {
-  const e = setup(t), code = (await e.create()).data.code;
+  const e = setup(t), code = (await e.legacy()).code;
   const [claim, join] = await Promise.all([seatRequest(e, code, 'claim', 2, 'a'.repeat(64)), e.join(code, '2號')]);
   assert.deepEqual([claim.status, join.status].sort(), [200, 409]);
   assert.deepEqual((await e.call('/' + code + '/seats')).data.occupied, [2]);
 });
 
 test('seat expiry, release, original deadlines and validation never resurrect a hold', async t => {
-  const e = setup(t), code = (await e.create()).data.code, a = 'a'.repeat(64), b = 'b'.repeat(64);
+  const e = setup(t), code = (await e.legacy()).code, a = 'a'.repeat(64), b = 'b'.repeat(64);
   for (const token of [[a], 3, null]) assert.equal((await seatRequest(e, code, 'claim', 1, token)).status, 400);
   for (const seat of [0, 41, '1', 1.5]) assert.equal((await seatRequest(e, code, 'claim', seat, a)).status, 400);
   for (const deadline of [Date.now() - 1, Date.now() + 40000, '100']) assert.equal((await seatRequest(e, code, 'claim', 1, a, deadline)).data.error.code, 'LEASE_EXPIRED');
@@ -181,7 +182,7 @@ test('seat expiry, release, original deadlines and validation never resurrect a 
 });
 
 test('seat table is bounded to forty rows per class and follows class cleanup', async t => {
-  const e = setup(t), code = (await e.create()).data.code;
+  const e = setup(t), code = (await e.legacy()).code;
   for (let seat = 1; seat <= 40; seat++) assert.equal((await seatRequest(e, code, 'claim', seat, 'a'.repeat(64))).status, 200);
   assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM seat_leases').get().n, 40);
   assert.throws(() => e.sqlite.prepare('INSERT INTO seat_leases VALUES(?,?,?,?)').run(code, 41, 'hash', Date.now() + 1000));
@@ -192,7 +193,7 @@ test('seat table is bounded to forty rows per class and follows class cleanup', 
 test('seat claims and renewals enforce deadlines crossed while preparing their atomic write', async t => {
   const originalNow = Date.now;
   for (const action of ['claim', 'renew']) for (const boundary of ['request', 'admission']) {
-    const e = setup(t), room = (await e.create()).data, now = originalNow(), token = 'a'.repeat(64);
+    const e = setup(t), room = await e.legacy(), now = originalNow(), token = 'a'.repeat(64);
     if (action === 'renew') await seatRequest(e, room.code, 'claim', 1, token);
     const original = e.sqlite.prepare('SELECT * FROM seat_leases').get();
     const deadline = boundary === 'request' ? now + 1000 : room.joinExpiresAt;
@@ -207,44 +208,37 @@ test('seat claims and renewals enforce deadlines crossed while preparing their a
     } finally { Date.now = originalNow; }
   }
 });
-test('new eight-character classes close admission at fifteen minutes but keep existing members for a day', async t => {
-  const e = setup(t), now = Date.now(), originalNow = Date.now;
-  Date.now = () => now;
+test('new classes retain admission and results for thirty days from creation', async t => {
+  const e = setup(t), now = Date.now(), originalNow = Date.now; Date.now = () => now;
   try {
     const room = (await e.create()).data;
-    assert.match(room.code, /^[A-HJ-NP-Z2-9]{8}$/);
-    assert.equal(room.joinExpiresAt, now + 900000);
-    assert.equal(room.expiresAt, now + 86400000);
-    assert.equal(e.sqlite.prepare('SELECT join_expires_at FROM classes WHERE code = ?').get(room.code).join_expires_at, now + 900000);
-    Date.now = () => now + 899999;
+    assert.match(room.code, /^r_[a-f0-9]{32}$/); assert.match(room.joinCode, /^[0-9]{2}$/);
+    assert.equal(room.joinExpiresAt, now + 30 * 86400000); assert.equal(room.expiresAt, room.joinExpiresAt);
     const token = randomBytes(32).toString('hex');
-    const admitted = await e.join(room.code, '準時', 'lost-response', token);
-    assert.equal(admitted.status, 200);
-    Date.now = () => now + 900000;
-    assert.equal((await e.join(room.code, '遲到')).data.error.code, 'JOIN_CLOSED');
-    const retry = await e.join(room.code, '準時', 'lost-response', token);
-    assert.equal(retry.status, 200);
-    assert.equal(retry.data.memberId, admitted.data.memberId);
-    assert.equal((await e.join(room.code, '改名', 'lost-response', token)).data.error.code, 'CONFLICT');
-    assert.equal((await e.submit(room.code, token, e.evidence())).status, 200);
-    assert.equal((await e.call('/' + room.code + '/board', 'GET', undefined, { authorization: 'Bearer ' + token })).status, 200);
-    assert.equal((await e.call('/' + room.code + '/teacher-board', 'GET', undefined, teacherHeaders)).status, 200);
-    assert.deepEqual((await e.create()).data, room, 'teacher retry cannot extend the admission deadline');
-    assert.equal(e.sqlite.prepare('SELECT expires_at FROM classes WHERE code = ?').get(room.code).expires_at, now + 86400000);
-    assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 1);
+    for (const day of [2, 29]) {
+      Date.now = () => now + day * 86400000;
+      const joined = await e.join(room.code, '2A01', 'lost-response', token); assert.equal(joined.status, 200);
+      assert.equal((await e.submit(room.code, token, e.evidence())).status, 200);
+      assert.equal((await e.call('/' + room.code + '/board', 'GET', undefined, { authorization: 'Bearer ' + token })).status, 200);
+      assert.deepEqual((await e.create()).data, room);
+    }
+    assert.equal((await e.join(room.code, '2A02')).status, 200);
+    Date.now = () => room.expiresAt;
+    assert.equal((await e.join(room.code, '2A03')).status, 410);
+    assert.equal((await e.call('/' + room.code + '/teacher-board', 'GET', undefined, teacherHeaders)).status, 410);
   } finally { Date.now = originalNow; }
 });
 test('a collision retries without recycling a live code and legacy eight-character rooms retain admission', async t => {
   const e = setup(t), random = globalThis.crypto.getRandomValues;
-  const picks = [0, 0, 1];
+  const picks = [0, 0];
   globalThis.crypto.getRandomValues = array => {
-    if (array instanceof Uint8Array && array.length === 8) { array.fill(picks.shift() ?? 2); return array; }
+    if (array instanceof Uint32Array && array.length === 1) { array.fill(picks.shift() ?? 2); return array; }
     return random.call(globalThis.crypto, array);
   };
   let first, second;
-  try { first = (await e.create('first')).data; second = (await e.create('second')).data; }
+  try { first = (await e.create('2C15')).data; second = (await e.create('second')).data; }
   finally { delete globalThis.crypto.getRandomValues; }
-  assert.equal(first.code, 'AAAAAAAA'); assert.equal(second.code, 'BBBBBBBB');
+  assert.equal(first.joinCode, '00'); assert.equal(second.joinCode, '01'); assert.notEqual(first.code, second.code);
   const now = Date.now();
   e.sqlite.prepare('INSERT INTO classes(code,owner_id,assignment_json,expires_at,request_id,payload_hash) SELECT ?,owner_id,assignment_json,?, ?,payload_hash FROM classes WHERE code = ?')
     .run('ABCDEFGH', now + 60000, 'legacy', first.code);
@@ -252,15 +246,15 @@ test('a collision retries without recycling a live code and legacy eight-charact
   assert.equal(joined.status, 200); assert.equal(joined.data.joinExpiresAt, joined.data.expiresAt);
   for (const code of ['000', '099', '12', '1000', 'ABC12345']) assert.equal((await e.join(code, '錯碼')).status, 404);
 });
-test('a six-word forty-eight-position challenge keeps its complete assignment in an eight-character class', async t => {
+test('a six-word forty-eight-position challenge keeps its complete assignment in an immutable room', async t => {
   const e = setup(t);
   const words = ['一二三四五六七八', '九十甲乙丙丁戊己', '庚辛壬癸子丑寅卯', '辰巳午未申酉戌亥', '天地玄黃宇宙洪荒', '日月盈昃辰宿列張'];
   const full = words.map(text => ({ text, selectedIndexes: Array.from({ length: 8 }, (_, index) => index) }));
   const created = await e.call('', 'POST', { requestId: 'full-class', version: 2, mode: 'copy', entries: full }, teacherHeaders);
   assert.equal(created.status, 200);
-  assert.match(created.data.code, /^[A-HJ-NP-Z2-9]{8}$/);
+  assert.match(created.data.code, /^r_[a-f0-9]{32}$/);
   assert.deepEqual(created.data.assignment.entries, full);
-  const joined = await e.join(created.data.code, '小星');
+  const joined = await e.join(created.data.code, '2C01');
   assert.equal(joined.status, 200);
   assert.deepEqual(joined.data.assignment.entries, full);
 });
@@ -269,7 +263,7 @@ test('an admission deadline crossed during a request is enforced by the atomic i
   Date.now = () => room.joinExpiresAt - 1;
   const db = { prepare(sql) { if (sql.startsWith('INSERT OR IGNORE INTO members')) Date.now = () => room.joinExpiresAt; return e.db.prepare(sql); } };
   try {
-    const response = await (await worker).fetch(new Request('https://class.test/api/v1/classes/' + room.code + '/members', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ requestId: 'boundary', alias: '7號', memberToken: 'b'.repeat(64) }) }), { DB: db });
+    const response = await (await worker).fetch(new Request('https://class.test/api/v1/classes/' + room.code + '/members', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ requestId: 'boundary', alias: '2A07', memberToken: 'b'.repeat(64) }) }), { DB: db });
     assert.equal(response.status, 410); assert.equal((await response.json()).error.code, 'JOIN_CLOSED');
     assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM members').get().n, 0);
   } finally { Date.now = originalNow; }
@@ -285,6 +279,7 @@ test('the additive join-deadline migration preserves populated legacy classes, m
   const oldClasses = sqlite.prepare('SELECT * FROM classes ORDER BY code').all(), oldMembers = sqlite.prepare('SELECT * FROM members').all(), oldInk = sqlite.prepare('SELECT * FROM reviewed_submissions').all();
   sqlite.exec(fs.readFileSync(path.join(root, 'drizzle/0003_class_join_deadline.sql'), 'utf8'));
   sqlite.exec(fs.readFileSync(path.join(root, 'drizzle/0004_seat_leases.sql'), 'utf8'));
+  sqlite.exec(fs.readFileSync(path.join(root, 'drizzle/0005_true_zaladane.sql'), 'utf8'));
   assert.deepEqual(sqlite.prepare('SELECT code,owner_id,assignment_json,expires_at,request_id,payload_hash FROM classes ORDER BY code').all(), oldClasses);
   assert.deepEqual(sqlite.prepare('SELECT * FROM members').all(), oldMembers); assert.deepEqual(sqlite.prepare('SELECT * FROM reviewed_submissions').all(), oldInk);
   assert(sqlite.prepare('SELECT join_expires_at FROM classes').all().every(row => row.join_expires_at === null));
@@ -304,8 +299,8 @@ test('atomic class, member and run quotas hold at their concurrent boundaries', 
   assert.equal((await e.create('class-0')).status, 200);
   assert.equal((await e.call('', 'POST', { requestId: 'class-0', entries: [{ text: '一', selectedIndexes: [0] }] }, teacherHeaders)).status, 409);
   const code = classes.find(x => x.status === 200).data.code;
-  for (let i = 0; i < 99; i++) await e.join(code, 'user-' + i);
-  const members = await Promise.all([e.join(code, 'last-a'), e.join(code, 'last-b')]); assert.deepEqual(members.map(x => x.status).sort(), [200, 429]);
+  for (let i = 0; i < 99; i++) await e.join(code, '2A' + (i + 1));
+  const members = await Promise.all([e.join(code, '2B01'), e.join(code, '2B02')]); assert.deepEqual(members.map(x => x.status).sort(), [200, 429]);
   const token = members.find(x => x.status === 200).token;
   for (let i = 0; i < 19; i++) await e.submit(code, token, e.evidence('run-' + i));
   const runs = await Promise.all([e.submit(code, token, e.evidence('last-a')), e.submit(code, token, e.evidence('last-b'))]); assert.deepEqual(runs.map(x => x.status).sort(), [200, 429]);
@@ -330,11 +325,11 @@ test('global creation cap is atomic across owners and retries precede full-capac
   assert.equal((await e.create('replacement', { 'x-teacher-capability': 'e'.repeat(64) })).status, 200);
 });
 test('expiry immediately denies reads and writes; later class creation cleans expired data with cascade', async t => {
-  const e = setup(t), code = (await e.create()).data.code, member = await e.join(code, '小星');
+  const e = setup(t), code = (await e.create()).data.code, member = await e.join(code, '2C01');
   await e.submit(code, member.token, e.evidence());
   e.sqlite.prepare('UPDATE classes SET expires_at = 0 WHERE code = ?').run(code);
   assert.equal((await e.call('/' + code + '/board', 'GET', undefined, { authorization: 'Bearer ' + member.token })).status, 410);
-  assert.equal((await e.join(code, '晚到')).status, 410);
+  assert.equal((await e.join(code, '2C04')).status, 410);
   await e.create('next');
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 0); assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM runs').get().n, 0);
 });
@@ -344,7 +339,7 @@ const A = require('../dist/assessment.js');
 async function reviewed(t) {
   const e = setup(t);
   e.room = (await e.call('', 'POST', { requestId: 'reviewed', version: 2, mode: 'listen', entries }, teacherHeaders)).data;
-  e.member = await e.join(e.room.code, '小星');
+  e.member = await e.join(e.room.code, '2C01');
   e.run = A.start(e.room.assignment, 'official'); e.run.phase = 'sealed'; e.run.elapsedMs = 13000;
   e.run.answers.forEach((answer, i) => { answer.status = i ? 'skipped' : 'submitted'; answer.strokes = [[[120, 340, 0], [200, 9900, 20]]]; });
   e.run = A.validateSubmission(e.room.assignment, e.run);
@@ -360,7 +355,7 @@ test('reviewed originals are private, first-only, atomic and exactly idempotent'
   assert.equal((await e.put({ ...e.run, runId: 'later' })).data.error.code, 'FIRST_SUBMISSION');
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reviewed_submissions').get().n, 1);
   assert.equal((await e.call(path + '/answers')).status, 401);
-  const other = await e.join(e.room.code, '小月');
+  const other = await e.join(e.room.code, '2C02');
   assert.equal((await e.call(path + '/answers', 'GET', undefined, { authorization: 'Bearer ' + other.token })).data.answer, null);
   const own = (await e.call(path + '/answers', 'GET', undefined, e.own)).data.answer;
   assert.deepEqual(own.run.answers, e.run.answers); assert.equal(own.score, null);
@@ -370,13 +365,13 @@ test('reviewed originals are private, first-only, atomic and exactly idempotent'
   assert.equal((await e.call(path + '/reviews', 'GET', undefined, { 'x-teacher-capability': teacherCapability, 'sec-fetch-site': 'same-origin' })).status, 200);
   const teacher = (await e.call(path + '/reviews/' + e.member.data.memberId, 'GET', undefined, teacherHeaders)).data;
   assert.deepEqual(teacher.run, e.run); assert.equal(teacher.elapsedMs, 13000);
-  const raceMember = await e.join(e.room.code, '小雨'), headers = { authorization: 'Bearer ' + raceMember.token };
+  const raceMember = await e.join(e.room.code, '2C03'), headers = { authorization: 'Bearer ' + raceMember.token };
   const race = await Promise.all([e.put({ ...e.run, runId: 'first-a' }, headers), e.put({ ...e.run, runId: 'first-b' }, headers)]);
   assert.deepEqual(race.map(row => row.status).sort(), [200, 409]);
 });
 test('review revisions, explicit publication and tied shape ranks never use timing', async t => {
   const e = await reviewed(t), path = '/' + e.room.code;
-  await e.put(); const other = await e.join(e.room.code, '小月');
+  await e.put(); const other = await e.join(e.room.code, '2C02');
   await e.put({ ...e.run, runId: 'other', elapsedMs: 1 }, { authorization: 'Bearer ' + other.token });
   const get = () => e.call(path + '/board', 'GET', undefined, e.own);
   const mark = (member, revision, marks, headers = teacherHeaders) => e.call(path + '/reviews/' + member.data.memberId, 'PUT', { revision, marks }, headers);
@@ -396,7 +391,7 @@ test('review revisions, explicit publication and tied shape ranks never use timi
   assert(board.rows.every(row => Object.keys(row).sort().join() === 'alias,mode,rank,score' && row.mode === 'listen'));
   marks[1].correct = true; await mark(e.member, 2, marks);
   board = (await get()).data;
-  assert.equal(board.rows[0].alias, '小星'); assert.equal(board.rows[0].score, 2);
+  assert.equal(board.rows[0].alias, '2C01'); assert.equal(board.rows[0].score, 2);
   assert.equal(board.rows[1].rank, 2);
   assert.deepEqual(JSON.parse(e.sqlite.prepare('SELECT ink_json FROM reviewed_submissions WHERE member_id = ?').get(e.member.data.memberId).ink_json), e.run);
 });
@@ -413,7 +408,7 @@ function wordOriginal(assignment, id, elapsedMs) {
 
 test('v3 word time, actual presentation mode and hint survive round trip while legacy listen and new copy scores rank separately', async t => {
   const e = await reviewed(t), path = '/' + e.room.code; await e.put();
-  const second = await e.join(e.room.code, '小月'), third = await e.join(e.room.code, '小雨');
+  const second = await e.join(e.room.code, '2C02'), third = await e.join(e.room.code, '2C03');
   const run = wordOriginal(e.room.assignment, 'word-original', 7500), own = { authorization: 'Bearer ' + second.token };
   assert.equal(run.assignment.mode, 'listen'); assert.equal(A.actualMode(run), 'copy');
   const receipt = await e.put(run, own); assert.equal(receipt.status, 200); assert.deepEqual(receipt.data, { runId: run.runId, official: true, version: 3 });
@@ -447,7 +442,7 @@ test('reviewed payload validation and checked quotas leave no partial original',
   assert.equal((await e.put(huge)).status, 413);
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reviewed_submissions').get().n, 0);
   await e.put(); e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes = 67108864').run();
-  const other = await e.join(e.room.code, '小月');
+  const other = await e.join(e.room.code, '2C02');
   const result = await e.put(e.run, { authorization: 'Bearer ' + other.token });
   assert.equal(result.status, 507); assert.equal(result.data.error.code, 'INK_CAPACITY');
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM reviewed_submissions').get().n, 1);
@@ -460,7 +455,7 @@ test('initial publication atomically requires a submission and complete marks on
   await e.put(); assert.equal((await publish()).status, 409);
   const marks = A.unmarked(e.room.assignment).map(mark => ({ ...mark, correct: true }));
   await e.call(path + '/reviews/' + e.member.data.memberId, 'PUT', { revision: 0, marks }, teacherHeaders);
-  const other = await e.join(e.room.code, 'late');
+  const other = await e.join(e.room.code, '2C05');
   const prepare = e.db.prepare; let injected = false;
   e.db.prepare = sql => {
     const statement = prepare(sql);
@@ -504,7 +499,7 @@ test('simultaneous byte quota checks are atomic per class and across classes', a
     let room = e.room;
     if (global) room = (await e.call('', 'POST', { requestId: 'another', version: 2, mode: 'listen', entries }, { ...teacherHeaders, 'x-teacher-capability': 'b'.repeat(64) })).data;
     e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes = ?').run((global ? 268435456 : 67108864) - bytes);
-    const a = await e.join(room.code, 'a'), b = await e.join(room.code, 'b');
+    const a = await e.join(room.code, '2A01'), b = await e.join(room.code, '2A02');
     const put = member => e.call('/' + room.code + '/answers', 'PUT', e.run, { authorization: 'Bearer ' + member.token });
     const results = await Promise.all([put(a), put(b)]);
     assert.deepEqual(results.map(result => result.status).sort(), [200, 507]);
@@ -530,7 +525,7 @@ test('maintenance is bounded, ignores caller cutoffs and never exposes an MCP se
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM classes').get().n, 1);
 });
 
-function automaticRun(assigned, runId = 'automatic', milliseconds = 1049) {
+function automaticRun(assigned, runId = '2C13', milliseconds = 1049) {
   const A = globalThis.BishunAssessment, run = A.startLocked(assigned, runId, 1);
   run.elapsedMs = milliseconds; run.wordProgress.forEach((word,index)=>{word.phase='submitted';word.elapsedMs=index?0:milliseconds;});
   const counts = JSON.parse(fs.readFileSync(path.join(root,'src/target-counts.js'),'utf8').match(/export const counts = (.*);/)[1]);
@@ -546,7 +541,7 @@ async function automaticClass(e) {
 }
 
 test('automatic v4 submissions preserve first originals, validate trusted counts and expose only time metadata', async t => {
-  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'小星'),b=await e.join(room.code,'小月');
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'2C01'),b=await e.join(room.code,'2C02');
   const call=(suffix,method='GET',body,token=a.token)=>e.call('/'+room.code+'/'+suffix,method,body,{authorization:'Bearer '+token});
   assert.equal((await call('automatic-board')).status,403);assert.equal((await call('automatic-answers')).data.answer,null);
   const run=automaticRun(assigned);const missing=structuredClone(run);missing.answers[0].strokes.pop();assert.equal((await call('automatic-answers','PUT',missing)).status,400);
@@ -566,29 +561,29 @@ test('automatic v4 submissions preserve first originals, validate trusted counts
 });
 
 test('new automatic cohort never publishes old scores and each member can retain both old and new originals', async t=>{
-  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'小星');const headers={authorization:'Bearer '+a.token},path='/'+room.code;
-  const A=globalThis.BishunAssessment,old=A.start(assigned,'old');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'2C01');const headers={authorization:'Bearer '+a.token},path='/'+room.code;
+  const A=globalThis.BishunAssessment,old=A.start(assigned,'2C12');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
   assert.equal((await e.call(path+'/answers','PUT',old,headers)).status,200);
   e.sqlite.prepare('UPDATE reviewed_submissions SET score=2 WHERE member_id=?').run(a.data.memberId);
   const run=automaticRun(assigned);assert.equal((await e.call(path+'/automatic-answers','PUT',run,headers)).status,200);
   assert.equal((await e.call(path+'/board','GET',undefined,headers)).data.published,false);
   assert.equal((await e.call(path+'/automatic-board','GET',undefined,headers)).data.rows.length,1);
-  assert.equal((await e.call(path+'/answers','GET',undefined,headers)).data.answer.run.runId,'old');
+  assert.equal((await e.call(path+'/answers','GET',undefined,headers)).data.answer.run.runId,'2C12');
   assert.equal((await e.call(path+'/answers','PUT',run,headers)).status,400);assert.equal((await e.call(path+'/automatic-answers','PUT',old,headers)).status,400);
   await e.call(path,'DELETE',undefined,teacherHeaders);assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,0);assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM reviewed_submissions').get().n,0);
 });
 
 test('old and automatic uploads share atomic class and global ink quotas, and immutable retries work at capacity', async t=>{
-  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'small'),b=await e.join(room.code,'large');const path='/'+room.code,headers={authorization:'Bearer '+a.token};
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'2C06'),b=await e.join(room.code,'2C07');const path='/'+room.code,headers={authorization:'Bearer '+a.token};
   const run=automaticRun(assigned);await e.call(path+'/automatic-answers','PUT',run,headers);
   e.sqlite.prepare('UPDATE automatic_submissions SET ink_bytes=67108864 WHERE member_id=?').run(a.data.memberId);
-  const A=globalThis.BishunAssessment,old=A.start(assigned,'old');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
+  const A=globalThis.BishunAssessment,old=A.start(assigned,'2C12');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
   assert.equal((await e.call(path+'/answers','PUT',old,{authorization:'Bearer '+b.token})).status,507);
   assert.equal((await e.call(path+'/automatic-answers','PUT',run,headers)).status,200);
   assert.equal((await e.call(path+'/automatic-answers','PUT',{...run,runId:'b'},{authorization:'Bearer '+b.token})).status,507);
   e.sqlite.prepare('UPDATE automatic_submissions SET ink_bytes=1').run();await e.call(path+'/answers','PUT',old,{authorization:'Bearer '+b.token});
-  e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes=67108864').run();const c=await e.join(room.code,'new');assert.equal((await e.call(path+'/automatic-answers','PUT',{...run,runId:'c'},{authorization:'Bearer '+c.token})).status,507);
-  e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes=268435456').run();const other=await automaticClass(e),otherMember=await e.join(other.room.code,'global');assert.equal((await e.call('/'+other.room.code+'/automatic-answers','PUT',run,{authorization:'Bearer '+otherMember.token})).status,507);
+  e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes=67108864').run();const c=await e.join(room.code,'2C08');assert.equal((await e.call(path+'/automatic-answers','PUT',{...run,runId:'c'},{authorization:'Bearer '+c.token})).status,507);
+  e.sqlite.prepare('UPDATE reviewed_submissions SET ink_bytes=268435456').run();const other=await automaticClass(e),otherMember=await e.join(other.room.code,'2C09');assert.equal((await e.call('/'+other.room.code+'/automatic-answers','PUT',run,{authorization:'Bearer '+otherMember.token})).status,507);
 });
 
 test('API initializes missing additive table once per binding and retries a failed initialization', async t=>{
@@ -599,7 +594,7 @@ test('API initializes missing additive table once per binding and retries a fail
 });
 
 test('first old answers PUT initializes additive schema before shared quota SQL', async t=>{
-  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'old-first');
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'2C10');
   e.sqlite.exec('DROP TABLE automatic_submissions');let creates=0;
   const db={prepare(sql){if(sql.startsWith('CREATE TABLE'))creates++;return e.db.prepare(sql);}};
   const run=globalThis.BishunAssessment.start(assigned,'legacy-first');run.phase='sealed';run.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
@@ -608,7 +603,7 @@ test('first old answers PUT initializes additive schema before shared quota SQL'
 });
 
 test('simultaneous old and automatic writes cannot cross their combined class byte limit', async t=>{
-  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'seed'),b=await e.join(room.code,'old'),c=await e.join(room.code,'automatic');const path='/'+room.code,run=automaticRun(assigned);
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'2C11'),b=await e.join(room.code,'2C12'),c=await e.join(room.code,'2C13');const path='/'+room.code,run=automaticRun(assigned);
   await e.call(path+'/automatic-answers','PUT',run,{authorization:'Bearer '+a.token});
   const old=globalThis.BishunAssessment.start(assigned,'legacy-race');old.phase='sealed';old.answers.forEach(answer=>{answer.status='submitted';answer.strokes=[[[1,2,0],[3,4,1]]];});
   const oldCanonical=globalThis.BishunAssessment.validateSubmission(assigned,old),newRun={...run,runId:'race'};
@@ -618,8 +613,8 @@ test('simultaneous old and automatic writes cannot cross their combined class by
 });
 
 test('automatic custom character fetch is bounded and unavailable data never becomes wrong ink', async t=>{
-  const e=setup(t);await worker;const A=globalThis.BishunAssessment,assigned=A.assignment([{text:'火',selectedIndexes:[0]}],'copy');const room=(await e.call('','POST',{requestId:'custom',...assigned},teacherHeaders)).data,a=await e.join(room.code,'custom');
-  let run=A.startLocked(assigned,'custom');run.answers[0]={...run.answers[0],expectedStrokes:2,status:'submitted',strokes:[[[1,2],[3,4]],[[5,6],[7,8]]]};run.wordProgress[0].phase='submitted';run=A.transition(run,{type:'SEAL'});
+  const e=setup(t);await worker;const A=globalThis.BishunAssessment,assigned=A.assignment([{text:'火',selectedIndexes:[0]}],'copy');const room=(await e.call('','POST',{requestId:'2C14',...assigned},teacherHeaders)).data,a=await e.join(room.code,'2C14');
+  let run=A.startLocked(assigned,'2C14');run.answers[0]={...run.answers[0],expectedStrokes:2,status:'submitted',strokes:[[[1,2],[3,4]],[[5,6],[7,8]]]};run.wordProgress[0].phase='submitted';run=A.transition(run,{type:'SEAL'});
   const fetch=globalThis.fetch;t.after(()=>{globalThis.fetch=fetch;});let options;
   globalThis.fetch=async(_url,value)=>{options=value;return new Response('{}',{headers:{'content-length':'2000001'}});};
   const failed=await e.call('/'+room.code+'/automatic-answers','PUT',run,{authorization:'Bearer '+a.token});assert.equal(failed.status,503);assert.equal(failed.data.error.code,'DATA_UNAVAILABLE');assert(options.signal instanceof AbortSignal);assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,0);
@@ -629,7 +624,7 @@ test('automatic custom character fetch is bounded and unavailable data never bec
 
 test('cold automatic retries reconcile stored originals without character data', async t=>{
   const e=setup(t);await worker;const A=globalThis.BishunAssessment,assigned=A.assignment([{text:'火',selectedIndexes:[0]}],'copy');
-  const room=(await e.call('','POST',{requestId:'cold-retry',...assigned},teacherHeaders)).data,a=await e.join(room.code,'first'),b=await e.join(room.code,'new');
+  const room=(await e.call('','POST',{requestId:'cold-retry',...assigned},teacherHeaders)).data,a=await e.join(room.code,'2C15'),b=await e.join(room.code,'2C08');
   let run=A.startLocked(assigned,'cold-retry');run.answers[0]={...run.answers[0],expectedStrokes:2,status:'submitted',strokes:[[[1,2],[3,4]],[[5,6],[7,8]]]};run.wordProgress[0].phase='submitted';run=A.transition(run,{type:'SEAL'});
   const loadWorker=async()=> (await import(pathToFileURL(path.join(root,'dist/server/index.js')).href+'?'+randomUUID())).default;
   const call=async(instance,data,token=a.token)=>{const response=await instance.fetch(new Request('https://class.test/api/v1/classes/'+room.code+'/automatic-answers',{method:'PUT',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(data)}),{DB:e.db});return {status:response.status,data:await response.json()};};
@@ -646,10 +641,61 @@ test('cold automatic retries reconcile stored originals without character data',
   assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,1);
 });
 
-test('automatic expiry denies private reads and cleanup cascades after twenty-four hours', async t=>{
-  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'expiry'),headers={authorization:'Bearer '+a.token},path='/'+room.code;
+test('automatic expiry denies private reads and cleanup cascades expired originals', async t=>{
+  const e=setup(t),{room,assigned}=await automaticClass(e),a=await e.join(room.code,'2C16'),headers={authorization:'Bearer '+a.token},path='/'+room.code;
   await e.call(path+'/automatic-answers','PUT',automaticRun(assigned),headers);e.sqlite.prepare('UPDATE classes SET expires_at=? WHERE code=?').run(Date.now()-1,room.code);
   for(const route of ['automatic-answers','automatic-board'])assert.equal((await e.call(path+'/'+route,'GET',undefined,headers)).status,410);
   assert.equal((await e.call(path+'/automatic-original/'+a.data.memberId,'GET',undefined,teacherHeaders)).status,410);
   await e.call('/cleanup','POST',{});assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM automatic_submissions').get().n,0);
+});
+
+test('all hundred labels are exhaustive and public labels never address private actions', async t => {
+  const e = setup(t), random = crypto.getRandomValues;
+  crypto.getRandomValues = array => array instanceof Uint32Array ? array.fill(0) : random.call(crypto, array);
+  try {
+    const rooms = [];
+    for (let i = 0; i < 100; i++) {
+      const result = await e.create('slot-' + i, { 'x-teacher-capability': Math.floor(i / 10).toString(16).repeat(64) });
+      assert.equal(result.status, 200); assert.equal(result.data.joinCode, String(i).padStart(2, '0')); rooms.push(result.data);
+    }
+    assert.equal((await e.create('overflow', { 'x-teacher-capability': 'f'.repeat(64) })).data.error.code, 'SERVICE_LIMIT');
+    const room = rooms[0];
+    assert.deepEqual((await e.call('/00')).data, { code: room.code, joinCode: '00', expiresAt: room.expiresAt });
+    for (const [route, method] of [['/00/members', 'POST'], ['/00/teacher-board', 'GET'], ['/00', 'DELETE']]) assert.equal((await e.call(route, method, method === 'GET' ? undefined : {}, teacherHeaders)).status, 404);
+    assert.equal(e.sqlite.prepare('SELECT count(*) n FROM classes c LEFT JOIN class_join_codes j ON j.room_code=c.code WHERE j.room_code IS NULL').get().n, 0);
+  } finally { delete crypto.getRandomValues; }
+});
+
+test('reclamation removes every expired mapping and reused labels cannot redirect old requests', async t => {
+  const e = setup(t), random = crypto.getRandomValues;
+  crypto.getRandomValues = array => array instanceof Uint32Array ? array.fill(0) : random.call(crypto, array);
+  try {
+    let old;
+    for (let i = 0; i < 30; i++) { const room = (await e.create('expired-' + i, { 'x-teacher-capability': Math.floor(i / 10).toString(16).repeat(64) })).data; old ||= room; }
+    const member = await e.join(old.code, '2A01');
+    e.sqlite.prepare('UPDATE classes SET expires_at=0').run();
+    const replacement = (await e.create('replacement')).data;
+    assert.equal(replacement.joinCode, '00'); assert.notEqual(replacement.code, old.code);
+    assert.equal(e.sqlite.prepare('SELECT count(*) n FROM class_join_codes').get().n, 1);
+    for (const result of [await e.join(old.code, '2A02'), await e.call('/' + old.code + '/teacher-board', 'GET', undefined, teacherHeaders), await e.submit(old.code, member.token, e.evidence())]) assert([404, 410].includes(result.status));
+    assert.equal(e.sqlite.prepare('SELECT count(*) n FROM members WHERE code=?').get(replacement.code).n, 0);
+  } finally { delete crypto.getRandomValues; }
+});
+
+test('mapping failure rolls the entire allocation back and identical concurrent retries create one room', async t => {
+  const e = setup(t);
+  e.sqlite.exec("CREATE TRIGGER fail_mapping BEFORE INSERT ON class_join_codes BEGIN SELECT RAISE(ABORT, 'forced'); END");
+  assert.equal((await e.create()).status, 503); assert.equal(e.sqlite.prepare('SELECT count(*) n FROM classes').get().n, 0);
+  e.sqlite.exec('DROP TRIGGER fail_mapping');
+  const results = await Promise.all([e.create(), e.create()]);
+  assert(results.every(result => result.status === 200)); assert.deepEqual(results[0].data, results[1].data);
+  assert.equal(e.sqlite.prepare('SELECT count(*) n FROM classes').get().n, 1);
+});
+
+test('student identifiers normalize once, reject malformed input and cannot recover another pupil', async t => {
+  const e = setup(t), room = (await e.create()).data;
+  const first = await e.join(room.code, '２ａ１'); assert.equal(first.status, 200); assert.equal(first.data.alias, '2A01');
+  for (const value of ['2a01', '2 A01']) { const duplicate = await e.join(room.code, value); assert.equal(duplicate.data.error.code, 'ALIAS_TAKEN'); assert(!JSON.stringify(duplicate.data).includes(first.token)); }
+  for (const value of ['2A41', '99AB99']) assert.equal((await e.join(room.code, value)).status, 200);
+  for (const value of ['2A00', '0A01', '100A01', '2ABC01', '2A100', '2-A01', '2\tA01', '2A', '01', '小星']) assert.equal((await e.join(room.code, value)).status, 400, value);
 });

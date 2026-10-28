@@ -1,6 +1,6 @@
 # Classroom service
 
-The Worker serves the legacy teacher page and stores assignments, anonymous memberships, original handwriting and teacher reviews in D1 binding `DB`. Pages serves the student app and the new teacher entry at `teacher.html`. Assignments retain version 2 and their immutable `copy` or `listen` mode. New version 4 originals record the actual displayed mode as `presentationMode: 'copy'`; historical version 2 originals keep their original mode. New teacher choices offer 看字寫 only.
+The Worker serves the legacy teacher page and stores assignments, student memberships, original handwriting and teacher reviews in D1 binding `DB`. Pages serves the student app and the new teacher entry at `teacher.html`. Assignments retain version 2 and their immutable `copy` or `listen` mode. New version 4 originals record the actual displayed mode as `presentationMode: 'copy'`; historical version 2 originals keep their original mode. New teacher choices offer 看字寫 only.
 
 ## Build and export
 
@@ -8,21 +8,21 @@ Run `node build.mjs` with Node 24. It produces `dist/server/index.js` without ru
 
 Drizzle schema lives in `schema.js`. Migrations through `0002_automatic_submissions.sql`, including metadata, were generated with drizzle-kit 0.31.10 and drizzle-orm 0.45.2. The API also initializes the additive automatic table once per DB binding because Sites packaging does not apply migrations. Failed initialization retries on the next request. The inline DDL is generated from migration 0002.
 
-Migration `0003_class_join_deadline.sql` adds a nullable `classes.join_expires_at` without rewriting existing data. Apply it before deploying this Worker. New eight-character classes set a 15-minute join deadline separately from their 24-hour record expiry. Existing numeric classes with a null deadline retain their original 15-minute admission window; historical eight-character classes with a null deadline retain their original admission until expiry. Changing the code format never extends a new class's join window. Runtime table initialization does not apply migration 0003.
+Migration `0003_class_join_deadline.sql` adds a nullable `classes.join_expires_at`. Existing three-digit classes with a null deadline retain their original 15-minute admission window; historical eight-character classes with a null deadline retain admission until expiry. Existing explicit deadlines are unchanged.
 
-Migration `0004_seat_leases.sql` adds temporary seat holds without changing existing memberships or originals. Apply it before deploying this Worker. Each class has at most 40 hold rows. Class deletion cascades to these rows. Only hashed random capabilities are stored.
+Migration `0004_seat_leases.sql` adds temporary seat holds for old clients without changing existing memberships or originals. Only hashed random capabilities are stored. Class deletion cascades to these rows.
+
+Migration `0005_true_zaladane.sql` adds `class_join_codes`, a unique mapping from public codes 00 through 99 to immutable room IDs. Apply all migrations before deploying this Worker. New room IDs contain `r_` and 32 random hexadecimal characters. New classes set both deadlines to 30 days after creation. The public code is reusable only after expiry or owner deletion. Allocation searches all 100 labels and atomically inserts the room and mapping, respecting the owner limit of 10 and global limit of 100 live classes. Existing rooms and identities remain unchanged.
 
 ## Simple pupil joining
 
-老師按「建立班級」，顯示該班 QR code。學生掃碼後，選擇自己的座號，再按「開始」。座號提供 1 至 40 號，不需輸入暱稱或登入。老師也可按「複製學生連結」，預先在平板開啟，學生便不用自行操作相機。未能掃碼時，仍可在首頁輸入八位班級碼。QR 及連結只含公開班級碼。
+老師建立班級後顯示兩位班級碼。學生在首頁輸入班級碼及班別與學號，例如 2A01，再按「開始」。不需掃碼、選座號或登入。前置 0 必須保留。年級接受 1 至 99、班別 1 至 2 個英文字母、學號 1 至 99；全形英數字、大小寫及普通空格會統一，例如 ２ａ１ 變成 2A01。相同學號不能取回另一部裝置的身份。重複學號請老師處理。
 
-共用平板若仍保留上一位身份，先核對座號，再繼續或確認更換使用者。座號已有人使用時，請老師處理；相同座號不能取回另一部裝置的身份。重試加入會保留原有請求，不另建身份。
+共用平板會先顯示已保存身份，學生須確認繼續或明確更換使用者。新班由建立起可加入及使用 30 日，包括原卷及排行榜；沒有另外的加入截止時間。舊班沿用原有期限。本機獨立挑戰仍保留 24 小時，累計書寫時間上限仍為 24 小時。
 
-`GET /api/v1/classes/:code/seats` returns `occupied` numbers 1 through 40, `serverNow`, `joinExpiresAt` and `expiresAt`. It exposes no member names or capabilities. `POST` to that path accepts `{action,seat,token,expiresAt}` for `claim` or `renew`, and `{action:'release',seat,token}` for release. Tokens are 64 lowercase hexadecimal characters. Claim and renew deadlines must be future server timestamps within 30 seconds and the admission deadline. Renew only updates a live matching hold. Release only removes a matching token. All seat responses use `Cache-Control: no-store`.
+`GET /api/v1/classes/07` resolves a public code to `{code,joinCode,expiresAt}`. Membership, teacher and original requests then use the immutable `code`; action routes reject a two-digit label. The client saves the resolved room and exact request before posting. A retry never resolves that saved public label again, so it cannot target a replacement room. Fresh modern identities use NFKC normalization, ASCII/fullwidth space removal, uppercasing and two-digit student-number padding. Matching legacy requests replay before the modern validation rule.
 
-The foreground picker polls every 1.5 seconds after each completed read and renews approximately every 10 seconds. It uses server timestamps and a monotonic clock, not the device wall clock. Requests time out after eight seconds. Closing or hiding the picker invalidates late replies and releases temporary holds; an undelivered release leaves a hold until its original deadline. Atomic SQL arbitrates claims and canonical `1號` through `40號` member joins, including old clients. A confirmed picker join adds `seatToken` to its once-persisted member request. Lost replies retry the same request ID, alias and tokens. If the hold expired, that pending request can reacquire the same seat token before retrying; it cannot take over another live holder or existing member.
-
-`vendor/qrcode.js` is the pinned, locally bundled QR encoder. Its provenance and full MIT licence are in `vendor/README.md` and `vendor/qrcode-LICENSE`. Both teacher pages generate QR SVG locally and retain a plain-link fallback. There is no runtime QR service or CDN.
+The legacy `GET /:code/seats` and `POST /:code/seats` protocol remains for already-open old clients. A saved legacy join retains its request ID, alias, member token and seat token. If its old hold expires, it can reacquire with the same token before retrying. Current pages have no seat picker, seat polling, QR generator or copy-class-link control. Teachers link to the generic student homepage.
 
 The canonical shared files are in the repository's `dist/`.
 
@@ -82,8 +82,8 @@ All routes below start with `/api/v1/classes`. Responses use JSON and `Cache-Con
 
 | Method and relative path | Authority | Result |
 | --- | --- | --- |
-| `POST /` | Trusted-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns an eight-character uppercase letter/digit code, assignment, `joinExpiresAt` and `expiresAt`. Ambiguous `I`, `O`, `0` and `1` are excluded from new codes. |
-| `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken,seatToken?}` during the first 15 minutes of a new class; returns membership and assignment. A picker seat token must match its live hold. An identical saved request remains retryable after admission closes. |
+| `POST /` | Trusted-origin teacher | Accepts `{requestId,version:2,mode,entries}`; returns immutable `code`, two-digit `joinCode`, assignment, `joinExpiresAt` and `expiresAt`. Both deadlines are 30 days after creation. |
+| `POST /:code/members` | New member capability | Accepts `{requestId,alias,memberToken,seatToken?}` until the new class expires after 30 days; returns membership and assignment. A legacy seat token must match its live hold. An identical saved request remains retryable after admission closes. |
 | `PUT /:code/answers` | Current member | Accepts one complete sealed original; returns `{runId,official:true,version:3}` for version 3, or the legacy receipt without version. |
 | `GET /:code/answers` | Current member | Returns only that member's original, marks and revision, or `answer:null`. Aggregate elapsed time is omitted. |
 | `GET /:code/reviews` | Trusted-origin owner | Lists members, submission status, scores, revisions and elapsed time. |
@@ -124,7 +124,7 @@ The reviewed request body is capped at 4 MiB. Canonical original JSON is capped 
 
 The other limits are 200,000 points per original, 256 strokes per historical character or 64 per v4 character, 48 selected positions, 64 MiB of original JSON per class, and 256 MiB globally. Current draft aggregate limits are checked before each character is locked. A v4 stroke that exceeds capacity is rejected before accepted progress advances; prior accepted ink stays visible. There is no silent thinning or point truncation. A server quota rejection returns `507 INK_CAPACITY` and leaves the local sealed retry intact. Legacy bodies remain capped at 256 KiB.
 
-Class limits remain 100 members, 10 active classes per owner and 100 active classes globally. New class codes use eight uppercase letters and digits from the original alphabet and remain reserved for 24 hours. Admission closes exactly 15 minutes after creation, using the stored `join_expires_at` deadline. `expiresAt` remains the 24-hour room access cutoff; `joinExpiresAt` is the separate admission cutoff. Legacy rooms without a stored deadline retain their original three-digit or eight-character admission window and data. All reads and writes require an unexpired class. Owner deletion cascades immediately. Creation and the public maintenance endpoint each delete at most 10 expired classes. Caller-supplied cutoffs and class selectors do not affect cleanup. Periodic background cleanup has not been enabled. There is no MCP endpoint. Provider backups are outside this application deletion guarantee.
+Class limits remain 100 members, 10 active classes per owner and 100 active classes globally. New public class codes use exactly two digits and remain reserved for 30 days. `joinExpiresAt` equals `expiresAt`, so joining and all class access end together. Expired mappings are reclaimed during allocation without reusing the immutable room ID. Legacy rooms without a stored deadline retain their original three-digit or eight-character admission window and data. All reads and writes require an unexpired class. Owner deletion cascades immediately. Creation and the public maintenance endpoint each delete at most 10 expired classes. Caller-supplied cutoffs and class selectors do not affect cleanup. Periodic background cleanup has not been enabled. There is no MCP endpoint. Provider backups are outside this application deletion guarantee.
 
 Local drafts, originals and challenge cards stop displaying at their expiry and are purged when the app next runs. Clearing browser data can lose a capability or local original. A browser capability is not a verified school identity.
 

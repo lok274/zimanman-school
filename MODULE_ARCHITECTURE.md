@@ -22,7 +22,7 @@ index.html
   ├─ assessment-store.js     小挑戰原稿的本機保存
   ├─ freehand.js              原筆跡呈現及重播
   ├─ assessment-review.js     老師批改、公布結果和重播資料
-  ├─ classroom.js             班級 API、暱稱、收卷及權限邊界
+  ├─ classroom.js             班級 API、班別及學號、收卷及權限邊界
   ├─ assessment-ui.js         小挑戰畫面及操作控制器
   ├─ writing.js               Hanzi Writer 書寫格、筆順及提示
   └─ app.js                   應用程式組合根：路由、DOM 和事件協調
@@ -149,11 +149,11 @@ const next = BishunSession.transition(state, {
 
 它是唯一直接接觸班級服務 API 的前端模組，負責：
 
-- 建立和加入班級
-- 保存班級碼、暱稱及瀏覽器憑證
+- 解析公開班級碼並加入班級
+- 保存公開班級碼、不可變班級身份、班別及學號及瀏覽器憑證
 - 上傳已提交原卷
 - 讀取新版自動時間榜，保留舊版老師公布榜的協定
-- 處理 24 小時到期和權限錯誤
+- 處理新班 30 日到期、舊班原有期限和權限錯誤
 
 學生頁不應直接呼叫 `fetch()` 讀班級 API；需要班級資料時，呼叫 `BishunClassroom` 的方法。這樣可集中處理重試、過期和錯誤訊息。
 

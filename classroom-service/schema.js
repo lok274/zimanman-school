@@ -4,6 +4,9 @@ export const classes = sqliteTable('classes', {
   code: text('code').primaryKey(), ownerId: text('owner_id').notNull(), assignmentJson: text('assignment_json').notNull(),
   expiresAt: integer('expires_at').notNull(), joinExpiresAt: integer('join_expires_at'), requestId: text('request_id').notNull(), payloadHash: text('payload_hash').notNull(),
 }, table => [uniqueIndex('classes_owner_request').on(table.ownerId, table.requestId), index('classes_expiry').on(table.expiresAt)]);
+export const classJoinCodes = sqliteTable('class_join_codes', {
+  joinCode: text('join_code').primaryKey(), roomCode: text('room_code').notNull().references(() => classes.code, { onDelete: 'cascade' }),
+}, table => [uniqueIndex('class_join_codes_room').on(table.roomCode), check('class_join_codes_digits', sql`length(${table.joinCode}) = 2 AND ${table.joinCode} GLOB '[0-9][0-9]'`)]);
 export const members = sqliteTable('members', {
   id: text('id').primaryKey(), code: text('code').notNull().references(() => classes.code, { onDelete: 'cascade' }),
   alias: text('alias').notNull(), aliasKey: text('alias_key').notNull(), tokenHash: text('token_hash').notNull(),

@@ -17,7 +17,7 @@ const code = room.data.code;
 assert.equal((await call('/' + code + '/teacher-board', 'GET', undefined, { 'x-teacher-capability': randomBytes(32).toString('hex') })).status, 403);
 assert.equal((await call('/' + code + '/board', 'GET', undefined, teacher)).status, 401);
 const students = [];
-for (const alias of ['甲', '乙']) {
+for (const alias of ['2A01', '2A02']) {
   const token = randomBytes(32).toString('hex'), request = { alias, requestId: randomUUID(), memberToken: token };
   const [a, b] = await Promise.all([call('/' + code + '/members', 'POST', request), call('/' + code + '/members', 'POST', request)]);
   assert.equal(a.status, 200); assert.deepEqual(a.data, b.data); students.push({ token, memberId: a.data.memberId });
@@ -38,7 +38,7 @@ const reviewed = await call('', 'POST', { entries: [{ text: '鬍鬚', selectedIn
 assert.equal(reviewed.status, 200); const reviewedCode = reviewed.data.code;
 assert.equal((await call('/' + reviewedCode + '/publication', 'POST', undefined, teacher)).status, 409);
 const reviewers = [];
-for (const alias of ['原稿甲', '原稿乙']) {
+for (const alias of ['2A01', '2A02']) {
   const token = randomBytes(32).toString('hex');
   const member = await call('/' + reviewedCode + '/members', 'POST', { alias, requestId: randomUUID(), memberToken: token });
   assert.equal(member.status, 200); reviewers.push({ token, memberId: member.data.memberId });
@@ -87,7 +87,7 @@ const fullEntries = ['粗', '濃', '鬍鬚', '密', '剪草機', '推來推去']
 const fullRoom = await call('', 'POST', { entries: fullEntries, version: 2, mode: 'copy', requestId: randomUUID() }, teacher);
 assert.equal(fullRoom.status, 200);
 const fullToken = randomBytes(32).toString('hex');
-await call('/' + fullRoom.data.code + '/members', 'POST', { alias: '容量驗證', requestId: randomUUID(), memberToken: fullToken });
+await call('/' + fullRoom.data.code + '/members', 'POST', { alias: '2A99', requestId: randomUUID(), memberToken: fullToken });
 const full = A.start(fullRoom.data.assignment, randomUUID()), counts = [11, 16, 19, 22, 11, 11, 10, 16, 11, 8, 11, 5]; full.phase = 'sealed';
 full.answers.forEach((answer, i) => { answer.status = 'submitted'; answer.strokes = Array.from({ length: counts[i] }, () => Array.from({ length: 512 }, (_, j) => [j * 19, 9999 - j * 19, j * 10])); });
 const fullSubmission = A.validateSubmission(fullRoom.data.assignment, full), fullBytes = Buffer.byteLength(JSON.stringify(fullSubmission));

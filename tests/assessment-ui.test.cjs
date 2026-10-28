@@ -40,9 +40,9 @@ function memory() {
 function boot({ store = memory(), classroom = null, now = Date.now(), elapsed = () => performance.now() } = {}) {
   const body = new Element('body'), previous = new Element('main'); previous.textContent = '鬍鬚'; body.append(previous);
   const listeners = {}, document = { body, hidden: false, createElement: tag => new Element(tag), createElementNS: (_ns, tag) => new Element(tag), addEventListener(name, fn) { listeners[name] = fn; } };
-  const timers = [], canceled = new Set(), calls = { closed: 0, practice: [] }, spoken = [];
+  const timers = [], delays = [], canceled = new Set(), calls = { closed: 0, practice: [] }, spoken = [];
   class Clock extends Date { static now() { return now; } }
-  const context = vm.createContext({ document, Date: Clock, structuredClone, TextEncoder, AbortController, crypto: webcrypto, performance: { now: elapsed }, console, setTimeout(fn) { timers.push(fn); return timers.length; }, clearTimeout(id) { canceled.add(id); }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {},
+  const context = vm.createContext({ document, Date: Clock, structuredClone, TextEncoder, AbortController, crypto: webcrypto, performance: { now: elapsed }, console, setTimeout(fn, delay) { timers.push(fn); delays.push(delay); return timers.length; }, clearTimeout(id) { canceled.add(id); }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, addEventListener() {},
     speechSynthesis: { getVoices: () => [{ lang: 'zh-HK' }], cancel() {}, speak(value) { spoken.push(value.text); } }, SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } } });
   for (const file of ['quiz-results.js', 'assessment.js', 'content.js', 'freehand.js', 'assessment-review.js', 'assessment-ui.js']) vm.runInContext(source(file), context);
   const mounts = [], hints = [];
@@ -68,7 +68,7 @@ function boot({ store = memory(), classroom = null, now = Date.now(), elapsed = 
   const click = async text => { const item = button(text); assert(item, 'button exists: ' + text); await item.click(); await new Promise(resolve => setImmediate(resolve)); };
   const stroke = async (x = 400) => { const result = mounts.at(-1).stroke([[x,600],[8400,9400]]); await tick(); return result; };
   const record = () => [...store.records.values()].find(value => value.run && value.kind === 'official');
-  return { ui, context, store, panel, previous, calls, assigned, click, button, stroke, record, spoken, timers, canceled, mounts, hints, listeners, setNow(value) { now = value; } };
+  return { ui, context, store, panel, previous, calls, assigned, click, button, stroke, record, spoken, timers, delays, canceled, mounts, hints, listeners, setNow(value) { now = value; } };
 }
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -233,4 +233,25 @@ test('local board filters assignment, actual mode and policy without writing the
 test('Back remains available during an automatic upload and late receipt cannot reopen the closed view',async()=>{
   const uploaded=deferred(),e=boot({classroom:classClient({submitAutomatic:()=>uploaded.promise})});await e.ui.open(e.assigned,member());await fill(e);assert.match(e.panel.textContent,/交卷中/);
   await e.click('← 返回課程');assert.equal(e.ui.active(),false);const before=JSON.stringify([...e.store.records]);uploaded.resolve({version:4,official:true});await tick();assert.equal(JSON.stringify([...e.store.records]),before);assert.equal(e.ui.active(),false);
+});
+
+test('class originals survive day 2, the capped timer and day 29, then expire on day 30', async () => {
+  const start = Date.now(), day = 86400000, joined = { ...member(), expiresAt: start + 30 * day };
+  const e = boot({ now: start, classroom: classClient() });
+  await e.ui.open(e.assigned, joined); await begin(e); await e.stroke();
+  assert.equal(e.record().expiresAt, joined.expiresAt); assert.equal(e.delays[0], 2147483647);
+  const original = clone(e.record().run);
+  for (const offset of [2 * day, 2147483647, 29 * day]) {
+    e.setNow(start + offset); await e.timers.at(-1)();
+    assert(!e.panel.textContent.includes('小挑戰已到期'));
+    assert.deepEqual(e.record().run, original);
+    assert.equal(e.delays.at(-1), Math.min(2147483647, joined.expiresAt - start - offset));
+  }
+  const restored = boot({ now: start + 29 * day, store: e.store, classroom: classClient() });
+  await restored.ui.open(restored.assigned, joined); assert.deepEqual(restored.record().run, original);
+  restored.setNow(joined.expiresAt); await restored.timers.at(-1)();
+  assert.match(restored.panel.textContent, /小挑戰已到期/); assert.equal(restored.store.records.size, 0);
+  const local = boot({ now: start }); await local.ui.open(local.assigned);
+  assert.equal(local.record().expiresAt, start + day);
+  assert.equal(local.context.BishunAssessment.limits.duration, day);
 });
