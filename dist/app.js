@@ -25,7 +25,7 @@
   let undoRestart = null;
   let clockTick = null;
   let boardNavigationRun = null;
-  let requestedCode = null, selectedSeat = null, classSwitchArmed = false;
+  let requestedCode = null, classSwitchArmed = false;
   const classSeatButtons = [];
   try {
     const code = new URL(location.href).searchParams.get('class');
@@ -80,6 +80,7 @@
     }
   }
   function availabilityChanged() {
+    watchClassSeats();
     if (document.hidden || leaving || !$('teacher-dialog').open) cancelDictation();
     checkpoint();
     if (!available()) {
@@ -540,17 +541,26 @@
   function scoreLabel(score) { return '錯誤 ' + score.mistakes + ' 次 · ' + (score.elapsedMs / 1000).toFixed(1) + ' 秒'; }
   function renderClassroom() {
     if (!classroom) return;
-    const view = classroom.view(), member = view.member, identity = member || view.joining;
+    const view = classroom.view(), member = view.member, identity = member || view.joining, selectedSeat = view.seats.selected;
     $('class-title').textContent = requestedCode && !identity ? '班級 ' + requestedCode : '班級小挑戰';
     $('class-join-fields').hidden = !!identity;
     $('class-code-fields').hidden = !!requestedCode;
     $('class-code').disabled = view.busy;
     $('class-alias').disabled = view.busy;
-    $('class-join').disabled = view.busy || !selectedSeat && !$('class-alias').value;
+    $('class-join').disabled = view.busy || view.seats.choosing || !selectedSeat && !$('class-alias').value;
     $('class-join').textContent = selectedSeat ? '我是 ' + selectedSeat + ' 號，開始' : $('class-alias').value ? '加入' : '開始';
-    for (const button of classSeatButtons) { button.disabled = view.busy; button.setAttribute('aria-pressed', String(button.getAttribute('data-seat') === String(selectedSeat))); }
+    for (const button of classSeatButtons) {
+      const seat = Number(button.getAttribute('data-seat')), taken = view.seats.occupied.includes(seat) && seat !== selectedSeat;
+      button.disabled = view.busy || view.seats.choosing || view.seats.status !== 'ready' || taken;
+      button.setAttribute('aria-pressed', String(seat === selectedSeat)); button.setAttribute('aria-label', seat + ' 號' + (taken ? '，已被選用' : ''));
+      button.classList.toggle('is-taken', taken);
+      if (button.textContent !== String(seat) + (taken ? 'X' : '')) {
+        button.textContent = String(seat);
+        if (taken) { const mark = textNode('span', 'X', 'class-seat-used'); mark.setAttribute('aria-hidden', 'true'); button.append(mark); }
+      }
+    }
     $('class-identity').textContent = identity ? '班級 ' + identity.code + ' · ' + identity.alias : '';
-    $('class-status').textContent = view.message || (requestedCode && identity && requestedCode !== identity.code ? '此平板仍有另一班紀錄，請找老師。' : '');
+    $('class-status').textContent = view.message || view.seats.message || (requestedCode && identity && requestedCode !== identity.code ? '此平板仍有另一班紀錄，請找老師。' : '');
     $('class-storage').hidden = view.storageOkay;
     $('class-continue').hidden = !view.needsContinue;
     $('class-continue').textContent = member ? '我是 ' + member.alias + '，繼續' : '繼續';
@@ -616,11 +626,12 @@
       classroom.bindRun(candidate.id); localMode = null; $('class-dialog').close(); startSession(candidate);
     } catch (error) { $('class-status').textContent = error.message.replaceAll('測驗', '小挑戰'); }
   }
-  function openClassroom() { classSwitchArmed = false; renderClassroom(); $('class-dialog').showModal(); }
+  function watchClassSeats() { classroom?.seatPicker({ code: requestedCode || $('class-code').value || '', active: $('class-dialog').open && !document.hidden && !leaving }); }
+  function openClassroom() { classSwitchArmed = false; renderClassroom(); $('class-dialog').showModal(); watchClassSeats(); }
   for (let seat = 1; seat <= 40; seat++) {
     const button = document.createElement('button');
     button.className = 'class-seat'; button.textContent = String(seat); button.setAttribute('data-seat', seat); button.setAttribute('aria-label', seat + ' 號'); button.setAttribute('aria-pressed', 'false');
-    button.addEventListener('click', () => { if (classroom?.view().busy) return; selectedSeat = seat; $('class-alias').value = ''; renderClassroom(); });
+    button.addEventListener('click', () => { if (classroom?.view().busy) return; $('class-alias').value = ''; classroom?.selectSeat(seat); });
     classSeatButtons.push(button); $('class-seats').append(button);
   }
   async function joinClassroom(code, alias, start) {
@@ -631,15 +642,15 @@
   }
   $('class-open').addEventListener('click', openClassroom);
   $('class-close').addEventListener('click', () => $('class-dialog').close());
-  $('class-dialog').addEventListener('close', () => { classSwitchArmed = false; renderClassroom(); });
-  $('class-alias').addEventListener('input', () => { selectedSeat = null; renderClassroom(); });
-  $('class-code').addEventListener('input', renderClassroom);
-  $('class-join').addEventListener('click', () => joinClassroom(requestedCode || $('class-code').value || '', selectedSeat ? selectedSeat + '號' : $('class-alias').value || '', !!selectedSeat));
+  $('class-dialog').addEventListener('close', () => { classSwitchArmed = false; watchClassSeats(); renderClassroom(); });
+  $('class-alias').addEventListener('input', () => { classroom?.selectSeat(null); renderClassroom(); });
+  $('class-code').addEventListener('input', () => { watchClassSeats(); renderClassroom(); });
+  $('class-join').addEventListener('click', () => { const seat = classroom?.view().seats.selected; joinClassroom(requestedCode || $('class-code').value || '', seat ? seat + '號' : $('class-alias').value || '', !!seat); });
   $('class-join-retry').addEventListener('click', () => { const joining = classroom?.view().joining; if (joining) joinClassroom(joining.code, joining.alias, /^(?:[1-9]|[1-3]\d|40)號$/.test(joining.alias)); });
   $('class-continue').addEventListener('click', () => { classroom?.continueMember(); if (classroom?.view().member?.assignment.version === 2 && !classroom.view().pending) startClassQuiz(); });
   $('class-leave').addEventListener('click', () => {
     if (!classSwitchArmed) { classSwitchArmed = true; renderClassroom(); return; }
-    boardNavigationRun = null; classSwitchArmed = false; selectedSeat = null; $('class-alias').value = ''; $('class-code').value = ''; classroom?.leave();
+    boardNavigationRun = null; classSwitchArmed = false; $('class-alias').value = ''; $('class-code').value = ''; classroom?.leave(); watchClassSeats();
   });
   $('class-start').addEventListener('click', startClassQuiz); $('class-again').addEventListener('click', startClassQuiz);
   function retryClassResult() { boardNavigationRun = classroom?.view().boundRunId; classroom?.retry(); }

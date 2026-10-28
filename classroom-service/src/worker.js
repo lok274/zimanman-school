@@ -65,6 +65,43 @@ function key(value) { if (typeof value !== 'string' || !keyPattern.test(value)) 
 function canonicalAssignment(data) { try { if (data.version !== undefined && ![1, 2].includes(data.version)) throw new Error('測驗版本不支援。'); return data.version === 2 ? A.assignment(data.entries, data.mode) : Q.assignment(data.entries); } catch (error) { fail(400, 'INVALID_ASSIGNMENT', error.message); } }
 function joinExpiresAt(room) { return room.join_expires_at ?? (/^\d{3}$/.test(room.code) ? room.expires_at - 85500000 : room.expires_at); }
 function roomReply(room) { return { code: room.code, assignment: JSON.parse(room.assignment_json), joinExpiresAt: joinExpiresAt(room), expiresAt: room.expires_at }; }
+function seatNumber(alias) { return /^(?:[1-9]|[1-3]\d|40)號$/.test(alias) ? Number(alias.slice(0, -1)) : null; }
+async function seatSnapshot(db, room) {
+  const now = Date.now();
+  const { results } = await db.prepare('SELECT seat FROM seat_leases WHERE code = ? AND expires_at > ? UNION SELECT CAST(alias_key AS INTEGER) AS seat FROM members WHERE code = ? AND alias_key IN (' + Array.from({ length: 40 }, (_, i) => "'" + (i + 1) + "號'").join(',') + ') ORDER BY seat').bind(room.code, now, room.code).all();
+  return { occupied: results.map(row => row.seat), serverNow: now, joinExpiresAt: joinExpiresAt(room), expiresAt: room.expires_at };
+}
+async function selectSeat(request, db, room) {
+  if (request.method === 'GET') return seatSnapshot(db, room);
+  if (request.method !== 'POST') fail(405, 'METHOD', '操作不支援。');
+  const data = await body(request, 2048), { action, seat, token, expiresAt } = data;
+  if (!['claim', 'renew', 'release'].includes(action) || !Number.isInteger(seat) || seat < 1 || seat > 40 || typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) fail(400, 'INVALID_SEAT', '座號資料無效。');
+  const tokenHash = await hash(token), now = Date.now();
+  if (action === 'release') {
+    await db.prepare('DELETE FROM seat_leases WHERE code = ? AND seat = ? AND token_hash = ?').bind(room.code, seat, tokenHash).run();
+    return { released: true };
+  }
+  if (joinExpiresAt(room) <= now) fail(410, 'JOIN_CLOSED', '班級加入時間已過。');
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= now || expiresAt > now + 30000 || expiresAt > joinExpiresAt(room)) fail(409, 'LEASE_EXPIRED', '請重新選擇座號。');
+  let lease;
+  if (action === 'renew') {
+    lease = await db.prepare(`UPDATE seat_leases SET expires_at = MAX(expires_at, ?) WHERE code = ? AND seat = ? AND token_hash = ? AND expires_at > ?
+      AND NOT EXISTS (SELECT 1 FROM members WHERE code = ? AND alias_key = ?)
+      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?) AND ? > ? RETURNING expires_at`)
+      .bind(expiresAt, room.code, seat, tokenHash, Date.now(), room.code, seat + '號', room.code, Date.now(), Date.now(), expiresAt, Date.now()).first();
+  } else {
+    lease = await db.prepare(`INSERT INTO seat_leases(code, seat, token_hash, expires_at) SELECT ?, ?, ?, ?
+      WHERE NOT EXISTS (SELECT 1 FROM members WHERE code = ? AND alias_key = ?)
+      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?) AND ? > ?
+      ON CONFLICT(code, seat) DO UPDATE SET token_hash = excluded.token_hash, expires_at = CASE WHEN seat_leases.token_hash = excluded.token_hash THEN MAX(seat_leases.expires_at, excluded.expires_at) ELSE excluded.expires_at END
+      WHERE seat_leases.expires_at <= ? OR seat_leases.token_hash = excluded.token_hash RETURNING expires_at`)
+      .bind(room.code, seat, tokenHash, expiresAt, room.code, seat + '號', room.code, Date.now(), Date.now(), expiresAt, Date.now(), Date.now()).first();
+  }
+  if (joinExpiresAt(room) <= Date.now()) fail(410, 'JOIN_CLOSED', '班級加入時間已過。');
+  if (expiresAt <= Date.now()) fail(409, 'LEASE_EXPIRED', '請重新選擇座號。');
+  if (!lease) fail(409, action === 'renew' ? 'LEASE_EXPIRED' : 'SEAT_TAKEN', action === 'renew' ? '請重新選擇座號。' : '此座號已被選用，請選擇其他座號。');
+  return { seat, expiresAt: lease.expires_at, serverNow: Date.now(), joinExpiresAt: joinExpiresAt(room) };
+}
 async function roomFor(db, code) {
   const room = await db.prepare('SELECT * FROM classes WHERE code = ?').bind(code).first();
   if (!room) fail(404, 'CLASS_NOT_FOUND', '搵唔到呢個班級，請核對班級碼。');
@@ -143,6 +180,7 @@ async function api(request, env, url) {
   if (!/^(?:[1-9]\d{2}|[A-Z2-9]{8})$/.test(code || '') || route.length > 3) fail(404, 'NOT_FOUND', '搵唔到呢個頁面。');
   const room = await roomFor(db, code);
   const assigned = JSON.parse(room.assignment_json);
+  if (action === 'seats' && route.length === 2) return selectSeat(request, db, room);
   if (route.length === 1 && request.method === 'DELETE') {
     await ownerFor(request, room);
     await db.prepare('DELETE FROM classes WHERE code = ? AND owner_id = ?').bind(code, room.owner_id).run();
@@ -256,16 +294,25 @@ async function api(request, env, url) {
     const alias = data.alias.normalize('NFC').trim();
     if (!alias || Array.from(alias).length > 20 || /[\p{Cc}\p{Cf}]/u.test(alias)) fail(400, 'INVALID_ALIAS', '暱稱限 1 至 20 個字，不可用控制字元。');
     if (typeof data.memberToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.memberToken)) fail(400, 'INVALID_TOKEN', '參加身份無效。');
+    if (data.seatToken !== undefined && (!seatNumber(alias) || typeof data.seatToken !== 'string' || !/^[a-f0-9]{64}$/.test(data.seatToken))) fail(400, 'INVALID_SEAT', '座號資料無效。');
     const tokenHash = await hash(data.memberToken), aliasKey = alias.toLocaleLowerCase('en-US'), payloadHash = await hash(JSON.stringify({ alias, tokenHash }));
+    const seat = seatNumber(alias), seatHash = data.seatToken ? await hash(data.seatToken) : null;
     await db.prepare(`INSERT OR IGNORE INTO members(id, code, alias, alias_key, token_hash, request_id, payload_hash)
       SELECT ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM members WHERE code = ?) < 100
-      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?)`)
-      .bind(crypto.randomUUID(), code, alias, aliasKey, tokenHash, requestId, payloadHash, code, code, Date.now(), Date.now()).run();
+      AND EXISTS (SELECT 1 FROM classes WHERE code = ? AND expires_at > ? AND COALESCE(join_expires_at, CASE WHEN length(code) = 3 THEN expires_at - 85500000 ELSE expires_at END) > ?)
+      AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM seat_leases WHERE code = ? AND seat = ? AND expires_at > ? AND (? IS NULL OR token_hash <> ?)))
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM seat_leases WHERE code = ? AND seat = ? AND token_hash = ? AND expires_at > ?))`)
+      .bind(crypto.randomUUID(), code, alias, aliasKey, tokenHash, requestId, payloadHash, code, code, Date.now(), Date.now(), seat, code, seat, Date.now(), seatHash, seatHash, seatHash, code, seat, seatHash, Date.now()).run();
     const saved = await db.prepare('SELECT * FROM members WHERE code = ? AND request_id = ?').bind(code, requestId).first();
     if (saved) { if (saved.payload_hash !== payloadHash) fail(409, 'CONFLICT', '相同加入編號已有另一份資料。'); return { ...roomReply(room), memberId: saved.id, alias: saved.alias }; }
     if (joinExpiresAt(room) <= Date.now()) fail(410, 'JOIN_CLOSED', '班級加入時間已過，已加入同學仍可繼續。');
     const taken = await db.prepare('SELECT id FROM members WHERE code = ? AND alias_key = ?').bind(code, aliasKey).first();
     if (taken) fail(409, 'ALIAS_TAKEN', '呢個暱稱已有人用，請用另一個；同名唔會接管原有紀錄。');
+    if (seat) {
+      const lease = await db.prepare('SELECT token_hash, expires_at FROM seat_leases WHERE code = ? AND seat = ?').bind(code, seat).first();
+      if (lease?.expires_at > Date.now() && lease.token_hash !== seatHash) fail(409, 'SEAT_TAKEN', '此座號已被選用，請選擇其他座號。');
+      if (seatHash && (!lease || lease.expires_at <= Date.now())) fail(409, 'LEASE_EXPIRED', '請重新選擇座號。');
+    }
     fail(429, 'MEMBER_LIMIT', '班級已滿或身份已使用，請聯絡老師。');
   }
   if (action === 'runs' && route.length === 3 && request.method === 'PUT') {

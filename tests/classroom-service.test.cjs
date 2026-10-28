@@ -13,6 +13,7 @@ const worker = import(pathToFileURL(path.join(root, 'dist/server/index.js'))).th
 const entries = [{ text: '推來推去', selectedIndexes: [0, 2] }];
 const teacherCapability = 'a'.repeat(64);
 const teacherHeaders = { origin: 'https://class.test', 'x-teacher-capability': teacherCapability };
+const seatRequest = (e, code, action, seat, token, expiresAt = Date.now() + 29000) => e.call('/' + code + '/seats', 'POST', { action, seat, token, ...(action === 'release' ? {} : { expiresAt }) });
 function setup(t) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON;');
   for (const file of fs.readdirSync(path.join(root, 'drizzle')).filter(file => file.endsWith('.sql'))) sqlite.exec(fs.readFileSync(path.join(root, 'drizzle', file), 'utf8'));
@@ -132,6 +133,80 @@ test('join retries retain capability and aliases refuse takeover under concurren
   assert.equal((await e.join(code, '小月', 'same')).data.error.code, 'CONFLICT');
   assert.equal(e.sqlite.prepare('SELECT COUNT(*) AS n FROM members').get().n, 1);
 });
+
+test('pre-start seat claims are atomic, private and protect legacy manual joins', async t => {
+  const e = setup(t), code = (await e.create()).data.code, a = 'a'.repeat(64), b = 'b'.repeat(64);
+  const results = await Promise.all([seatRequest(e, code, 'claim', 1, a), seatRequest(e, code, 'claim', 1, b)]);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+  const token = results[0].status === 200 ? a : b, other = token === a ? b : a;
+  const snapshot = await e.call('/' + code + '/seats');
+  assert.deepEqual(snapshot.data.occupied, [1]); assert.equal(snapshot.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(Object.keys(snapshot.data).sort(), ['expiresAt', 'joinExpiresAt', 'occupied', 'serverNow']);
+  assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM members').get().n, 0);
+  assert.equal((await e.join(code, '1號')).data.error.code, 'SEAT_TAKEN');
+  await seatRequest(e, code, 'release', 1, other); assert.deepEqual((await e.call('/' + code + '/seats')).data.occupied, [1]);
+  const body = { alias: '1號', requestId: 'first-seat', memberToken: 'c'.repeat(64), seatToken: token };
+  const joined = await e.call('/' + code + '/members', 'POST', body); assert.equal(joined.status, 200);
+  await seatRequest(e, code, 'release', 1, token);
+  assert.deepEqual((await e.call('/' + code + '/seats')).data.occupied, [1]);
+  assert.equal((await seatRequest(e, code, 'claim', 1, other)).data.error.code, 'SEAT_TAKEN');
+  assert.equal((await seatRequest(e, code, 'renew', 1, token)).data.error.code, 'LEASE_EXPIRED');
+  e.sqlite.prepare('UPDATE classes SET join_expires_at = ? WHERE code = ?').run(Date.now() - 1, code);
+  assert.equal((await e.call('/' + code + '/members', 'POST', body)).data.memberId, joined.data.memberId);
+});
+
+test('claim and legacy join racing for the same seat cannot both win', async t => {
+  const e = setup(t), code = (await e.create()).data.code;
+  const [claim, join] = await Promise.all([seatRequest(e, code, 'claim', 2, 'a'.repeat(64)), e.join(code, '2號')]);
+  assert.deepEqual([claim.status, join.status].sort(), [200, 409]);
+  assert.deepEqual((await e.call('/' + code + '/seats')).data.occupied, [2]);
+});
+
+test('seat expiry, release, original deadlines and validation never resurrect a hold', async t => {
+  const e = setup(t), code = (await e.create()).data.code, a = 'a'.repeat(64), b = 'b'.repeat(64);
+  for (const token of [[a], 3, null]) assert.equal((await seatRequest(e, code, 'claim', 1, token)).status, 400);
+  for (const seat of [0, 41, '1', 1.5]) assert.equal((await seatRequest(e, code, 'claim', seat, a)).status, 400);
+  for (const deadline of [Date.now() - 1, Date.now() + 40000, '100']) assert.equal((await seatRequest(e, code, 'claim', 1, a, deadline)).data.error.code, 'LEASE_EXPIRED');
+  await seatRequest(e, code, 'claim', 3, a); await seatRequest(e, code, 'release', 3, a);
+  assert.equal((await seatRequest(e, code, 'renew', 3, a)).data.error.code, 'LEASE_EXPIRED');
+  await seatRequest(e, code, 'claim', 3, a);
+  e.sqlite.prepare('UPDATE seat_leases SET expires_at = ? WHERE code = ?').run(Date.now() - 1, code);
+  assert.deepEqual((await e.call('/' + code + '/seats')).data.occupied, []);
+  assert.equal((await seatRequest(e, code, 'renew', 3, a)).data.error.code, 'LEASE_EXPIRED');
+  assert.equal((await seatRequest(e, code, 'claim', 3, b)).status, 200);
+  await seatRequest(e, code, 'release', 3, a); assert.deepEqual((await e.call('/' + code + '/seats')).data.occupied, [3]);
+  assert.equal((await e.call('/' + code + '/members', 'POST', { requestId: 'array', alias: '3號', memberToken: 'c'.repeat(64), seatToken: [b] })).status, 400);
+  e.sqlite.prepare('UPDATE classes SET join_expires_at = ? WHERE code = ?').run(Date.now() - 1, code);
+  assert.equal((await seatRequest(e, code, 'claim', 4, a)).data.error.code, 'JOIN_CLOSED');
+});
+
+test('seat table is bounded to forty rows per class and follows class cleanup', async t => {
+  const e = setup(t), code = (await e.create()).data.code;
+  for (let seat = 1; seat <= 40; seat++) assert.equal((await seatRequest(e, code, 'claim', seat, 'a'.repeat(64))).status, 200);
+  assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM seat_leases').get().n, 40);
+  assert.throws(() => e.sqlite.prepare('INSERT INTO seat_leases VALUES(?,?,?,?)').run(code, 41, 'hash', Date.now() + 1000));
+  e.sqlite.prepare('UPDATE classes SET expires_at = ? WHERE code = ?').run(Date.now() - 1, code);
+  assert.equal((await e.call('/' + code + '/seats')).status, 410);
+  await e.call('/cleanup', 'POST', {}); assert.equal(e.sqlite.prepare('SELECT count(*) AS n FROM seat_leases').get().n, 0);
+});
+test('seat claims and renewals enforce deadlines crossed while preparing their atomic write', async t => {
+  const originalNow = Date.now;
+  for (const action of ['claim', 'renew']) for (const boundary of ['request', 'admission']) {
+    const e = setup(t), room = (await e.create()).data, now = originalNow(), token = 'a'.repeat(64);
+    if (action === 'renew') await seatRequest(e, room.code, 'claim', 1, token);
+    const original = e.sqlite.prepare('SELECT * FROM seat_leases').get();
+    const deadline = boundary === 'request' ? now + 1000 : room.joinExpiresAt;
+    const before = boundary === 'request' ? now : room.joinExpiresAt - 1;
+    Date.now = () => before;
+    const db = { prepare(sql) { if (sql.startsWith(action === 'claim' ? 'INSERT INTO seat_leases' : 'UPDATE seat_leases SET')) Date.now = () => deadline; return e.db.prepare(sql); } };
+    try {
+      const result = await (await worker).fetch(new Request('https://class.test/api/v1/classes/' + room.code + '/seats', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, seat: 1, token, expiresAt: deadline }) }), { DB: db });
+      assert.equal(result.status, boundary === 'request' ? 409 : 410);
+      assert.equal((await result.json()).error.code, boundary === 'request' ? 'LEASE_EXPIRED' : 'JOIN_CLOSED');
+      assert.deepEqual(e.sqlite.prepare('SELECT * FROM seat_leases').get(), original, action + ' ' + boundary);
+    } finally { Date.now = originalNow; }
+  }
+});
 test('new eight-character classes close admission at fifteen minutes but keep existing members for a day', async t => {
   const e = setup(t), now = Date.now(), originalNow = Date.now;
   Date.now = () => now;
@@ -209,6 +284,7 @@ test('the additive join-deadline migration preserves populated legacy classes, m
   sqlite.prepare('INSERT INTO reviewed_submissions(member_id,run_id,payload_hash,ink_json,ink_bytes,elapsed_ms,submitted_at,marks_json) VALUES(?,?,?,?,?,?,?,?)').run('old-member', 'old-run', 'hash', '{"original":"retained"}', 23, 100, now, '[]');
   const oldClasses = sqlite.prepare('SELECT * FROM classes ORDER BY code').all(), oldMembers = sqlite.prepare('SELECT * FROM members').all(), oldInk = sqlite.prepare('SELECT * FROM reviewed_submissions').all();
   sqlite.exec(fs.readFileSync(path.join(root, 'drizzle/0003_class_join_deadline.sql'), 'utf8'));
+  sqlite.exec(fs.readFileSync(path.join(root, 'drizzle/0004_seat_leases.sql'), 'utf8'));
   assert.deepEqual(sqlite.prepare('SELECT code,owner_id,assignment_json,expires_at,request_id,payload_hash FROM classes ORDER BY code').all(), oldClasses);
   assert.deepEqual(sqlite.prepare('SELECT * FROM members').all(), oldMembers); assert.deepEqual(sqlite.prepare('SELECT * FROM reviewed_submissions').all(), oldInk);
   assert(sqlite.prepare('SELECT join_expires_at FROM classes').all().every(row => row.join_expires_at === null));

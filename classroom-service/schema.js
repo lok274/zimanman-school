@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, uniqueIndex, index, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex, index, primaryKey, check } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 export const classes = sqliteTable('classes', {
   code: text('code').primaryKey(), ownerId: text('owner_id').notNull(), assignmentJson: text('assignment_json').notNull(),
   expiresAt: integer('expires_at').notNull(), joinExpiresAt: integer('join_expires_at'), requestId: text('request_id').notNull(), payloadHash: text('payload_hash').notNull(),
@@ -8,6 +9,10 @@ export const members = sqliteTable('members', {
   alias: text('alias').notNull(), aliasKey: text('alias_key').notNull(), tokenHash: text('token_hash').notNull(),
   requestId: text('request_id').notNull(), payloadHash: text('payload_hash').notNull(),
 }, table => [uniqueIndex('members_alias').on(table.code, table.aliasKey), uniqueIndex('members_token').on(table.tokenHash), uniqueIndex('members_request').on(table.code, table.requestId)]);
+export const seatLeases = sqliteTable('seat_leases', {
+  code: text('code').notNull().references(() => classes.code, { onDelete: 'cascade' }), seat: integer('seat').notNull(),
+  tokenHash: text('token_hash').notNull(), expiresAt: integer('expires_at').notNull(),
+}, table => [primaryKey({ columns: [table.code, table.seat] }), check('seat_leases_range', sql`${table.seat} BETWEEN 1 AND 40`)]);
 export const runs = sqliteTable('runs', {
   id: text('id').notNull(), memberId: text('member_id').notNull().references(() => members.id, { onDelete: 'cascade' }),
   payloadHash: text('payload_hash').notNull(), mistakes: integer('mistakes'), elapsedMs: integer('elapsed_ms'),
